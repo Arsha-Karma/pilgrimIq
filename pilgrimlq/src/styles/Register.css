@@ -1,0 +1,322 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    margin:0;
+    padding:0;
+}
+
+/* ===========================
+   BACKGROUND
+=========================== */
+
+.register-container{
+
+    width:100%;
+    min-height:100vh;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    padding:20px;
+
+    background:
+    linear-gradient(
+    rgba(15,30,60,.25),
+    rgba(15,30,60,.25)
+    ),
+    url("../assets/index-background.png");
+
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+
+}
+
+/* ===========================
+   REGISTER CARD
+=========================== */
+
+.register-card{
+
+    width:100%;
+    max-width:410px;
+
+    background:rgba(255,255,255,.95);
+
+    backdrop-filter:blur(16px);
+
+    border-radius:22px;
+
+    border:1px solid rgba(255,255,255,.45);
+
+    padding:18px 24px;
+
+    box-shadow:0 15px 35px rgba(0,0,0,.18);
+
+}
+
+/* ===========================
+   LOGO
+=========================== */
+
+.logo{
+
+    width:85px;
+
+    display:block;
+
+    margin:0 auto 8px;
+
+}
+
+/* ===========================
+   TITLE
+=========================== */
+
+.register-card h1{
+
+    text-align:center;
+
+    font-size:26px;
+
+    font-weight:700;
+
+    color:#123A7A;
+
+    margin-bottom:4px;
+
+}
+
+.subtitle{
+
+    text-align:center;
+
+    color:#667085;
+
+    font-size:14px;
+
+    margin-bottom:14px;
+
+}
+
+/* ===========================
+   LABELS
+=========================== */
+
+label{
+
+    display:block;
+
+    font-size:12px;
+
+    font-weight:700;
+
+    color:#374151;
+
+    margin-bottom:4px;
+
+    letter-spacing:.4px;
+
+}
+
+/* ===========================
+   INPUT BOX
+=========================== */
+
+.input-box{
+
+    display:flex;
+
+    align-items:center;
+
+    height:42px;
+
+    border:1px solid #D7DCE4;
+
+    border-radius:10px;
+
+    background:white;
+
+    padding:0 12px;
+
+    margin-bottom:10px;
+
+    transition:.3s;
+
+}
+
+.input-box:focus-within{
+
+    border-color:#123A7A;
+
+    box-shadow:0 0 0 4px rgba(18,58,122,.08);
+
+}
+
+.input-icon{
+
+    color:#8A94A6;
+
+    font-size:17px;
+
+}
+
+.input-box input{
+
+    flex:1;
+
+    height:100%;
+
+    border:none;
+
+    outline:none;
+
+    background:transparent;
+
+    padding-left:10px;
+
+    font-size:14px;
+
+    color:#374151;
+
+}
+
+.input-box input::placeholder{
+
+    color:#9CA3AF;
+
+}
+
+/* ===========================
+   BUTTON
+=========================== */
+
+.register-btn{
+
+    width:100%;
+
+    height:42px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#123A7A;
+
+    color:white;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:8px;
+
+    cursor:pointer;
+
+    margin-top:4px;
+
+    transition:.3s;
+
+    box-shadow:0 8px 18px rgba(18,58,122,.25);
+
+}
+
+.register-btn:hover{
+
+    background:#0E3066;
+
+    transform:translateY(-2px);
+
+}
+
+/* ===========================
+   LOGIN LINK
+=========================== */
+
+.login-text{
+
+    margin-top:12px;
+
+    text-align:center;
+
+    font-size:13px;
+
+    color:#6B7280;
+
+}
+
+.login-text a{
+
+    margin-left:5px;
+
+    color:#2563EB;
+
+    text-decoration:none;
+
+    font-weight:700;
+
+}
+
+.login-text a:hover{
+
+    text-decoration:underline;
+
+}
+
+/* ===========================
+   MOBILE
+=========================== */
+
+@media(max-width:480px){
+
+.register-card{
+
+    max-width:350px;
+
+    padding:18px;
+
+}
+
+.logo{
+
+    width:75px;
+
+}
+
+.register-card h1{
+
+    font-size:22px;
+
+}
+
+.subtitle{
+
+    font-size:13px;
+
+}
+
+.input-box{
+
+    height:40px;
+
+}
+
+.register-btn{
+
+    height:40px;
+
+}
+
+}
