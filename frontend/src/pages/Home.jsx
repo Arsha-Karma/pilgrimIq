@@ -2,6 +2,8 @@ import { useState } from "react";
 import "../styles/Home.css";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { FiArrowRight, FiCompass, FiCalendar, FiShield } from "react-icons/fi";
+import { FaHeartbeat, FaPrayingHands } from "react-icons/fa";
 
 import hero from "../assets/index-background.png";
 import logo from "../assets/pilgrim-logo.png";
@@ -145,36 +147,61 @@ function Home() {
                 <br />
                 Our Intelligent Support.
               </h2>
+              <p className="home-hero-subtitle">
+                PilgrimIQ is a platform that helps you plan, prepare and complete your pilgrimage with personalized health insights, smart planning and real-time assistance.
+              </p>
 
               <div className="home-hero-buttons">
-                <Link to="/register" className="home-btn-primary">Start Your Journey</Link>
-                <Link to="/features" className="home-btn-secondary">Explore Features</Link>
+                <Link to="/register" className="home-btn-primary">
+                  <span>Start Your Journey</span>
+                  <FiArrowRight className="home-btn-icon" />
+                </Link>
+                <Link to="/features" className="home-btn-secondary">
+                  <span>Explore Features</span>
+                  <FiCompass className="home-btn-icon" />
+                </Link>
               </div>
             </div>
 
             <div className="home-features-grid">
               <div className="home-feature-card">
-                <span className="home-feature-icon">❤️</span>
-                <h4>Health Assessment</h4>
-                <p>AI health risk analysis and safety index</p>
+                <div className="home-feature-icon-wrapper">
+                  <FaHeartbeat className="home-feature-icon" />
+                </div>
+                <div className="home-feature-info">
+                  <h4>Health Assessment</h4>
+                  <p>AI health risk analysis and safety index</p>
+                </div>
               </div>
 
               <div className="home-feature-card">
-                <span className="home-feature-icon">📅</span>
-                <h4>Smart Planning</h4>
-                <p>Weather, crowd and route predictions</p>
+                <div className="home-feature-icon-wrapper">
+                  <FiCalendar className="home-feature-icon" />
+                </div>
+                <div className="home-feature-info">
+                  <h4>Smart Planning</h4>
+                  <p>Weather, crowd & route predictions</p>
+                </div>
               </div>
 
               <div className="home-feature-card">
-                <span className="home-feature-icon">🛡️</span>
-                <h4>Safe & Secure</h4>
-                <p>Real-time alerts and emergency support</p>
+                <div className="home-feature-icon-wrapper">
+                  <FiShield className="home-feature-icon" />
+                </div>
+                <div className="home-feature-info">
+                  <h4>Safe & Secure</h4>
+                  <p>Real-time alerts, AI chat & emergency support</p>
+                </div>
               </div>
 
               <div className="home-feature-card">
-                <span className="home-feature-icon">🌍</span>
-                <h4>All Pilgrimage Centers</h4>
-                <p>Supports all pilgrimage destinations</p>
+                <div className="home-feature-icon-wrapper">
+                  <FaPrayingHands className="home-feature-icon" />
+                </div>
+                <div className="home-feature-info">
+                  <h4>All Faiths</h4>
+                  <p>Temples, Churches, Mosques & more</p>
+                </div>
               </div>
             </div>
           </div>
@@ -451,7 +478,7 @@ function Home() {
           <div>
             <h3>Contact Us</h3>
             <p>📍 PilgrimIQ ,India</p>
-            <p>📧 support@pilgrim-iq.com</p>
+            <p>📧 pilgrimlq03@gmail.com</p>
             <p>📞 +91 9874561232-PILGRIM (24/7)</p>
           </div>
         </div>

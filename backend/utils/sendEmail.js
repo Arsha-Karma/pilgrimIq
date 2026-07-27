@@ -1,38 +1,42 @@
 const nodemailer = require("nodemailer");
+const dotenv = require("dotenv");
+const path = require("path");
+
+// Load .env explicitly from backend root
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const sendEmail = async (options) => {
-  // Check if SMTP environment variables exist
-  const hasSmtpConfig = process.env.EMAIL_USER && (process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD);
+  // Ensure .env is freshly loaded if process was started earlier
+  dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
-  if (hasSmtpConfig) {
-    const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || "gmail",
-      host: process.env.EMAIL_HOST || "smtp.gmail.com",
-      port: process.env.EMAIL_PORT || 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD,
-      },
-    });
+  const emailUser = process.env.EMAIL_USER || "pilgrimlq03@gmail.com";
+  const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || "nanclkodweshkdjc";
 
-    const mailOptions = {
-      from: `PilgrimIQ Support <${process.env.EMAIL_USER}>`,
-      to: options.email,
-      subject: options.subject,
-      text: options.message,
-      html: options.html,
-    };
+  const transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || "gmail",
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.EMAIL_PORT || "587", 10),
+    secure: false, // true for 465, false for 587
+    auth: {
+      user: emailUser,
+      pass: emailPass,
+    },
+  });
 
+  const mailOptions = {
+    from: `PilgrimIQ Support <${emailUser}>`,
+    to: options.email,
+    subject: options.subject,
+    text: options.message,
+    html: options.html,
+  };
+
+  try {
     await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL SENT] Password reset email successfully sent to ${options.email}`);
-  } else {
-    console.log(`\n======================================================`);
-    console.log(`[SIMULATED EMAIL SENT TO: ${options.email}]`);
-    console.log(`Subject: ${options.subject}`);
-    console.log(`Body: ${options.message}`);
-    console.log(`Tip: Add EMAIL_USER and EMAIL_PASS to backend/.env for real SMTP emails.`);
-    console.log(`======================================================\n`);
+    console.log(`[EMAIL SENT VIA GMAIL SMTP] Password reset email successfully sent to ${options.email} from ${emailUser}`);
+  } catch (err) {
+    console.error(`[EMAIL ERROR] Failed to send email to ${options.email}:`, err.message);
+    throw new Error(`Email delivery failed: ${err.message}`);
   }
 };
 

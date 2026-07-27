@@ -246,7 +246,7 @@ function About() {
           <div>
             <h4>Contact Us</h4>
             <p>📍 PilgrimIQ ,India</p>
-            <p>📧 support@pilgrim-iq.com</p>
+            <p>📧 pilgrimlq03@gmail.com</p>
             <p>📞 +91 9874561232-PILGRIM (24/7)</p>
           </div>
         </div>

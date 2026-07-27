@@ -95,3 +95,11 @@ export const apiResetPassword = async (resetToken, password, email = "") => {
   });
 };
 
+export const apiGetAllUsers = async (token) => {
+  return fetchAPI("/auth/users", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+

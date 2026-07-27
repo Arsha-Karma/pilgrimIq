@@ -10,6 +10,7 @@ import logo from "../assets/pilgrim-logo.png";
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [dirty, setDirty] = useState({});
@@ -22,6 +23,17 @@ function Login() {
 
   const { login, googleAuth } = useAuth();
   const navigate = useNavigate();
+
+  // Load remembered email on mount if 'Remember me' was checked
+  React.useEffect(() => {
+    const savedRemember = localStorage.getItem("pilgrim_remember_me") === "true";
+    const savedEmail = localStorage.getItem("pilgrim_remembered_email");
+    if (savedRemember && savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
 
   const validateField = (name, value) => {
     let error = "";
@@ -78,8 +90,21 @@ function Login() {
 
     try {
       setLoading(true);
-      await login(email, password);
-      navigate("/");
+      const userData = await login(email, password);
+
+      if (rememberMe) {
+        localStorage.setItem("pilgrim_remember_me", "true");
+        localStorage.setItem("pilgrim_remembered_email", email.trim());
+      } else {
+        localStorage.removeItem("pilgrim_remember_me");
+        localStorage.removeItem("pilgrim_remembered_email");
+      }
+
+      if (userData?.role === "admin" || userData?.email === "pilgrimlq03@gmail.com") {
+        navigate("/admin");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       setFormError(err.message || "Failed to log in.");
     } finally {
@@ -91,8 +116,12 @@ function Login() {
     setFormError("");
     try {
       setLoading(true);
-      await googleAuth({ accessToken: tokenResponse.access_token });
-      navigate("/");
+      const userData = await googleAuth({ accessToken: tokenResponse.access_token });
+      if (userData?.role === "admin" || userData?.email === "pilgrimlq03@gmail.com") {
+        navigate("/admin");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       setFormError(err.message || "Google Sign-In failed. Please try again.");
     } finally {
@@ -192,7 +221,11 @@ function Login() {
 
           <div className="login-options">
             <label className="remember">
-              <input type="checkbox" />
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
               <span>Remember me</span>
             </label>
 

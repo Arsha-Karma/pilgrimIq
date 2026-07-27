@@ -9,10 +9,12 @@ const {
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  getAllUsers,
 } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
 // Public routes
+router.get("/users", getAllUsers);
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/google", googleLogin);
