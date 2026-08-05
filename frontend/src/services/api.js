@@ -102,4 +102,45 @@ export const apiGetAllUsers = async (token) => {
   });
 };
 
+export const apiRegisterDoctor = async (doctorData, token) => {
+  return fetchAPI("/auth/register-doctor", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(doctorData),
+  });
+};
+
+export const apiUpdateProfile = async (profileData, token) => {
+  return fetchAPI("/auth/profile", {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(profileData),
+  });
+};
+
+export const apiAddFamilyMember = async (memberData, token) => {
+  return fetchAPI("/auth/family-members", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(memberData),
+  });
+};
+
+export const apiUpdateFamilyMember = async (memberId, memberData, token) => {
+  return fetchAPI(`/auth/family-members/${memberId}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(memberData),
+  });
+};
+
+export const apiDeleteFamilyMember = async (memberId, token) => {
+  return fetchAPI(`/auth/family-members/${memberId}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+};
+
+
+
 

@@ -41,8 +41,15 @@ body{
 
 .logo{
     width:65px;
+    height:65px;
+    object-fit:contain;
     display:block;
-    margin:0 auto 4px;
+    margin:0 auto 8px;
+    background:#ffffff;
+    padding:5px;
+    border-radius:14px;
+    box-shadow:0 4px 15px rgba(0,0,0,0.12);
+    border:1px solid rgba(226,232,240,0.8);
 }
 
 .register-card h1{

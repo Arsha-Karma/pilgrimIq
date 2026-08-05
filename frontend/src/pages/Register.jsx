@@ -158,7 +158,7 @@ function Register() {
     setSuccessMsg("");
     try {
       setLoading(true);
-      await apiGoogleLogin({ accessToken: tokenResponse.access_token });
+      await apiGoogleLogin({ accessToken: tokenResponse.access_token, isSignUp: true });
       setSuccessMsg("Account registered successfully! Redirecting to login page...");
       setTimeout(() => {
         navigate("/login", {

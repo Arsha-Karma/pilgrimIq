@@ -12,14 +12,19 @@ import Services from "./pages/Services";
 import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 import AdminDashboard from "./pages/AdminDashboard";
+import DoctorDashboard from "./pages/DoctorDashboard";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/doctor" element={<DoctorDashboard />} />
+        <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

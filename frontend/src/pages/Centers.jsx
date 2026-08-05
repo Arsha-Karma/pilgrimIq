@@ -177,6 +177,27 @@ function Centers() {
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
+                      navigate("/profile");
+                    }}
+                    style={{
+                      width: "100%",
+                      backgroundColor: "#2563eb",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      marginBottom: "8px",
+                      transition: "background-color 0.2s ease",
+                    }}
+                  >
+                    👤 My Profile & Family
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
                       logout();
                       navigate("/");
                     }}

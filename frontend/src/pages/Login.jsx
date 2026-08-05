@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "../styles/Login.css";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { FiMail, FiLock, FiArrowRight } from "react-icons/fi";
+import { FiMail, FiLock, FiArrowRight, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
@@ -11,6 +11,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [dirty, setDirty] = useState({});
@@ -23,17 +24,6 @@ function Login() {
 
   const { login, googleAuth } = useAuth();
   const navigate = useNavigate();
-
-  // Load remembered email on mount if 'Remember me' was checked
-  React.useEffect(() => {
-    const savedRemember = localStorage.getItem("pilgrim_remember_me") === "true";
-    const savedEmail = localStorage.getItem("pilgrim_remembered_email");
-    if (savedRemember && savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
-    }
-  }, []);
-
 
   const validateField = (name, value) => {
     let error = "";
@@ -57,6 +47,28 @@ function Login() {
     setDirty((prev) => ({ ...prev, email: true }));
     const err = validateField("email", val);
     setFieldErrors((prev) => ({ ...prev, email: err }));
+
+    // Check if there is a remembered password when user types/enters an email ID
+    try {
+      const normalizedEmail = val.trim().toLowerCase();
+      const savedCreds = JSON.parse(localStorage.getItem("pilgrim_saved_creds") || "{}");
+
+      let foundPass = savedCreds[normalizedEmail];
+      if (!foundPass && normalizedEmail && normalizedEmail === (localStorage.getItem("pilgrim_remembered_email") || "").toLowerCase()) {
+        foundPass = localStorage.getItem("pilgrim_remembered_password");
+      }
+
+      if (foundPass) {
+        setPassword(foundPass);
+        setRememberMe(true);
+        setFieldErrors((prev) => ({ ...prev, password: "" }));
+      } else {
+        setPassword("");
+        setRememberMe(false);
+      }
+    } catch (err) {
+      // Ignore JSON error
+    }
   };
 
   const handlePasswordChange = (e) => {
@@ -92,16 +104,39 @@ function Login() {
       setLoading(true);
       const userData = await login(email, password);
 
+      const trimmedEmail = email.trim();
+      const normalizedEmail = trimmedEmail.toLowerCase();
+
       if (rememberMe) {
         localStorage.setItem("pilgrim_remember_me", "true");
-        localStorage.setItem("pilgrim_remembered_email", email.trim());
+        localStorage.setItem("pilgrim_remembered_email", trimmedEmail);
+        localStorage.setItem("pilgrim_remembered_password", password);
+
+        try {
+          const savedCreds = JSON.parse(localStorage.getItem("pilgrim_saved_creds") || "{}");
+          savedCreds[normalizedEmail] = password;
+          localStorage.setItem("pilgrim_saved_creds", JSON.stringify(savedCreds));
+        } catch (err) {
+          // Ignore
+        }
       } else {
         localStorage.removeItem("pilgrim_remember_me");
         localStorage.removeItem("pilgrim_remembered_email");
+        localStorage.removeItem("pilgrim_remembered_password");
+
+        try {
+          const savedCreds = JSON.parse(localStorage.getItem("pilgrim_saved_creds") || "{}");
+          delete savedCreds[normalizedEmail];
+          localStorage.setItem("pilgrim_saved_creds", JSON.stringify(savedCreds));
+        } catch (err) {
+          // Ignore
+        }
       }
 
       if (userData?.role === "admin" || userData?.email === "pilgrimlq03@gmail.com") {
         navigate("/admin");
+      } else if (userData?.role === "physician") {
+        navigate("/doctor");
       } else {
         navigate("/");
       }
@@ -116,7 +151,7 @@ function Login() {
     setFormError("");
     try {
       setLoading(true);
-      const userData = await googleAuth({ accessToken: tokenResponse.access_token });
+      const userData = await googleAuth({ accessToken: tokenResponse.access_token, isSignUp: false });
       if (userData?.role === "admin" || userData?.email === "pilgrimlq03@gmail.com") {
         navigate("/admin");
       } else {
@@ -206,7 +241,7 @@ function Login() {
             <FiLock className="input-icon" />
             <input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••••"
               autoComplete="current-password"
               value={password}
@@ -214,6 +249,16 @@ function Login() {
               onBlur={handleBlur}
               disabled={loading}
             />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowPassword((prev) => !prev)}
+              tabIndex={-1}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <FiEyeOff className="input-icon" /> : <FiEye className="input-icon" />}
+            </button>
           </div>
           {shouldShowError("password") && (
             <span className="field-error">{fieldErrors.password}</span>

@@ -50,6 +50,18 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "physician", "admin"],
       default: "user",
     },
+    specialization: {
+      type: String,
+      default: "",
+    },
+    assignedCamp: {
+      type: String,
+      default: "",
+    },
+    doctorCode: {
+      type: String,
+      default: "",
+    },
     resetPasswordToken: {
       type: String,
       default: null,
@@ -58,6 +70,44 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    familyMembers: [
+      {
+        name: {
+          type: String,
+          required: [true, "Family member name is required"],
+          trim: true,
+        },
+        relationship: {
+          type: String,
+          required: [true, "Relationship is required"],
+          trim: true,
+        },
+        age: {
+          type: Number,
+          default: null,
+        },
+        gender: {
+          type: String,
+          enum: ["Male", "Female", "Other"],
+          default: "Male",
+        },
+        phone: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        bloodGroup: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        medicalConditions: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+      },
+    ],
   },
   {
     timestamps: true,

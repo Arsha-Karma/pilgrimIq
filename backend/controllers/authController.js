@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const FamilyMember = require("../models/FamilyMember");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
 const crypto = require("crypto");
@@ -145,7 +146,7 @@ const loginUser = async (req, res, next) => {
 // @access  Public
 const googleLogin = async (req, res, next) => {
   try {
-    const { credential, accessToken } = req.body;
+    const { credential, accessToken, isSignUp } = req.body;
 
     let payload = null;
 
@@ -196,6 +197,10 @@ const googleLogin = async (req, res, next) => {
       if (picture && !user.avatar) user.avatar = picture;
       await user.save();
     } else {
+      if (!isSignUp) {
+        res.status(400);
+        throw new Error("Invalid email address. Please register first.");
+      }
       user = await User.create({
         name: name || cleanEmail.split("@")[0],
         email: cleanEmail,
@@ -228,6 +233,8 @@ const getUserProfile = async (req, res, next) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
+      const familyMembers = await FamilyMember.find({ user: user._id }).sort({ createdAt: -1 });
+
       res.json({
         _id: user._id,
         name: user.name,
@@ -236,6 +243,7 @@ const getUserProfile = async (req, res, next) => {
         role: user.role,
         avatar: user.avatar,
         authProvider: user.authProvider,
+        familyMembers: familyMembers || [],
       });
     } else {
       res.status(404);
@@ -265,6 +273,7 @@ const updateUserProfile = async (req, res, next) => {
       }
 
       const updatedUser = await user.save();
+      const familyMembers = await FamilyMember.find({ user: updatedUser._id }).sort({ createdAt: -1 });
 
       res.json({
         _id: updatedUser._id,
@@ -274,6 +283,7 @@ const updateUserProfile = async (req, res, next) => {
         role: updatedUser.role,
         avatar: updatedUser.avatar,
         authProvider: updatedUser.authProvider,
+        familyMembers: familyMembers || [],
         token: generateToken(updatedUser._id),
       });
     } else {
@@ -483,6 +493,236 @@ const getAllUsers = async (req, res, next) => {
   }
 };
 
+// @desc    Register a new Physician / Doctor & send credentials email
+// @route   POST /api/auth/register-doctor
+// @access  Public / Admin
+const registerDoctor = async (req, res, next) => {
+  try {
+    let { name, email, phone, specialization, password } = req.body;
+
+    name = name ? name.trim() : "";
+    email = email ? email.trim().toLowerCase() : "";
+    phone = phone ? phone.trim() : "";
+    specialization = specialization ? specialization.trim() : "General Physician";
+    password = password || "";
+
+    if (!name || !email || !password) {
+      res.status(400);
+      throw new Error("Please provide doctor name, email, and login password.");
+    }
+
+    if (name.length < 2) {
+      res.status(400);
+      throw new Error("Doctor full name must be at least 2 characters long.");
+    }
+
+    if (!isValidEmail(email)) {
+      res.status(400);
+      throw new Error("Please enter a valid email address for the doctor.");
+    }
+
+    if (password.length < 6) {
+      res.status(400);
+      throw new Error("Password must be at least 6 characters long.");
+    }
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      res.status(409);
+      throw new Error(`An account with email address ${email} already exists.`);
+    }
+
+    const doctorCode = `DOC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const doctor = await User.create({
+      name,
+      email,
+      phone,
+      password,
+      role: "physician",
+      specialization,
+      doctorCode,
+      authProvider: "local",
+    });
+
+    // Prepare email with HTML styling
+    const htmlMessage = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 550px; margin: 0 auto; border: 1px solid #E5E7EB; border-radius: 16px; padding: 28px; background-color: #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #123A7A; margin: 0; font-size: 24px;">Welcome to PilgrimIQ</h2>
+          <p style="color: #6B7280; font-size: 14px; margin-top: 4px;">Medical & Physician Surveillance Portal</p>
+        </div>
+        
+        <p style="color: #374151; font-size: 15px; line-height: 1.6;">Hello <strong>Dr. ${doctor.name}</strong>,</p>
+        <p style="color: #374151; font-size: 15px; line-height: 1.6;">You have been registered as an official Physician/Medic on the PilgrimIQ Surveillance Platform by the System Administrator.</p>
+        
+        <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 5px solid #2563EB; border-radius: 10px; padding: 18px; margin: 24px 0;">
+          <h3 style="color: #1E293B; margin-top: 0; font-size: 16px;">Your Login Credentials</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155;">
+            <tr>
+              <td style="padding: 6px 0; font-weight: 600; width: 140px;">Login ID / Email:</td>
+              <td style="padding: 6px 0; font-family: monospace; font-size: 15px; color: #2563EB;">${doctor.email}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: 600;">Password:</td>
+              <td style="padding: 6px 0; font-family: monospace; font-size: 15px; color: #059669; font-weight: bold;">${password}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: 600;">Doctor ID:</td>
+              <td style="padding: 6px 0;">${doctor.doctorCode}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: 600;">Specialization:</td>
+              <td style="padding: 6px 0;">${doctor.specialization}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="http://localhost:3000/login" style="background-color: #2563EB; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; display: inline-block;">Log In to PilgrimIQ Portal</a>
+        </div>
+
+        <p style="color: #6B7280; font-size: 13px;">Please log in using the credentials above. For security reasons, we recommend updating your password upon your first login.</p>
+        <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 20px 0;" />
+        <p style="text-align: center; color: #9CA3AF; font-size: 12px;">© 2026 PilgrimIQ Healthcare Command Center. All rights reserved.</p>
+      </div>
+    `;
+
+    let emailSent = true;
+    let emailStatusMessage = "Login credentials have been sent to the doctor's email address.";
+
+    try {
+      await sendEmail({
+        email: doctor.email,
+        subject: "PilgrimIQ Doctor Credentials & Portal Access",
+        message: `Hello Dr. ${doctor.name},\n\nYour PilgrimIQ Doctor Account has been registered by the admin.\n\nLogin ID / Email: ${doctor.email}\nPassword: ${password}\nDoctor ID: ${doctor.doctorCode}\nSpecialization: ${doctor.specialization}\n\nLog in at http://localhost:3000/login`,
+        html: htmlMessage,
+      });
+    } catch (emailErr) {
+      console.error(`[REGISTER DOCTOR EMAIL NOTICE] Could not deliver email to ${doctor.email}:`, emailErr.message);
+      emailSent = false;
+      emailStatusMessage = `Doctor registered in system. Note: Email dispatch notice - ${emailErr.message}`;
+    }
+
+    res.status(201).json({
+      success: true,
+      message: emailStatusMessage,
+      emailSent,
+      doctor: {
+        _id: doctor._id,
+        name: doctor.name,
+        email: doctor.email,
+        phone: doctor.phone,
+        role: doctor.role,
+        specialization: doctor.specialization,
+        doctorCode: doctor.doctorCode,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Add a family member to user profile
+// @route   POST /api/auth/family-members
+// @access  Private
+const addFamilyMember = async (req, res, next) => {
+  try {
+    const { name, relationship, age, gender, phone, bloodGroup, medicalConditions } = req.body;
+
+    if (!name || !name.trim() || !relationship || !relationship.trim()) {
+      res.status(400);
+      throw new Error("Name and relationship are required for family member.");
+    }
+
+    const newMember = await FamilyMember.create({
+      user: req.user._id,
+      name: name.trim(),
+      relationship: relationship.trim(),
+      age: age !== "" && age !== null && age !== undefined ? Number(age) : null,
+      gender: gender || "Male",
+      phone: phone ? phone.trim() : "",
+      bloodGroup: bloodGroup ? bloodGroup.trim() : "",
+      medicalConditions: medicalConditions ? medicalConditions.trim() : "",
+    });
+
+    const familyMembers = await FamilyMember.find({ user: req.user._id }).sort({ createdAt: -1 });
+
+    res.status(201).json({
+      success: true,
+      message: "Family member added successfully to collection",
+      member: newMember,
+      familyMembers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update a family member
+// @route   PUT /api/auth/family-members/:memberId
+// @access  Private
+const updateFamilyMember = async (req, res, next) => {
+  try {
+    const { memberId } = req.params;
+    const { name, relationship, age, gender, phone, bloodGroup, medicalConditions } = req.body;
+
+    const member = await FamilyMember.findOne({ _id: memberId, user: req.user._id });
+    if (!member) {
+      res.status(404);
+      throw new Error("Family member not found in collection");
+    }
+
+    if (name) member.name = name.trim();
+    if (relationship) member.relationship = relationship.trim();
+    if (age !== undefined) member.age = age !== "" && age !== null ? Number(age) : null;
+    if (gender) member.gender = gender;
+    if (phone !== undefined) member.phone = phone.trim();
+    if (bloodGroup !== undefined) member.bloodGroup = bloodGroup.trim();
+    if (medicalConditions !== undefined) member.medicalConditions = medicalConditions.trim();
+
+    await member.save();
+
+    const familyMembers = await FamilyMember.find({ user: req.user._id }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: "Family member updated successfully",
+      member,
+      familyMembers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a family member
+// @route   DELETE /api/auth/family-members/:memberId
+// @access  Private
+const deleteFamilyMember = async (req, res, next) => {
+  try {
+    const { memberId } = req.params;
+
+    const member = await FamilyMember.findOne({ _id: memberId, user: req.user._id });
+    if (!member) {
+      res.status(404);
+      throw new Error("Family member not found in collection");
+    }
+
+    await FamilyMember.deleteOne({ _id: memberId, user: req.user._id });
+
+    const familyMembers = await FamilyMember.find({ user: req.user._id }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: "Family member removed successfully from collection",
+      familyMembers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -493,5 +733,11 @@ module.exports = {
   verifyResetCode,
   resetPassword,
   getAllUsers,
+  registerDoctor,
+  addFamilyMember,
+  updateFamilyMember,
+  deleteFamilyMember,
 };
+
+
 

@@ -52,12 +52,17 @@
 }
 
 .home-page .home-logo img {
-  width: 60px !important;
-  height: 60px !important;
-  min-width: 60px !important;
-  min-height: 60px !important;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+  min-height: 52px !important;
   object-fit: contain !important;
   margin: 0 !important;
+  background: #ffffff !important;
+  padding: 4px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.4), 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
   display: block !important;
 }
 

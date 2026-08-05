@@ -35,9 +35,14 @@
 }
 
 .sidebar-logo {
-  height: 38px;
-  width: auto;
+  height: 42px;
+  width: 42px;
   object-fit: contain;
+  background: #ffffff;
+  padding: 5px;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
 }
 
 .brand-text h3 {
@@ -785,3 +790,288 @@
   border-color: #2563eb;
   transform: translateY(-2px);
 }
+
+/* Register Doctor Modal & Form Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 25px rgba(37, 99, 235, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-close-modal:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.modal-body {
+  padding: 24px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.form-group-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-app-layout .form-input,
+.admin-app-layout .form-select,
+.modal-card .form-input,
+.modal-card .form-select,
+.form-input, 
+.form-select {
+  width: 100%;
+  padding: 11px 14px;
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 10px;
+  color: #000000 !important;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.admin-app-layout .form-input::placeholder,
+.modal-card .form-input::placeholder,
+.form-input::placeholder {
+  color: #64748b !important;
+  font-weight: 400;
+  opacity: 1;
+}
+
+.admin-app-layout .form-select option,
+.modal-card .form-select option,
+.form-select option {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.admin-app-layout .form-input:focus,
+.admin-app-layout .form-select:focus,
+.modal-card .form-input:focus,
+.modal-card .form-select:focus,
+.form-input:focus, 
+.form-select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* Chrome/Safari autofill override for black text */
+.form-input:-webkit-autofill,
+.form-input:-webkit-autofill:hover, 
+.form-input:-webkit-autofill:focus, 
+.form-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #000000 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+.password-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-gen-pass {
+  background: #334155;
+  color: #60a5fa;
+  border: none;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.btn-gen-pass:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+.admin-app-layout .modal-footer,
+.modal-card .modal-footer,
+.modal-footer {
+  padding: 16px 24px;
+  background: #0f172a !important;
+  border-top: 1px solid #334155 !important;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.admin-app-layout .btn-cancel,
+.modal-card .btn-cancel,
+.btn-cancel {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+  border: 1px solid #475569 !important;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.admin-app-layout .btn-cancel:hover,
+.modal-card .btn-cancel:hover,
+.btn-cancel:hover {
+  background-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+.btn-submit-doctor {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.btn-submit-doctor:hover {
+  background: #1d4ed8;
+}
+
+.btn-submit-doctor:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.alert-box {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.alert-box.success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #34d399;
+}
+
+.alert-box.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #f87171;
+}
+
+/* Hide duplicate browser native password reveal eye icons */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
+.password-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.eye-toggle-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+  z-index: 2;
+}
+
+.eye-toggle-btn:hover {
+  color: #60a5fa;
+}
+

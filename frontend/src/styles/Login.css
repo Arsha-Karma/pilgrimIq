@@ -40,9 +40,16 @@ body{
 }
 
 .logo{
-    width:80px;
+    width:70px;
+    height:70px;
+    object-fit:contain;
     display:block;
-    margin:0 auto 8px;
+    margin:0 auto 12px;
+    background:#ffffff;
+    padding:6px;
+    border-radius:14px;
+    box-shadow:0 4px 15px rgba(0,0,0,0.12);
+    border:1px solid rgba(226,232,240,0.8);
 }
 
 .login-card h1{
@@ -94,6 +101,22 @@ label{
 .input-icon{
     color:#8A94A6;
     font-size:17px;
+}
+
+.password-toggle-btn{
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:0 4px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    outline:none;
+    transition:color .2s ease;
+}
+
+.password-toggle-btn:hover .input-icon{
+    color:#123A7A;
 }
 
 .input-box input{

@@ -33,7 +33,6 @@ const sendEmail = async (options) => {
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL SENT VIA GMAIL SMTP] Password reset email successfully sent to ${options.email} from ${emailUser}`);
   } catch (err) {
     console.error(`[EMAIL ERROR] Failed to send email to ${options.email}:`, err.message);
     throw new Error(`Email delivery failed: ${err.message}`);
