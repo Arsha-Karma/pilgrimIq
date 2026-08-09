@@ -70,6 +70,145 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    location: {
+      type: String,
+      default: "",
+    },
+    dob: {
+      type: String,
+      default: "",
+    },
+    age: {
+      type: Number,
+      default: null,
+    },
+    gender: {
+      type: String,
+      default: "",
+    },
+    bloodGroup: {
+      type: String,
+      default: "",
+    },
+    height: {
+      type: Number,
+      default: null,
+    },
+    weight: {
+      type: Number,
+      default: null,
+    },
+    nationality: {
+      type: String,
+      default: "",
+    },
+    state: {
+      type: String,
+      default: "",
+    },
+    district: {
+      type: String,
+      default: "",
+    },
+    address: {
+      type: String,
+      default: "",
+    },
+    preferredLanguage: {
+      type: String,
+      default: "",
+    },
+    isVerified: {
+      type: Boolean,
+      default: true,
+    },
+    profileCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    completionPercentage: {
+      type: Number,
+      default: 0,
+    },
+    psiScore: {
+      type: Number,
+      default: 100,
+    },
+    psiRiskLevel: {
+      type: String,
+      default: "Low Risk",
+    },
+    healthInfo: {
+      chronicDiseases: { type: String, default: "" },
+      allergies: { type: String, default: "" },
+      currentMedicines: { type: String, default: "" },
+      bloodGroup: { type: String, default: "" },
+      bmi: { type: String, default: "" },
+      fitnessLevel: { type: String, default: "" },
+      medicalConditions: { type: String, default: "" },
+      disabilities: { type: String, default: "" },
+    },
+    medicalInfo: {
+      existingConditions: [{ type: String }],
+      otherCondition: { type: String, default: "" },
+      previousSurgeries: { type: String, default: "" },
+      currentMedications: { type: String, default: "" },
+      drugAllergies: { type: String, default: "" },
+      foodAllergies: { type: String, default: "" },
+      mobilityLimitations: { type: String, default: "" },
+      visionProblems: { type: String, default: "" },
+      hearingProblems: { type: String, default: "" },
+      smokingStatus: { type: String, default: "" },
+      alcoholStatus: { type: String, default: "" },
+      pregnancyStatus: { type: String, default: "" },
+    },
+    healthMeasurements: {
+      restingBP: { type: String, default: "" },
+      bloodSugar: { type: String, default: "" },
+      heartRate: { type: String, default: "" },
+      spo2: { type: String, default: "" },
+      hemoglobin: { type: String, default: "" },
+    },
+    fitnessInfo: {
+      activityLevel: { type: String, default: "" },
+      continuousWalking: { type: String, default: "" },
+      stairClimbing: { type: String, default: "" },
+      usesAssistance: { type: String, default: "" },
+    },
+    medicalReports: [
+      {
+        fileName: { type: String, required: true },
+        fileType: { type: String, default: "pdf" },
+        category: { type: String, default: "General" },
+        uploadDate: { type: String, default: "" },
+        url: { type: String, default: "" },
+      },
+    ],
+    consent: {
+      accurate: { type: Boolean, default: false },
+      aiRisk: { type: Boolean, default: false },
+      terms: { type: Boolean, default: false },
+    },
+    emergencyContact: {
+      contactName: { type: String, default: "" },
+      relationship: { type: String, default: "" },
+      phone: { type: String, default: "" },
+      alternatePhone: { type: String, default: "" },
+    },
+    pilgrimagePreferences: {
+      preferredReligion: { type: String, default: "" },
+      preferredLanguage: { type: String, default: "" },
+      preferredClimate: { type: String, default: "" },
+      travelFrequency: { type: String, default: "" },
+      preferredTravelType: { type: String, default: "" },
+      specialAssistance: { type: String, default: "" },
+    },
+    quickOverview: {
+      healthRecords: { type: Number, default: 0 },
+      upcomingTrips: { type: Number, default: 0 },
+      bookings: { type: Number, default: 0 },
+      feedbackRating: { type: Number, default: 0 },
+    },
     familyMembers: [
       {
         name: {

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "../styles/Register.css";
 import { Link, useNavigate } from "react-router-dom";
-import { FiUser, FiMail, FiPhone, FiLock, FiArrowRight } from "react-icons/fi";
+import { FiUser, FiMail, FiPhone, FiLock, FiArrowRight, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +23,8 @@ function Register() {
   const [formError, setFormError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -285,13 +287,23 @@ function Register() {
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••••"
               value={formData.password}
               onChange={handleChange}
               onBlur={handleBlur}
               disabled={loading}
             />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowPassword((prev) => !prev)}
+              tabIndex={-1}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <FiEyeOff className="input-icon" /> : <FiEye className="input-icon" />}
+            </button>
           </div>
           {shouldShowError("password") && (
             <span className="field-error">{fieldErrors.password}</span>
@@ -303,13 +315,23 @@ function Register() {
             <input
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="••••••••••"
               value={formData.confirmPassword}
               onChange={handleChange}
               onBlur={handleBlur}
               disabled={loading}
             />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowConfirmPassword((prev) => !prev)}
+              tabIndex={-1}
+              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              title={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirmPassword ? <FiEyeOff className="input-icon" /> : <FiEye className="input-icon" />}
+            </button>
           </div>
           {shouldShowError("confirmPassword") && (
             <span className="field-error">{fieldErrors.confirmPassword}</span>

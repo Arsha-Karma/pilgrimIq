@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "../styles/Login.css";
 import { Link, useNavigate } from "react-router-dom";
-import { FiMail, FiLock, FiKey, FiArrowRight, FiCheckCircle } from "react-icons/fi";
+import { FiMail, FiLock, FiKey, FiArrowRight, FiCheckCircle, FiEye, FiEyeOff } from "react-icons/fi";
 import { apiForgotPassword, apiVerifyCode, apiResetPassword } from "../services/api";
 import logo from "../assets/pilgrim-logo.png";
 
@@ -11,23 +11,98 @@ function ForgotPassword() {
   // Step 3: New Password & Confirm Password
   const [step, setStep] = useState(1);
 
-  const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState(""); // Kept strictly empty by default
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    otpCode: "",
+    password: "",
+    confirmPassword: "",
+  });
 
-  const [errors, setErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [dirty, setDirty] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const navigate = useNavigate();
 
-  const validateEmail = (val) => {
-    if (!val || !val.trim()) return "Email address is required.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return "Please enter a valid email address.";
-    return "";
+  const validateField = (name, value, currentFormData = formData) => {
+    let error = "";
+
+    switch (name) {
+      case "email":
+        if (!value || !value.trim()) {
+          error = "Email Address is required";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+          error = "Please enter a valid email address with '@' (e.g., user@example.com)";
+        }
+        break;
+
+      case "otpCode":
+        if (!value || !value.trim()) {
+          error = "6-Digit Reset Code is required";
+        } else if (!/^\d+$/.test(value.trim())) {
+          error = "Reset code must contain digits only";
+        } else if (value.trim().length !== 6) {
+          error = "Reset code must be exactly 6 digits";
+        }
+        break;
+
+      case "password":
+        if (!value) {
+          error = "New Password is required";
+        } else if (value.length < 6) {
+          error = "Password must be at least 6 characters long";
+        } else if (
+          !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/.test(value)
+        ) {
+          error = "Password must include uppercase, lowercase, number, and special character";
+        }
+        break;
+
+      case "confirmPassword":
+        if (!value) {
+          error = "Confirm Password is required";
+        } else if (value !== currentFormData.password) {
+          error = "Passwords do not match";
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    return error;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    const updatedData = { ...formData, [name]: value };
+    setFormData(updatedData);
+    setDirty((prev) => ({ ...prev, [name]: true }));
+
+    const error = validateField(name, value, updatedData);
+    setFieldErrors((prev) => ({ ...prev, [name]: error }));
+
+    if (name === "password" && (dirty.confirmPassword || isSubmitted)) {
+      const confirmError = validateField("confirmPassword", updatedData.confirmPassword, updatedData);
+      setFieldErrors((prev) => ({ ...prev, confirmPassword: confirmError }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setDirty((prev) => ({ ...prev, [name]: true }));
+    const error = validateField(name, value, formData);
+    setFieldErrors((prev) => ({ ...prev, [name]: error }));
+  };
+
+  const shouldShowError = (fieldName) => {
+    return (dirty[fieldName] || isSubmitted) && fieldErrors[fieldName];
   };
 
   // STEP 1: Send 6-Digit Code to Email
@@ -36,15 +111,15 @@ function ForgotPassword() {
     setServerError("");
     setIsSubmitted(true);
 
-    const emailErr = validateEmail(email);
-    setErrors({ email: emailErr });
+    const emailErr = validateField("email", formData.email);
+    setFieldErrors((prev) => ({ ...prev, email: emailErr }));
     if (emailErr) return;
 
     try {
       setLoading(true);
-      await apiForgotPassword(email.trim());
-      setInfoMessage(`A 6-digit reset code has been sent to ${email.trim()}`);
-      setOtpCode(""); // Ensure code input starts completely blank
+      await apiForgotPassword(formData.email.trim());
+      setInfoMessage(`A 6-digit reset code has been sent to ${formData.email.trim()}`);
+      setFormData((prev) => ({ ...prev, otpCode: "" })); // Ensure code starts completely blank
       setStep(2);
       setIsSubmitted(false);
     } catch (err) {
@@ -60,14 +135,13 @@ function ForgotPassword() {
     setServerError("");
     setIsSubmitted(true);
 
-    if (!otpCode || !otpCode.trim()) {
-      setErrors({ otpCode: "Please enter the 6-digit reset code." });
-      return;
-    }
+    const otpErr = validateField("otpCode", formData.otpCode);
+    setFieldErrors((prev) => ({ ...prev, otpCode: otpErr }));
+    if (otpErr) return;
 
     try {
       setLoading(true);
-      await apiVerifyCode(email.trim(), otpCode.trim());
+      await apiVerifyCode(formData.email.trim(), formData.otpCode.trim());
       setInfoMessage("Reset code verified successfully! Now set your new password below.");
       setStep(3);
       setIsSubmitted(false);
@@ -84,24 +158,21 @@ function ForgotPassword() {
     setServerError("");
     setIsSubmitted(true);
 
-    const errs = {};
-    if (!password) {
-      errs.password = "New password is required.";
-    } else if (password.length < 6) {
-      errs.password = "Password must be at least 6 characters long.";
-    }
-    if (confirmPassword !== password) {
-      errs.confirmPassword = "Passwords do not match.";
-    }
+    const passwordErr = validateField("password", formData.password);
+    const confirmErr = validateField("confirmPassword", formData.confirmPassword, formData);
 
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    const errors = {
+      password: passwordErr,
+      confirmPassword: confirmErr,
+    };
+    setFieldErrors((prev) => ({ ...prev, ...errors }));
+
+    if (passwordErr || confirmErr) return;
 
     try {
       setLoading(true);
-      await apiResetPassword(otpCode.trim(), password, email.trim());
-      
-      // Navigate to login page upon success
+      await apiResetPassword(formData.otpCode.trim(), formData.password, formData.email.trim());
+
       navigate("/login", {
         state: { successMessage: "Password changed successfully! Please log in with your new password." },
       });
@@ -163,18 +234,20 @@ function ForgotPassword() {
           /* STEP 1: Enter Email */
           <form onSubmit={handleSendCode} noValidate>
             <label htmlFor="email">EMAIL ADDRESS</label>
-            <div className={`input-box ${isSubmitted && errors.email ? "input-error" : ""}`}>
+            <div className={`input-box ${shouldShowError("email") ? "input-error" : ""}`}>
               <FiMail className="input-icon" />
               <input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="pilgrim@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formData.email}
+                onChange={handleChange}
+                onBlur={handleBlur}
                 disabled={loading}
               />
             </div>
-            {isSubmitted && errors.email && <span className="field-error">{errors.email}</span>}
+            {shouldShowError("email") && <span className="field-error">{fieldErrors.email}</span>}
 
             <button type="submit" className="login-btn" style={{ marginTop: "14px" }} disabled={loading}>
               {loading ? "Sending Code..." : "Send Reset Code"}
@@ -191,20 +264,22 @@ function ForgotPassword() {
           /* STEP 2: Enter 6-Digit Code ONLY */
           <form onSubmit={handleVerifyCode} noValidate>
             <label htmlFor="otpCode">6-DIGIT RESET CODE</label>
-            <div className={`input-box ${isSubmitted && errors.otpCode ? "input-error" : ""}`}>
+            <div className={`input-box ${shouldShowError("otpCode") ? "input-error" : ""}`}>
               <FiKey className="input-icon" />
               <input
                 id="otpCode"
+                name="otpCode"
                 type="text"
                 maxLength="6"
                 placeholder="Enter 6-digit code"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
+                value={formData.otpCode}
+                onChange={handleChange}
+                onBlur={handleBlur}
                 disabled={loading}
                 style={{ letterSpacing: "2px", fontWeight: "700" }}
               />
             </div>
-            {isSubmitted && errors.otpCode && <span className="field-error">{errors.otpCode}</span>}
+            {shouldShowError("otpCode") && <span className="field-error">{fieldErrors.otpCode}</span>}
 
             <button type="submit" className="login-btn" style={{ marginTop: "14px" }} disabled={loading}>
               {loading ? "Verifying Code..." : "Verify Code"}
@@ -239,36 +314,56 @@ function ForgotPassword() {
         )}
 
         {step === 3 && (
-          /* STEP 3: Enter New Password & Confirm Password (ONLY after code is verified) */
+          /* STEP 3: Enter New Password & Confirm Password */
           <form onSubmit={handleResetPassword} noValidate>
             <label htmlFor="password">NEW PASSWORD</label>
-            <div className={`input-box ${isSubmitted && errors.password ? "input-error" : ""}`}>
+            <div className={`input-box ${shouldShowError("password") ? "input-error" : ""}`}>
               <FiLock className="input-icon" />
               <input
                 id="password"
-                type="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={formData.password}
+                onChange={handleChange}
+                onBlur={handleBlur}
                 disabled={loading}
               />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
+              >
+                {showPassword ? <FiEyeOff className="input-icon" /> : <FiEye className="input-icon" />}
+              </button>
             </div>
-            {isSubmitted && errors.password && <span className="field-error">{errors.password}</span>}
+            {shouldShowError("password") && <span className="field-error">{fieldErrors.password}</span>}
 
             <label htmlFor="confirmPassword">CONFIRM NEW PASSWORD</label>
-            <div className={`input-box ${isSubmitted && errors.confirmPassword ? "input-error" : ""}`}>
+            <div className={`input-box ${shouldShowError("confirmPassword") ? "input-error" : ""}`}>
               <FiLock className="input-icon" />
               <input
                 id="confirmPassword"
-                type="password"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                onBlur={handleBlur}
                 disabled={loading}
               />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                tabIndex="-1"
+              >
+                {showConfirmPassword ? <FiEyeOff className="input-icon" /> : <FiEye className="input-icon" />}
+              </button>
             </div>
-            {isSubmitted && errors.confirmPassword && (
-              <span className="field-error">{errors.confirmPassword}</span>
+            {shouldShowError("confirmPassword") && (
+              <span className="field-error">{fieldErrors.confirmPassword}</span>
             )}
 
             <button type="submit" className="login-btn" style={{ marginTop: "14px" }} disabled={loading}>

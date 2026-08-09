@@ -877,10 +877,12 @@
   grid-column: span 2;
 }
 
-.form-group label {
+.form-group label,
+.modal-card label,
+.modal-body label {
   font-size: 12px;
-  font-weight: 700;
-  color: #cbd5e1;
+  font-weight: 800;
+  color: #000000 !important;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }

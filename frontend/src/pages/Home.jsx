@@ -1,17 +1,13 @@
 import { useState } from "react";
 import "../styles/Home.css";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import Navbar from "../components/Navbar";
+import { Link } from "react-router-dom";
 import { FiArrowRight, FiCompass, FiCalendar, FiShield } from "react-icons/fi";
 import { FaHeartbeat, FaPrayingHands } from "react-icons/fa";
 
 import hero from "../assets/index-background.png";
-import logo from "../assets/pilgrim-logo.png";
 
 function Home() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [heartRate, setHeartRate] = useState(74);
   const [spo2, setSpo2] = useState(98);
   const [altitude, setAltitude] = useState(2800);
@@ -25,136 +21,10 @@ function Home() {
   };
 
   const psiScore = calculatePsi();
-  const firstLetter = user?.name ? user.name.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : "U");
 
   return (
     <div className="home-page">
-      <nav className="home-navbar">
-        <div className="home-logo">
-          <img src={logo} alt="PilgrimIQ Logo" />
-          <div className="home-logo-text">
-            <h2>PilgrimIQ</h2>
-            <p>Plan Smart. Travel Safe. Stay Blessed.</p>
-          </div>
-        </div>
-
-        <ul className="home-nav-links">
-          <li><Link to="/" className="active-nav">Home</Link></li>
-          <li><Link to="/about">About Us</Link></li>
-          <li><Link to="/features">Features</Link></li>
-          <li><Link to="/centers">Pilgrimage Centers</Link></li>
-          <li><Link to="/services">Services</Link></li>
-          <li><Link to="/how-it-works">How It Works</Link></li>
-          <li><Link to="/contact">Contact</Link></li>
-        </ul>
-
-        <div className="home-nav-buttons">
-          {user ? (
-            <div style={{ position: "relative", display: "inline-block" }}>
-              <div
-                onClick={() => setShowProfileMenu((prev) => !prev)}
-                title="Click to view profile menu"
-                style={{
-                  width: "44px",
-                  height: "44px",
-                  borderRadius: "50%",
-                  backgroundColor: "#123A7A",
-                  color: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: "700",
-                  fontSize: "19px",
-                  boxShadow: "0 4px 12px rgba(18, 58, 122, 0.35)",
-                  border: "2px solid #ffffff",
-                  cursor: "pointer",
-                  userSelect: "none",
-                  transition: "transform 0.2s ease",
-                }}
-              >
-                {firstLetter}
-              </div>
-
-              {showProfileMenu && (
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "54px",
-                    backgroundColor: "#ffffff",
-                    borderRadius: "14px",
-                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.18)",
-                    border: "1px solid #E5E7EB",
-                    padding: "16px",
-                    minWidth: "220px",
-                    zIndex: 1000,
-                  }}
-                >
-                  <div style={{ marginBottom: "12px", borderBottom: "1px solid #F3F4F6", paddingBottom: "10px" }}>
-                    <p style={{ fontWeight: "700", color: "#123A7A", fontSize: "15px", margin: 0 }}>
-                      {user.name || "Pilgrim User"}
-                    </p>
-                    <p style={{ color: "#6B7280", fontSize: "13px", margin: "4px 0 0 0", wordBreak: "break-all" }}>
-                      {user.email}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      navigate("/profile");
-                    }}
-                    style={{
-                      width: "100%",
-                      backgroundColor: "#2563eb",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "10px 14px",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      marginBottom: "8px",
-                      transition: "background-color 0.2s ease",
-                    }}
-                  >
-                    👤 My Profile & Family
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      logout();
-                      navigate("/");
-                    }}
-                    style={{
-                      width: "100%",
-                      backgroundColor: "#dc2626",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "10px 14px",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "background-color 0.2s ease",
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <Link to="/login" className="home-login-btn">
-                Login
-              </Link>
-              <Link to="/register" className="home-signup-btn">
-                Sign Up
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <Navbar />
 
       <section
         className="home-hero"
@@ -235,7 +105,7 @@ function Home() {
             <span className="home-badge">WHY CHOOSE PILGRIMIQ</span>
             <h2>Intelligent Healthcare & Journey Analytics</h2>
             <p>
-              Experience a safer, personalized pilgrimage engineered with Artificial Intelligence, IoT bio-monitoring, and microclimate forecasting.
+              Experience a safer, personalized pilgrimage engineered with Artificial Intelligence, family tracking, and microclimate forecasting.
             </p>
           </div>
 
@@ -262,9 +132,9 @@ function Home() {
             </div>
 
             <div className="home-why-card">
-              <div className="home-icon-wrapper">📡</div>
-              <h3>IoT Health Monitoring</h3>
-              <p>Live tracking for SpO₂, heart rate, and body temperature via wearable smart device integration.</p>
+              <div className="home-icon-wrapper">👨‍👩‍👧‍👦</div>
+              <h3>Family Tracking</h3>
+              <p>Live tracking for location, status updates, and safety alerts for all registered family members.</p>
               <Link to="/services" className="home-card-link">Learn More →</Link>
             </div>
 
@@ -467,7 +337,7 @@ function Home() {
         <div className="home-container home-footer-grid">
           <div>
             <h2>PilgrimIQ</h2>
-            <p>PilgrimIQ is an AI-powered personalized decision support platform engineered to ensure maximum safety, healthcare monitoring, weather intelligence, and travel comfort for pilgrims worldwide.</p>
+            <p>PilgrimIQ is a personalized decision support platform engineered to ensure maximum safety, healthcare monitoring, weather intelligence, and travel comfort for pilgrims worldwide.</p>
             <div className="home-footer-badges">
               <span className="home-cert-badge">🔒 HIPAA Compliant</span>
               <span className="home-cert-badge">🤖 AI Powered</span>

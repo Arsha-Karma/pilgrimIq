@@ -34,7 +34,15 @@ const sendEmail = async (options) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (err) {
-    console.error(`[EMAIL ERROR] Failed to send email to ${options.email}:`, err.message);
+    if (err.message.includes("534-5.7.9") || err.message.includes("Invalid login")) {
+      console.error(
+        `[EMAIL ERROR] Google SMTP Auth Failed (534-5.7.9) for ${emailUser}.\n` +
+        `  -> Cause: Gmail requires an App Password when 2-Step Verification is enabled or password expired.\n` +
+        `  -> Solution: Visit https://myaccount.google.com/apppasswords using ${emailUser}, generate a 16-character App Password, and update EMAIL_PASS in backend/.env.`
+      );
+    } else {
+      console.error(`[EMAIL ERROR] Failed to send email to ${options.email}:`, err.message);
+    }
     throw new Error(`Email delivery failed: ${err.message}`);
   }
 };

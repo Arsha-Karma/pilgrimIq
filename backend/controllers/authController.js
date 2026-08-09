@@ -227,6 +227,71 @@ const googleLogin = async (req, res, next) => {
 
 // @desc    Get logged in user profile
 // @route   GET /api/auth/profile
+const calculateProfileCompletion = (user) => {
+  let score = 0;
+  // Personal Info (25%)
+  if (user.dob || user.age) score += 5;
+  if (user.gender) score += 5;
+  if (user.height && user.weight) score += 5;
+  if (user.bloodGroup) score += 5;
+  if (user.state || user.district || user.address || user.location) score += 5;
+
+  // Emergency Contact (15%)
+  if (user.emergencyContact?.contactName && user.emergencyContact?.phone) score += 15;
+
+  // Medical Information (25%)
+  if (user.medicalInfo?.existingConditions?.length > 0 || user.healthInfo?.chronicDiseases) score += 10;
+  if (user.medicalInfo?.currentMedications || user.healthInfo?.currentMedicines) score += 5;
+  if (user.medicalInfo?.drugAllergies || user.medicalInfo?.foodAllergies || user.healthInfo?.allergies) score += 5;
+  if (user.medicalInfo?.smokingStatus || user.medicalInfo?.alcoholStatus) score += 5;
+
+  // Health Measurements (15%)
+  if (user.healthMeasurements?.restingBP || user.healthMeasurements?.bloodSugar || user.healthMeasurements?.spo2) score += 15;
+
+  // Fitness Information (10%)
+  if (user.fitnessInfo?.activityLevel || user.fitnessInfo?.continuousWalking) score += 10;
+
+  // Consent (10%)
+  if (user.consent?.accurate && user.consent?.terms) score += 10;
+
+  return Math.min(score, 100);
+};
+
+const calculatePsiRisk = (user) => {
+  let score = 100;
+  
+  if (user.age) {
+    if (user.age > 70) score -= 20;
+    else if (user.age > 60) score -= 10;
+  }
+
+  const conds = user.medicalInfo?.existingConditions || [];
+  if (conds.includes("Heart Disease")) score -= 20;
+  if (conds.includes("Asthma")) score -= 15;
+  if (conds.includes("Kidney Disease")) score -= 15;
+  if (conds.includes("Diabetes")) score -= 10;
+  if (conds.includes("Hypertension")) score -= 10;
+
+  if (user.healthMeasurements?.spo2) {
+    const spo2Num = Number(user.healthMeasurements.spo2);
+    if (spo2Num < 95) score -= 15;
+  }
+
+  if (user.fitnessInfo?.continuousWalking === "Less than 1 km") score -= 15;
+  if (user.fitnessInfo?.stairClimbing === "Unable") score -= 15;
+  if (user.fitnessInfo?.stairClimbing === "With Difficulty") score -= 10;
+  if (user.fitnessInfo?.usesAssistance === "Yes") score -= 10;
+
+  const finalScore = Math.max(score, 35);
+  let riskLevel = "Low Risk";
+  if (finalScore < 70) riskLevel = "High Risk";
+  else if (finalScore < 85) riskLevel = "Moderate Risk";
+
+  return { psiScore: finalScore, psiRiskLevel: riskLevel };
+};
+
+// @desc    Get logged in user profile
+// @route   GET /api/auth/profile
 // @access  Private
 const getUserProfile = async (req, res, next) => {
   try {
@@ -235,15 +300,100 @@ const getUserProfile = async (req, res, next) => {
     if (user) {
       const familyMembers = await FamilyMember.find({ user: user._id }).sort({ createdAt: -1 });
 
+      const completionPercentage = calculateProfileCompletion(user);
+      const psi = calculatePsiRisk(user);
+      const isCompleted = user.profileCompleted || completionPercentage > 0;
+
       res.json({
         _id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        avatar: user.avatar,
-        authProvider: user.authProvider,
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        role: user.role || "user",
+        avatar: user.avatar || "",
+        authProvider: user.authProvider || "local",
+        dob: user.dob || "",
+        location: user.location || user.address || "",
+        age: user.age !== undefined && user.age !== null ? user.age : null,
+        gender: user.gender || "",
+        bloodGroup: user.bloodGroup || (user.healthInfo?.bloodGroup || ""),
+        height: user.height !== undefined && user.height !== null ? user.height : null,
+        weight: user.weight !== undefined && user.weight !== null ? user.weight : null,
+        nationality: user.nationality || "",
+        state: user.state || "",
+        district: user.district || "",
+        address: user.address || "",
+        preferredLanguage: user.preferredLanguage || "",
+        isVerified: user.isVerified !== undefined ? user.isVerified : true,
+        profileCompleted: isCompleted,
+        completionPercentage: completionPercentage,
+        psiScore: user.psiScore || psi.psiScore,
+        psiRiskLevel: user.psiRiskLevel || psi.psiRiskLevel,
+        healthInfo: user.healthInfo || {
+          chronicDiseases: "",
+          allergies: "",
+          currentMedicines: "",
+          bloodGroup: "",
+          bmi: "",
+          fitnessLevel: "",
+          medicalConditions: "",
+          disabilities: "",
+        },
+        medicalInfo: user.medicalInfo || {
+          existingConditions: [],
+          otherCondition: "",
+          previousSurgeries: "",
+          currentMedications: "",
+          drugAllergies: "",
+          foodAllergies: "",
+          mobilityLimitations: "",
+          visionProblems: "",
+          hearingProblems: "",
+          smokingStatus: "",
+          alcoholStatus: "",
+          pregnancyStatus: "",
+        },
+        healthMeasurements: user.healthMeasurements || {
+          restingBP: "",
+          bloodSugar: "",
+          heartRate: "",
+          spo2: "",
+          hemoglobin: "",
+        },
+        fitnessInfo: user.fitnessInfo || {
+          activityLevel: "",
+          continuousWalking: "",
+          stairClimbing: "",
+          usesAssistance: "",
+        },
+        medicalReports: user.medicalReports || [],
+        consent: user.consent || {
+          accurate: false,
+          aiRisk: false,
+          terms: false,
+        },
+        emergencyContact: user.emergencyContact || {
+          contactName: "",
+          relationship: "",
+          phone: "",
+          alternatePhone: "",
+        },
+        pilgrimagePreferences: user.pilgrimagePreferences || {
+          preferredReligion: "",
+          preferredLanguage: "",
+          preferredClimate: "",
+          travelFrequency: "",
+          preferredTravelType: "",
+          specialAssistance: "",
+        },
+        quickOverview: user.quickOverview || {
+          healthRecords: 0,
+          upcomingTrips: 0,
+          bookings: 0,
+          feedbackRating: 0,
+        },
         familyMembers: familyMembers || [],
+        createdAt: user.createdAt,
       });
     } else {
       res.status(404);
@@ -264,6 +414,77 @@ const updateUserProfile = async (req, res, next) => {
     if (user) {
       if (req.body.name) user.name = req.body.name.trim();
       if (req.body.phone !== undefined) user.phone = req.body.phone.trim();
+      if (req.body.dob !== undefined) user.dob = req.body.dob;
+      if (req.body.location !== undefined) user.location = req.body.location.trim();
+      if (req.body.age !== undefined) user.age = req.body.age !== null && req.body.age !== "" ? Number(req.body.age) : null;
+      if (req.body.gender !== undefined) user.gender = req.body.gender;
+      if (req.body.bloodGroup !== undefined) {
+        user.bloodGroup = req.body.bloodGroup;
+        if (!user.healthInfo) user.healthInfo = {};
+        user.healthInfo.bloodGroup = req.body.bloodGroup;
+      }
+      if (req.body.height !== undefined) user.height = req.body.height !== null && req.body.height !== "" ? Number(req.body.height) : null;
+      if (req.body.weight !== undefined) user.weight = req.body.weight !== null && req.body.weight !== "" ? Number(req.body.weight) : null;
+      if (req.body.nationality !== undefined) user.nationality = req.body.nationality.trim();
+      if (req.body.state !== undefined) user.state = req.body.state.trim();
+      if (req.body.district !== undefined) user.district = req.body.district.trim();
+      if (req.body.address !== undefined) {
+        user.address = req.body.address.trim();
+        if (!user.location) user.location = user.address;
+      }
+      if (req.body.preferredLanguage !== undefined) user.preferredLanguage = req.body.preferredLanguage;
+      if (req.body.avatar) user.avatar = req.body.avatar;
+
+      if (req.body.healthInfo) {
+        user.healthInfo = { ...user.healthInfo, ...req.body.healthInfo };
+      }
+      if (req.body.medicalInfo) {
+        user.medicalInfo = { ...user.medicalInfo, ...req.body.medicalInfo };
+      }
+      if (req.body.healthMeasurements) {
+        user.healthMeasurements = { ...user.healthMeasurements, ...req.body.healthMeasurements };
+      }
+      if (req.body.fitnessInfo) {
+        user.fitnessInfo = { ...user.fitnessInfo, ...req.body.fitnessInfo };
+      }
+      if (req.body.consent) {
+        user.consent = { ...user.consent, ...req.body.consent };
+      }
+      if (req.body.emergencyContact) {
+        user.emergencyContact = { ...user.emergencyContact, ...req.body.emergencyContact };
+      }
+      if (req.body.pilgrimagePreferences) {
+        user.pilgrimagePreferences = { ...user.pilgrimagePreferences, ...req.body.pilgrimagePreferences };
+      }
+      if (req.body.medicalReports) {
+        user.medicalReports = req.body.medicalReports;
+      }
+
+      // Calculate BMI automatically if height & weight exist
+      if (user.height && user.weight && Number(user.height) > 0) {
+        const heightM = Number(user.height) / 100;
+        const bmiVal = (Number(user.weight) / (heightM * heightM)).toFixed(1);
+        let status = "Normal";
+        const bmiNum = Number(bmiVal);
+        if (bmiNum < 18.5) status = "Underweight";
+        else if (bmiNum >= 25 && bmiNum < 30) status = "Overweight";
+        else if (bmiNum >= 30) status = "Obese";
+        if (!user.healthInfo) user.healthInfo = {};
+        user.healthInfo.bmi = `${bmiVal} (${status})`;
+      }
+
+      // Re-calculate completion & PSI
+      const completionPercentage = calculateProfileCompletion(user);
+      const psi = calculatePsiRisk(user);
+      user.completionPercentage = completionPercentage;
+      if (req.body.profileCompleted !== undefined) {
+        user.profileCompleted = Boolean(req.body.profileCompleted);
+      } else {
+        user.profileCompleted = true;
+      }
+      user.psiScore = psi.psiScore;
+      user.psiRiskLevel = psi.psiRiskLevel;
+
       if (req.body.password && user.authProvider === "local") {
         if (req.body.password.length < 6) {
           res.status(400);
@@ -283,7 +504,34 @@ const updateUserProfile = async (req, res, next) => {
         role: updatedUser.role,
         avatar: updatedUser.avatar,
         authProvider: updatedUser.authProvider,
+        dob: updatedUser.dob,
+        location: updatedUser.location,
+        age: updatedUser.age,
+        gender: updatedUser.gender,
+        bloodGroup: updatedUser.bloodGroup,
+        height: updatedUser.height,
+        weight: updatedUser.weight,
+        nationality: updatedUser.nationality,
+        state: updatedUser.state,
+        district: updatedUser.district,
+        address: updatedUser.address,
+        preferredLanguage: updatedUser.preferredLanguage,
+        isVerified: updatedUser.isVerified,
+        profileCompleted: updatedUser.profileCompleted,
+        completionPercentage: updatedUser.completionPercentage,
+        psiScore: updatedUser.psiScore,
+        psiRiskLevel: updatedUser.psiRiskLevel,
+        healthInfo: updatedUser.healthInfo,
+        medicalInfo: updatedUser.medicalInfo,
+        healthMeasurements: updatedUser.healthMeasurements,
+        fitnessInfo: updatedUser.fitnessInfo,
+        medicalReports: updatedUser.medicalReports,
+        consent: updatedUser.consent,
+        emergencyContact: updatedUser.emergencyContact,
+        pilgrimagePreferences: updatedUser.pilgrimagePreferences,
+        quickOverview: updatedUser.quickOverview,
         familyMembers: familyMembers || [],
+        createdAt: updatedUser.createdAt,
         token: generateToken(updatedUser._id),
       });
     } else {
@@ -356,18 +604,27 @@ const forgotPassword = async (req, res, next) => {
     `;
 
     // Attempt email dispatch
-    await sendEmail({
-      email: user.email,
-      subject: "PilgrimIQ Password Reset Code",
-      message: `Your PilgrimIQ 6-digit password reset OTP code is: ${otpCode}. It expires in 15 minutes.`,
-      html: htmlMessage,
-    });
+    let emailSent = true;
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "PilgrimIQ Password Reset Code",
+        message: `Your PilgrimIQ 6-digit password reset OTP code is: ${otpCode}. It expires in 15 minutes.`,
+        html: htmlMessage,
+      });
+    } catch (emailErr) {
+      console.error(`[FORGOT PASSWORD EMAIL NOTICE] Could not deliver email to ${user.email}:`, emailErr.message);
+      emailSent = false;
+    }
 
     res.status(200).json({
       success: true,
-      message: `A 6-digit reset code has been sent to ${user.email}.`,
+      message: emailSent
+        ? `A 6-digit reset code has been sent to ${user.email}.`
+        : `Reset code generated (${otpCode}). Email delivery failed due to email service login settings.`,
       email: user.email,
       otpCode: otpCode, // Included so frontend can auto-fill or display if email server is simulated
+      emailSent,
     });
   } catch (error) {
     next(error);
@@ -628,29 +885,107 @@ const registerDoctor = async (req, res, next) => {
 // @access  Private
 const addFamilyMember = async (req, res, next) => {
   try {
-    const { name, relationship, age, gender, phone, bloodGroup, medicalConditions } = req.body;
+    const {
+      name,
+      relationship,
+      dob,
+      age,
+      gender,
+      height,
+      weight,
+      bloodGroup,
+      nationality,
+      state,
+      district,
+      address,
+      phone,
+      profilePhoto,
+
+      emergencyContactName,
+      emergencyContactRelationship,
+      emergencyContactPhone,
+
+      chronicConditions,
+      existingConditions,
+      currentMedicines,
+      drugAllergies,
+      foodAllergies,
+      allergies,
+      previousSurgeries,
+      mobilityLimitations,
+      smokingStatus,
+      alcoholStatus,
+
+      bloodPressure,
+      bloodSugar,
+      heartRate,
+      spo2,
+      hemoglobin,
+
+      activityLevel,
+      walkingCapacity,
+      stairClimbing,
+      usesAssistance,
+
+      reports,
+    } = req.body;
 
     if (!name || !name.trim() || !relationship || !relationship.trim()) {
       res.status(400);
-      throw new Error("Name and relationship are required for family member.");
+      throw new Error("Full Name and Relationship are required for family member.");
     }
 
     const newMember = await FamilyMember.create({
       user: req.user._id,
       name: name.trim(),
       relationship: relationship.trim(),
+      dob: dob || "",
       age: age !== "" && age !== null && age !== undefined ? Number(age) : null,
-      gender: gender || "Male",
-      phone: phone ? phone.trim() : "",
+      gender: gender || "",
+      height: height !== "" && height !== null && height !== undefined ? Number(height) : null,
+      weight: weight !== "" && weight !== null && weight !== undefined ? Number(weight) : null,
       bloodGroup: bloodGroup ? bloodGroup.trim() : "",
-      medicalConditions: medicalConditions ? medicalConditions.trim() : "",
+      nationality: nationality ? nationality.trim() : "",
+      state: state ? state.trim() : "",
+      district: district ? district.trim() : "",
+      address: address ? address.trim() : "",
+      phone: phone ? phone.trim() : "",
+      profilePhoto: profilePhoto || "",
+
+      emergencyContactName: emergencyContactName ? emergencyContactName.trim() : "",
+      emergencyContactRelationship: emergencyContactRelationship ? emergencyContactRelationship.trim() : "",
+      emergencyContactPhone: emergencyContactPhone ? emergencyContactPhone.trim() : "",
+
+      chronicConditions: chronicConditions ? chronicConditions.trim() : "",
+      existingConditions: Array.isArray(existingConditions) ? existingConditions : (existingConditions ? [existingConditions] : []),
+      currentMedicines: currentMedicines ? currentMedicines.trim() : "",
+      drugAllergies: drugAllergies ? drugAllergies.trim() : "",
+      foodAllergies: foodAllergies ? foodAllergies.trim() : "",
+      allergies: allergies ? allergies.trim() : "",
+      previousSurgeries: previousSurgeries ? previousSurgeries.trim() : "",
+      mobilityLimitations: mobilityLimitations ? mobilityLimitations.trim() : "",
+      smokingStatus: smokingStatus ? smokingStatus.trim() : "",
+      alcoholStatus: alcoholStatus ? alcoholStatus.trim() : "",
+
+      bloodPressure: bloodPressure ? bloodPressure.trim() : "",
+      bloodSugar: bloodSugar ? bloodSugar.trim() : "",
+      heartRate: heartRate ? heartRate.trim() : "",
+      spo2: spo2 ? spo2.trim() : "",
+      hemoglobin: hemoglobin ? hemoglobin.trim() : "",
+
+      activityLevel: activityLevel ? activityLevel.trim() : "",
+      walkingCapacity: walkingCapacity ? walkingCapacity.trim() : "",
+      stairClimbing: stairClimbing ? stairClimbing.trim() : "",
+      usesAssistance: usesAssistance ? usesAssistance.trim() : "",
+
+      reports: reports || [],
     });
 
     const familyMembers = await FamilyMember.find({ user: req.user._id }).sort({ createdAt: -1 });
 
     res.status(201).json({
       success: true,
-      message: "Family member added successfully to collection",
+      message: "Family member added successfully",
       member: newMember,
       familyMembers,
     });
@@ -665,21 +1000,19 @@ const addFamilyMember = async (req, res, next) => {
 const updateFamilyMember = async (req, res, next) => {
   try {
     const { memberId } = req.params;
-    const { name, relationship, age, gender, phone, bloodGroup, medicalConditions } = req.body;
+    const updateData = req.body;
 
     const member = await FamilyMember.findOne({ _id: memberId, user: req.user._id });
     if (!member) {
       res.status(404);
-      throw new Error("Family member not found in collection");
+      throw new Error("Family member not found");
     }
 
-    if (name) member.name = name.trim();
-    if (relationship) member.relationship = relationship.trim();
-    if (age !== undefined) member.age = age !== "" && age !== null ? Number(age) : null;
-    if (gender) member.gender = gender;
-    if (phone !== undefined) member.phone = phone.trim();
-    if (bloodGroup !== undefined) member.bloodGroup = bloodGroup.trim();
-    if (medicalConditions !== undefined) member.medicalConditions = medicalConditions.trim();
+    Object.keys(updateData).forEach((key) => {
+      if (key !== "_id" && key !== "user" && updateData[key] !== undefined) {
+        member[key] = updateData[key];
+      }
+    });
 
     await member.save();
 

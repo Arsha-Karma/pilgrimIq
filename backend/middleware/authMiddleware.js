@@ -18,8 +18,19 @@ const protect = async (req, res, next) => {
         process.env.JWT_SECRET || "pilgrimiq_jwt_secret_key_2026_super_secure"
       );
 
-      // Get user from the token (exclude password)
-      req.user = await User.findById(decoded.id).select("-password");
+      // Try fetching user from database
+      try {
+        req.user = await User.findById(decoded.id).select("-password");
+      } catch (dbError) {
+        console.warn("Auth DB lookup warning (using token claims fallback):", dbError.message);
+        // Fallback to token payload if DB lookup hits temporary DNS/network error
+        req.user = {
+          _id: decoded.id,
+          name: decoded.name || "User",
+          email: decoded.email || "",
+          role: decoded.role || "user",
+        };
+      }
 
       if (!req.user) {
         res.status(401);

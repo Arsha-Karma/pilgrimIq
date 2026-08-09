@@ -797,7 +797,7 @@ function AdminDashboard() {
 
                   <div className="form-group-grid">
                     <div className="form-group full-width">
-                      <label>Doctor Full Name *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Doctor Full Name *</label>
                       <input
                         name="name"
                         type="text"
@@ -822,7 +822,7 @@ function AdminDashboard() {
                     </div>
 
                     <div className="form-group">
-                      <label>Email Address (Login ID) *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Email Address (Login ID) *</label>
                       <input
                         name="email"
                         type="email"
@@ -847,7 +847,7 @@ function AdminDashboard() {
                     </div>
 
                     <div className="form-group">
-                      <label>Contact Phone Number *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Contact Phone Number *</label>
                       <input
                         name="phone"
                         type="tel"
@@ -872,7 +872,7 @@ function AdminDashboard() {
                     </div>
 
                     <div className="form-group full-width">
-                      <label>Specialization / Designation *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Specialization / Designation *</label>
                       <select
                         name="specialization"
                         className={`form-select ${shouldShowDoctorError("specialization") ? "input-error" : ""}`}
@@ -901,7 +901,7 @@ function AdminDashboard() {
                     </div>
 
                     <div className="form-group full-width">
-                      <label>Login Password *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Login Password *</label>
                       <div className="password-input-group">
                         <input
                           name="password"
@@ -942,7 +942,7 @@ function AdminDashboard() {
                           ⚠️ {doctorFieldErrors.password}
                         </span>
                       ) : (
-                        <span style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", display: "block" }}>
+                        <span style={{ fontSize: "11px", color: "#475569", marginTop: "4px", display: "block", fontWeight: "600" }}>
                           • Must contain upper & lowercase letters, number, and special character. Will be emailed to doctor.
                         </span>
                       )}
