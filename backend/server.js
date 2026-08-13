@@ -3,6 +3,10 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const pilgrimageCenterRoutes = require("./routes/pilgrimageCenterRoutes");
+const enquiryRoutes = require("./routes/enquiryRoutes");
+const journeyRoutes = require("./routes/journeyRoutes");
+const nearbyServiceRoutes = require("./routes/nearbyServiceRoutes");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 // Load environment variables
@@ -23,6 +27,9 @@ app.get("/", (req, res) => {
   res.send("PilgrimIQ Backend API is running. Access the frontend app at http://localhost:3000");
 });
 
+const medicalReportRoutes = require("./routes/medicalReportRoutes");
+const physicianReviewRoutes = require("./routes/physicianReviewRoutes");
+
 // Health Check route
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "PilgrimIQ Backend API is running smoothly!" });
@@ -30,6 +37,12 @@ app.get("/api/health", (req, res) => {
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/pilgrimage-centers", pilgrimageCenterRoutes);
+app.use("/api/enquiries", enquiryRoutes);
+app.use("/api/journeys", journeyRoutes);
+app.use("/api/nearby-services", nearbyServiceRoutes);
+app.use("/api/medical-reports", medicalReportRoutes);
+app.use("/api/physician/medical-reviews", physicianReviewRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

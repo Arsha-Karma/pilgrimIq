@@ -1,101 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import "../styles/Centers.css";
 import Navbar from "../components/Navbar";
+import { apiGetPilgrimageCenters } from "../services/api";
 
 function Centers() {
+  const navigate = useNavigate();
+  const [centers, setCenters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedReligion, setSelectedReligion] = useState("All");
+  const [selectedDifficulty, setSelectedDifficulty] = useState("All");
+  const [selectedCrowd, setSelectedCrowd] = useState("All");
+  const [selectedClimate, setSelectedClimate] = useState("All");
 
-  const centersData = [
-    {
-      id: 1,
-      name: "Vaishno Devi Temple",
-      category: "Temple",
-      difficulty: "Moderate to High Trek",
-      diffType: "warning",
-      location: "Katra, Jammu & Kashmir, India",
-      description: "A holy cave temple dedicated to Goddess Vaishno Devi located in the Trikuta Mountains. Involves a 13 km uphill trek.",
-      climate: "Sub-tropical to Cold Alpine",
-      season: "March to October",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=800&auto=format&fit=crop')"
-    },
-    {
-      id: 2,
-      name: "Kedarnath Temple",
-      category: "Temple",
-      difficulty: "High Trek",
-      diffType: "danger",
-      location: "Rudraprayag, Uttarakhand, India",
-      description: "One of the most sacred temples of Lord Shiva situated near the Mandakini river amidst snow-clad Himalayan peaks.",
-      climate: "Cold Mountain Climate",
-      season: "May to June & Sept to Oct",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?q=80&w=800&auto=format&fit=crop')"
-    },
-    {
-      id: 3,
-      name: "Basilica of Our Lady of Good Health",
-      category: "Church",
-      difficulty: "Easy Trek",
-      diffType: "success",
-      location: "Velankanni, Tamil Nadu, India",
-      description: "A world-famous Marian shrine often known as the 'Lourdes of the East', situated on the shores of the Bay of Bengal.",
-      climate: "Tropical Warm & Humid",
-      season: "August to March",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=800&auto=format&fit=crop')"
-    },
-    {
-      id: 4,
-      name: "Al-Masjid an-Nabawi & Holy Shrines",
-      category: "Mosque",
-      difficulty: "Moderate Trek",
-      diffType: "warning",
-      location: "Madinah / Makkah, Saudi Arabia",
-      description: "Sacred Islamic pilgrimage destination featuring expansive marble plazas, cooled walkways, and high crowd densities.",
-      climate: "Hot Desert Climate",
-      season: "November to February",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=800&auto=format&fit=crop')"
-    },
-    {
-      id: 5,
-      name: "Tawang Monastery",
-      category: "Monastery",
-      difficulty: "Moderate Trek",
-      diffType: "warning",
-      location: "Tawang, Arunachal Pradesh, India",
-      description: "The largest monastery in India and second largest in the world, nestled in breathtaking High Himalayan terrain.",
-      climate: "Alpine Cold",
-      season: "April to October",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1609946782740-9a2c14041d8e?q=80&w=800&auto=format&fit=crop')"
-    },
-    {
-      id: 6,
-      name: "Sri Harmandir Sahib (Golden Temple)",
-      category: "Shrines",
-      difficulty: "Easy Trek",
-      diffType: "success",
-      location: "Amritsar, Punjab, India",
-      description: "The central gurdwara for Sikhs around the world, renowned for its open doors, spiritual harmony, and free community kitchen (Langar).",
-      climate: "Semi-Arid / Continental",
-      season: "October to March",
-      bgGradient: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('https://images.unsplash.com/photo-1605649487212-47bdab064df7?q=80&w=800&auto=format&fit=crop')"
+  const religions = ["All", "Hindu", "Christian", "Muslim", "Buddhist", "Jain", "Sikh", "Other"];
+  const difficulties = ["All", "Low", "Moderate", "High", "Very High"];
+  const crowdLevels = ["All", "Low", "Moderate", "High", "Very High"];
+  const climates = ["All", "Hot", "Warm", "Cool", "Cold", "Humid", "Moderate"];
+
+  // Fetch centers from backend API
+  const fetchCenters = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const queryParams = {
+        search: searchTerm,
+        religion: selectedReligion !== "All" ? selectedReligion : "",
+        walking: selectedDifficulty !== "All" ? selectedDifficulty : "",
+        crowdLevel: selectedCrowd !== "All" ? selectedCrowd : "",
+        climate: selectedClimate !== "All" ? selectedClimate : "",
+      };
+
+      const data = await apiGetPilgrimageCenters(queryParams);
+      setCenters(data || []);
+    } catch (err) {
+      console.error("Failed to load centers:", err);
+      setError("Unable to load pilgrimage centers. Please try again.");
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, [searchTerm, selectedReligion, selectedDifficulty, selectedCrowd, selectedClimate]);
 
-  const categories = [
-    { name: "All", count: centersData.length },
-    { name: "Temple", count: 2 },
-    { name: "Church", count: 1 },
-    { name: "Mosque", count: 1 },
-    { name: "Monastery", count: 1 },
-    { name: "Shrines", count: 1 }
-  ];
+  useEffect(() => {
+    fetchCenters();
+  }, [fetchCenters]);
 
-  const filteredCenters = centersData.filter((center) => {
-    const matchesCategory = selectedCategory === "All" || center.category === selectedCategory;
-    const matchesSearch = center.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          center.location.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const getDifficultyBadgeClass = (diff) => {
+    const d = (diff || "").toLowerCase();
+    if (d === "low") return "diff-success";
+    if (d === "high" || d === "very high") return "diff-danger";
+    return "diff-warning";
+  };
 
   return (
     <div className="centers-page">
@@ -113,7 +72,7 @@ function Centers() {
             <span className="search-icon">🔍</span>
             <input
               type="text"
-              placeholder="Search center name or location..."
+              placeholder="Search center by name, city, state, or religion..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -123,51 +82,143 @@ function Centers() {
 
       <section className="centers-content-section">
         <div className="centers-main-container">
+          {/* RELIGION FILTER TABS */}
           <div className="filter-tabs-bar">
-            {categories.map((cat) => (
+            {religions.map((rel) => (
               <button
-                key={cat.name}
-                className={`filter-pill ${selectedCategory === cat.name ? "active-pill" : ""}`}
-                onClick={() => setSelectedCategory(cat.name)}
+                key={rel}
+                className={`filter-pill ${selectedReligion === rel ? "active-pill" : ""}`}
+                onClick={() => setSelectedReligion(rel)}
               >
-                {cat.name === "All" ? "All" : `${cat.name} (${cat.count})`}
+                {rel}
               </button>
             ))}
           </div>
 
-          <div className="centers-cards-grid">
-            {filteredCenters.map((center) => (
-              <div className="pilgrim-card" key={center.id}>
-                <div
-                  className="card-header-image"
-                  style={{ backgroundImage: center.bgGradient }}
-                >
-                  <div className="card-top-badges">
-                    <span className="badge-cat">{center.category}</span>
-                    <span className={`badge-diff diff-${center.diffType}`}>
-                      {center.difficulty}
-                    </span>
-                  </div>
+          {/* SECONDARY FILTER CONTROLS */}
+          <div className="secondary-filters-row" style={{ display: "flex", gap: "16px", marginBottom: "24px", flexWrap: "wrap", background: "#ffffff", padding: "14px 20px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+            <div className="filter-select-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>Walking Difficulty:</label>
+              <select
+                value={selectedDifficulty}
+                onChange={(e) => setSelectedDifficulty(e.target.value)}
+                style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+              >
+                {difficulties.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
 
-                  <div className="card-image-title">
-                    <h3>{center.name}</h3>
-                    <p>📍 {center.location}</p>
-                  </div>
-                </div>
+            <div className="filter-select-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>Crowd Level:</label>
+              <select
+                value={selectedCrowd}
+                onChange={(e) => setSelectedCrowd(e.target.value)}
+                style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+              >
+                {crowdLevels.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
 
-                <div className="card-body">
-                  <p className="card-desc">{center.description}</p>
-
-                  <div className="card-meta-row">
-                    <span className="meta-item">☀️ {center.climate}</span>
-                    <span className="meta-item">📅 {center.season}</span>
-                  </div>
-
-                  <button className="view-details-btn">View Details →</button>
-                </div>
-              </div>
-            ))}
+            <div className="filter-select-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>Climate:</label>
+              <select
+                value={selectedClimate}
+                onChange={(e) => setSelectedClimate(e.target.value)}
+                style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+              >
+                {climates.map((cl) => (
+                  <option key={cl} value={cl}>{cl}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* CONTENT AREA */}
+          {loading ? (
+            <div className="loading-state-container" style={{ textAlign: "center", padding: "60px 20px" }}>
+              <div className="spinner" style={{ width: 36, height: 36, border: "3px solid #e2e8f0", borderTopColor: "#2563eb", borderRadius: "50%", margin: "0 auto 16px auto", animation: "spin 0.8s linear infinite" }}></div>
+              <p style={{ color: "#64748b" }}>Loading pilgrimage centers...</p>
+            </div>
+          ) : error ? (
+            <div className="error-state-container" style={{ textAlign: "center", padding: "60px 20px", background: "#ffffff", borderRadius: "16px", border: "1px solid #fee2e2" }}>
+              <h3 style={{ color: "#dc2626" }}>⚠️ API Connection Error</h3>
+              <p style={{ color: "#475569" }}>{error}</p>
+              <button onClick={fetchCenters} className="view-details-btn" style={{ margin: "16px auto 0 auto", display: "inline-block" }}>
+                Retry Fetching
+              </button>
+            </div>
+          ) : centers.length === 0 ? (
+            <div className="empty-centers-box" style={{ textAlign: "center", padding: "60px 20px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>⛩️</div>
+              <h3 style={{ color: "#0f172a", fontSize: "20px", margin: "0 0 8px 0" }}>No pilgrimage centers are currently available.</h3>
+              <p style={{ color: "#64748b", margin: 0 }}>
+                {searchTerm || selectedReligion !== "All" || selectedDifficulty !== "All"
+                  ? "Try clearing your search terms or filters."
+                  : "Check back later as new destinations are added by administrators."}
+              </p>
+            </div>
+          ) : (
+            <div className="centers-cards-grid">
+              {centers.map((center) => {
+                const imgUrl = center.image || "https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=800&auto=format&fit=crop";
+                const bgStyle = {
+                  backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(11,45,114,0.9) 100%), url('${imgUrl}')`,
+                };
+
+                return (
+                  <div className="pilgrim-card" key={center._id}>
+                    <div className="card-header-image" style={bgStyle}>
+                      <div className="card-top-badges">
+                        <span className="badge-cat">{center.religion}</span>
+                        <span className={`badge-diff ${getDifficultyBadgeClass(center.difficulty?.walking)}`}>
+                          {center.difficulty?.walking ? `${center.difficulty.walking} Trek` : "Moderate Trek"}
+                        </span>
+                      </div>
+
+                      <div className="card-image-title">
+                        <h3>{center.name}</h3>
+                        <p>📍 {center.location?.city}, {center.location?.state}, {center.location?.country}</p>
+                      </div>
+                    </div>
+
+                    <div className="card-body">
+                      <p className="card-desc">
+                        {center.description && center.description.length > 120
+                          ? `${center.description.substring(0, 120)}...`
+                          : center.description}
+                      </p>
+
+                      <div className="card-meta-row">
+                        <span className="meta-item">☀️ {center.visitingInformation?.climate || "Moderate"}</span>
+                        <span className="meta-item">📅 {center.visitingInformation?.bestSeason || "All Year"}</span>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                        <button
+                          className="view-details-btn"
+                          onClick={() => navigate(`/pilgrimage-centers/${center._id}`)}
+                          style={{ flex: 1 }}
+                        >
+                          View Details →
+                        </button>
+                        <button
+                          className="view-details-btn"
+                          onClick={() => navigate(`/journey-planner/${center._id}`)}
+                          style={{ flex: 1, background: "#10b981", borderColor: "#10b981" }}
+                        >
+                          Plan Journey
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

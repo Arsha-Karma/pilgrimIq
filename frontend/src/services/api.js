@@ -1,6 +1,6 @@
 const DEFAULT_API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:5000/api";
 
-const getHeaders = (token) => {
+export const getHeaders = (token) => {
   const headers = {
     "Content-Type": "application/json",
   };
@@ -10,7 +10,7 @@ const getHeaders = (token) => {
   return headers;
 };
 
-const fetchAPI = async (endpoint, options = {}) => {
+export const fetchAPI = async (endpoint, options = {}) => {
   const urls = [
     `${DEFAULT_API_URL}${endpoint}`,
     DEFAULT_API_URL.includes("127.0.0.1")
@@ -140,6 +140,92 @@ export const apiDeleteFamilyMember = async (memberId, token) => {
     headers: getHeaders(token),
   });
 };
+
+// PILGRIMAGE CENTER API ENDPOINTS
+export const apiGetPilgrimageCenters = async (queryParams = {}, token = null) => {
+  const params = new URLSearchParams();
+  Object.keys(queryParams).forEach((key) => {
+    if (queryParams[key] !== undefined && queryParams[key] !== null && queryParams[key] !== "") {
+      params.append(key, queryParams[key]);
+    }
+  });
+  const queryString = params.toString() ? `?${params.toString()}` : "";
+  return fetchAPI(`/pilgrimage-centers${queryString}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+export const apiGetPilgrimageCenterById = async (id, token = null) => {
+  return fetchAPI(`/pilgrimage-centers/${id}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+export const apiCreatePilgrimageCenter = async (centerData, token) => {
+  return fetchAPI("/pilgrimage-centers", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(centerData),
+  });
+};
+
+export const apiUpdatePilgrimageCenter = async (id, centerData, token) => {
+  return fetchAPI(`/pilgrimage-centers/${id}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(centerData),
+  });
+};
+
+export const apiDeletePilgrimageCenter = async (id, token) => {
+  return fetchAPI(`/pilgrimage-centers/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+};
+
+export const apiUpdatePilgrimageCenterStatus = async (id, isActive, token) => {
+  return fetchAPI(`/pilgrimage-centers/${id}/status`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify({ isActive }),
+  });
+};
+
+// Enquiry APIs
+export const apiSubmitEnquiry = async (enquiryData, token = null) => {
+  return fetchAPI("/enquiries", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(enquiryData),
+  });
+};
+
+export const apiGetEnquiries = async (token = null) => {
+  return fetchAPI("/enquiries", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+export const apiUpdateEnquiryStatus = async (id, status, token = null) => {
+  return fetchAPI(`/enquiries/${id}/status`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+};
+
+export const apiReplyEnquiry = async (id, replyData, token = null) => {
+  return fetchAPI(`/enquiries/${id}/reply`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(replyData),
+  });
+};
+
 
 
 

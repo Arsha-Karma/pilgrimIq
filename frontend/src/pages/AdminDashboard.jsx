@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "../styles/AdminDashboard.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiGetAllUsers, apiRegisterDoctor } from "../services/api";
+import { apiGetAllUsers, apiRegisterDoctor, apiGetEnquiries, apiUpdateEnquiryStatus, apiReplyEnquiry } from "../services/api";
 import logo from "../assets/pilgrim-logo.png";
 import {
   FiGrid,
@@ -24,8 +24,14 @@ import {
   FiX,
   FiPlusCircle,
   FiEye,
-  FiEyeOff
+  FiEyeOff,
+  FiCompass,
+  FiChevronDown,
+  FiChevronUp,
+  FiMail,
+  FiSend
 } from "react-icons/fi";
+import AdminPilgrimageCenters from "./AdminPilgrimageCenters";
 
 function AdminDashboard() {
   const { user, token, logout } = useAuth();
@@ -37,6 +43,153 @@ function AdminDashboard() {
   const [notificationMsg, setNotificationMsg] = useState("");
   const [dbUsers, setDbUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Expandable family member rows state & Pilgrim Modal state
+  const [expandedUserIds, setExpandedUserIds] = useState(new Set());
+  const [viewingPilgrimModal, setViewingPilgrimModal] = useState(null);
+
+  // User Enquiries state
+  const [dbEnquiries, setDbEnquiries] = useState([]);
+  const [loadingEnquiries, setLoadingEnquiries] = useState(false);
+  const [viewingEnquiryModal, setViewingEnquiryModal] = useState(null);
+  const [viewingReplyModal, setViewingReplyModal] = useState(null);
+  const [enquirySearchTerm, setEnquirySearchTerm] = useState("");
+  const [enquiryStatusFilter, setEnquiryStatusFilter] = useState("all");
+
+  // Direct Reply Modal state
+  const [showReplyFormModal, setShowReplyFormModal] = useState(false);
+  const [replyingEnquiry, setReplyingEnquiry] = useState(null);
+  const [replyMessageText, setReplyMessageText] = useState("");
+  const [replySubjectText, setReplySubjectText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+
+  const fetchEnquiries = useCallback(async () => {
+    try {
+      setLoadingEnquiries(true);
+      const data = await apiGetEnquiries(token);
+      if (data && data.enquiries) {
+        setDbEnquiries(data.enquiries);
+      }
+    } catch (err) {
+      console.error("Failed to load enquiries:", err);
+    } finally {
+      setLoadingEnquiries(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchEnquiries();
+  }, [fetchEnquiries]);
+
+  const handleUpdateEnquiryStatus = async (id, status) => {
+    try {
+      await apiUpdateEnquiryStatus(id, status, token);
+      triggerAction(`Enquiry status updated to ${status}`);
+      fetchEnquiries();
+      if (viewingEnquiryModal && viewingEnquiryModal._id === id) {
+        setViewingEnquiryModal((prev) => (prev ? { ...prev, status } : null));
+      }
+    } catch (err) {
+      console.error("Failed to update enquiry status:", err);
+    }
+  };
+
+  const handleOpenReplyFormModal = (enquiry) => {
+    setReplyingEnquiry(enquiry);
+    setReplySubjectText(`Re: ${enquiry.subject || "PilgrimIQ Inquiry"}`);
+    setReplyMessageText(
+      `Hello ${enquiry.name || "Pilgrim"},\n\nThank you for reaching out to PilgrimIQ Support.\n\n[ Type your reply here ]\n\n--------------------------\nOriginal Inquiry:\n"${enquiry.message}"`
+    );
+    setShowReplyFormModal(true);
+  };
+
+  const handleSendDirectEmailReply = async (e) => {
+    e.preventDefault();
+    if (!replyingEnquiry || !replyMessageText.trim()) return;
+
+    try {
+      setSendingReply(true);
+      const res = await apiReplyEnquiry(
+        replyingEnquiry._id,
+        {
+          replyMessage: replyMessageText,
+          replySubject: replySubjectText,
+        },
+        token
+      );
+
+      triggerAction(res.message || `Reply email dispatched to ${replyingEnquiry.email}!`);
+      setShowReplyFormModal(false);
+      setReplyingEnquiry(null);
+      setReplyMessageText("");
+      fetchEnquiries();
+      if (viewingEnquiryModal && viewingEnquiryModal._id === replyingEnquiry._id) {
+        setViewingEnquiryModal((prev) => (prev ? { ...prev, status: "Replied" } : null));
+      }
+    } catch (err) {
+      alert("Failed to send reply email: " + (err.message || "Server error"));
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const handleOpenGmailWeb = (enquiry) => {
+    if (!enquiry || !enquiry.email) return;
+
+    const email = enquiry.email;
+    const subject = encodeURIComponent(`Re: ${enquiry.subject || "PilgrimIQ Inquiry"}`);
+    const body = encodeURIComponent(
+      `Hello ${enquiry.name || "Pilgrim"},\n\nThank you for reaching out to PilgrimIQ Support regarding "${enquiry.subject || "your inquiry"}".\n\n\n\n--------------------------\nOriginal Inquiry from ${enquiry.name} (${enquiry.email}):\n"${enquiry.message}"\n\nBest regards,\nPilgrimIQ Admin & Support Team`
+    );
+
+    // Open Gmail compose in a new browser tab without OS popup!
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, "_blank");
+
+    if (enquiry._id) {
+      handleUpdateEnquiryStatus(enquiry._id, "Replied");
+    }
+  };
+
+  const filteredEnquiries = dbEnquiries.filter((enq) => {
+    const term = enquirySearchTerm.toLowerCase().trim();
+    const matchesSearch =
+      !term ||
+      (enq.name || "").toLowerCase().includes(term) ||
+      (enq.email || "").toLowerCase().includes(term) ||
+      (enq.subject || "").toLowerCase().includes(term) ||
+      (enq.message || "").toLowerCase().includes(term);
+
+    const isUnreplied = enq.status !== "Replied";
+
+    if (enquiryStatusFilter === "all") return matchesSearch && isUnreplied;
+    return matchesSearch && isUnreplied && enq.status === enquiryStatusFilter;
+  });
+
+  const repliedEnquiriesList = dbEnquiries.filter((enq) => {
+    const term = enquirySearchTerm.toLowerCase().trim();
+    const matchesSearch =
+      !term ||
+      (enq.name || "").toLowerCase().includes(term) ||
+      (enq.email || "").toLowerCase().includes(term) ||
+      (enq.subject || "").toLowerCase().includes(term) ||
+      (enq.message || "").toLowerCase().includes(term) ||
+      (enq.adminReply || "").toLowerCase().includes(term);
+
+    return enq.status === "Replied" && matchesSearch;
+  });
+
+  const toggleExpandUser = (userId) => {
+    setExpandedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
 
   // Doctor Registration Modal state & validation
   const [showDoctorModal, setShowDoctorModal] = useState(false);
@@ -79,13 +232,13 @@ function AdminDashboard() {
         if (!value || !value.trim()) {
           error = "Phone Number is required";
         } else if (/[^\d]/.test(value)) {
-          error = "Phone number must contain digits only";
+          error = "Phone number can only contain digits (letters and symbols are not allowed)";
         } else if (/^[0-5]/.test(value)) {
-          error = "Phone number cannot start with 0, 1, 2, 3, 4, or 5";
+          error = "Phone number must start with a digit between 6 and 9";
         } else if (value.length !== 10) {
           error = "Phone number must be exactly 10 digits";
-        } else if (/^(\d)\1{9}$/.test(value)) {
-          error = "Invalid phone number format (e.g., 1000000000 is not allowed)";
+        } else if (/^(\d)\1{9}$/.test(value) || /^[6-9]0{8,9}$/.test(value) || /^[6-9](\d)\1{8}$/.test(value)) {
+          error = "Invalid phone number format (repetitive numbers like 7000000000 are not allowed)";
         }
         break;
 
@@ -265,35 +418,53 @@ function AdminDashboard() {
     (u) => u.role !== "admin" && u.role !== "physician" && u.email !== "pilgrimlq03@gmail.com"
   );
 
-  // Convert real registered users into pilgrim table format
+  // Convert real registered users & family members into pilgrim table format
   const pilgrimsList = registeredUserAccounts.map((u, index) => ({
+    _id: u._id,
     id: `REG-${u._id ? u._id.substring(u._id.length - 6).toUpperCase() : `00${index + 1}`}`,
     name: u.name || "Registered Pilgrim",
     email: u.email,
     phone: u.phone || "Not provided",
+    familyMembers: u.familyMembers || [],
     riskScore: "Low (14%)",
     status: "Cleared",
     location: "Pamba Base Camp",
     lastCheckin: u.createdAt
       ? new Date(u.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
       : "Just registered",
+    rawUser: u,
   }));
 
+  const totalFamilyMembersCount = pilgrimsList.reduce((acc, p) => acc + p.familyMembers.length, 0);
+
   const filteredPilgrims = pilgrimsList.filter((pilgrim) => {
-    const matchesSearch =
-      pilgrim.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pilgrim.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pilgrim.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase().trim();
+    const matchesUser =
+      pilgrim.name.toLowerCase().includes(term) ||
+      pilgrim.id.toLowerCase().includes(term) ||
+      pilgrim.email.toLowerCase().includes(term) ||
+      pilgrim.phone.toLowerCase().includes(term);
+
+    const matchesFamily = pilgrim.familyMembers.some((fm) =>
+      (fm.name || "").toLowerCase().includes(term) ||
+      (fm.relationship || "").toLowerCase().includes(term) ||
+      (fm.phone || "").toLowerCase().includes(term) ||
+      (fm.bloodGroup || "").toLowerCase().includes(term) ||
+      (fm.chronicConditions || "").toLowerCase().includes(term)
+    );
+
+    const matchesSearch = !term || matchesUser || matchesFamily;
 
     if (statusFilter === "all") return matchesSearch;
     if (statusFilter === "cleared") return matchesSearch && pilgrim.status === "Cleared";
     if (statusFilter === "alert") return matchesSearch && pilgrim.status === "Medical Alert";
     if (statusFilter === "review") return matchesSearch && pilgrim.status === "Under Review";
+    if (statusFilter === "has_family") return matchesSearch && pilgrim.familyMembers.length > 0;
     return matchesSearch;
   });
 
@@ -311,7 +482,7 @@ function AdminDashboard() {
 
         <nav className="sidebar-nav">
           <div className="nav-section-label">MAIN NAVIGATION</div>
-          
+
           <button
             className={`nav-item ${activeTab === "overview" ? "active" : ""}`}
             onClick={() => setActiveTab("overview")}
@@ -347,7 +518,34 @@ function AdminDashboard() {
             <span className="nav-tag neutral">Live Monitor</span>
           </button>
 
+          <button
+            className={`nav-item ${activeTab === "centers" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("centers");
+              triggerAction("Opened Pilgrimage Centers Management");
+            }}
+          >
+            <FiCompass className="nav-icon" />
+            <span>Pilgrimage Centers</span>
+          </button>
+
           <div className="nav-section-label" style={{ marginTop: "20px" }}>MANAGEMENT</div>
+
+          <button
+            className={`nav-item ${activeTab === "enquiries" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("enquiries");
+              triggerAction("Opened User Enquiries Management");
+            }}
+          >
+            <FiMail className="nav-icon" />
+            <span>User Enquiries</span>
+            {dbEnquiries.filter((e) => e.status === "New").length > 0 && (
+              <span className="nav-tag green">
+                {dbEnquiries.filter((e) => e.status === "New").length} New
+              </span>
+            )}
+          </button>
 
           <button
             className={`nav-item ${activeTab === "doctors" ? "active" : ""}`}
@@ -420,6 +618,8 @@ function AdminDashboard() {
               {activeTab === "pilgrims" && "Registered Pilgrims Directory"}
               {activeTab === "camps" && "Base Camp Operations Center"}
               {activeTab === "alerts" && "Emergency Health Monitoring"}
+              {activeTab === "centers" && "Pilgrimage Center Management"}
+              {activeTab === "enquiries" && "User Enquiries & Helpdesk Messages"}
               {activeTab === "doctors" && "Physicians & Medical Staff"}
               {activeTab === "reports" && "AI Health Audit & Reports"}
               {activeTab === "settings" && "System Configuration & Settings"}
@@ -445,334 +645,956 @@ function AdminDashboard() {
             </div>
           )}
 
-          {/* Hero Banner */}
-          <div className="admin-hero">
-            <div>
-              <h1>Welcome back, {user?.name || "Administrator"} 👋</h1>
-              <p>Real-time Pilgrimage Health Surveillance, Safety Monitoring & Medical Control</p>
-            </div>
-            <div className="admin-quick-actions-bar">
-              <button className="btn-alert" onClick={() => triggerAction("Broadcast Emergency Alert")}>
-                <FiAlertTriangle /> Broadcast Alert
-              </button>
-              <button className="btn-primary" onClick={() => triggerAction("Generate Daily Operations Report")}>
-                <FiFileText /> Daily Report
-              </button>
-            </div>
-          </div>
+          {/* Hero Banner & Key Metrics Cards (Shown only on Overview tab) */}
+          {activeTab === "overview" && (
+            <>
+              <div className="admin-hero">
+                <div>
+                  <h1>Welcome back, {user?.name || "Administrator"} 👋</h1>
+                  <p>Real-time Pilgrimage Health Surveillance, Safety Monitoring & Medical Control</p>
+                </div>
+                <div className="admin-quick-actions-bar">
+                  <button className="btn-alert" onClick={() => triggerAction("Broadcast Emergency Alert")}>
+                    <FiAlertTriangle /> Broadcast Alert
+                  </button>
+                  <button className="btn-primary" onClick={() => triggerAction("Generate Daily Operations Report")}>
+                    <FiFileText /> Daily Report
+                  </button>
+                </div>
+              </div>
 
-          {/* Key Metrics Cards */}
-          <div className="kpi-grid">
-            <div className="kpi-card blue">
-              <div className="kpi-header">
-                <span>TOTAL REGISTERED PILGRIMS</span>
-                <FiUsers className="kpi-icon" />
-              </div>
-              <div className="kpi-value">{registeredUserAccounts.length}</div>
-              <div className="kpi-trend positive">
-                <FiTrendingUp /> {registeredUserAccounts.length} Registered User Account{registeredUserAccounts.length === 1 ? "" : "s"}
-              </div>
-            </div>
+              {/* Key Metrics Cards */}
+              <div className="kpi-grid">
+                <div className="kpi-card blue">
+                  <div className="kpi-header">
+                    <span>TOTAL REGISTERED PILGRIMS</span>
+                    <FiUsers className="kpi-icon" />
+                  </div>
+                  <div className="kpi-value">{registeredUserAccounts.length}</div>
+                  <div className="kpi-trend positive">
+                    <FiTrendingUp /> {registeredUserAccounts.length} Registered User Account{registeredUserAccounts.length === 1 ? "" : "s"}
+                  </div>
+                </div>
 
-            <div className="kpi-card green">
-              <div className="kpi-header">
-                <span>MEDICAL BASE CAMPS</span>
-                <FiMapPin className="kpi-icon" />
-              </div>
-              <div className="kpi-value">48 Camps</div>
-              <div className="kpi-trend positive">
-                <FiCheckCircle /> 100% Operational
-              </div>
-            </div>
+                <div className="kpi-card green">
+                  <div className="kpi-header">
+                    <span>MEDICAL BASE CAMPS</span>
+                    <FiMapPin className="kpi-icon" />
+                  </div>
+                  <div className="kpi-value">48 Camps</div>
+                  <div className="kpi-trend positive">
+                    <FiCheckCircle /> 100% Operational
+                  </div>
+                </div>
 
-            <div className="kpi-card red">
-              <div className="kpi-header">
-                <span>ACTIVE HEALTH ALERTS</span>
-                <FiAlertTriangle className="kpi-icon" />
-              </div>
-              <div className="kpi-value">0 Patients</div>
-              <div className="kpi-trend positive">
-                <FiActivity /> All registered pilgrims monitored
-              </div>
-            </div>
+                <div className="kpi-card red">
+                  <div className="kpi-header">
+                    <span>ACTIVE HEALTH ALERTS</span>
+                    <FiAlertTriangle className="kpi-icon" />
+                  </div>
+                  <div className="kpi-value">0 Patients</div>
+                  <div className="kpi-trend positive">
+                    <FiActivity /> All registered pilgrims monitored
+                  </div>
+                </div>
 
-            <div className="kpi-card purple">
-              <div className="kpi-header">
-                <span>EMERGENCY DISPATCH UNITS</span>
-                <FiShield className="kpi-icon" />
+                <div className="kpi-card purple">
+                  <div className="kpi-header">
+                    <span>EMERGENCY DISPATCH UNITS</span>
+                    <FiShield className="kpi-icon" />
+                  </div>
+                  <div className="kpi-value">64 Units</div>
+                  <div className="kpi-trend neutral">
+                    <FiClock /> Avg Response: 4.2 mins
+                  </div>
+                </div>
               </div>
-              <div className="kpi-value">64 Units</div>
-              <div className="kpi-trend neutral">
-                <FiClock /> Avg Response: 4.2 mins
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* Content Panels Grid */}
-          <div className="admin-content-grid">
-            {activeTab === "doctors" ? (
-              <div className="admin-panel main-panel">
-                <div className="panel-header">
-                  <div>
-                    <h3>Physicians & Medical Officers Directory</h3>
-                    <p>
-                      Official medical staff registered for base camp surveillance ({registeredDoctors.length} Registered Doctor{registeredDoctors.length === 1 ? "" : "s"})
-                    </p>
+          {activeTab === "centers" ? (
+            <AdminPilgrimageCenters token={token} showAlert={(type, msg) => triggerAction(msg)} />
+          ) : (
+            <div className="admin-content-grid" style={activeTab === "enquiries" ? { display: "block" } : {}}>
+              {activeTab === "enquiries" ? (
+                <>
+                  <div className="admin-panel main-panel">
+                    <div className="panel-header">
+                      <div>
+                        <h3>User Enquiries & Support Messages</h3>
+                        <p>
+                          Inquiries submitted by users via Contact Us page ({filteredEnquiries.length} pending • {filteredEnquiries.filter((e) => e.status === "New").length} unread)
+                        </p>
+                      </div>
+
+                      <div className="table-controls">
+                        <div className="search-box">
+                          <FiSearch className="search-icon" />
+                          <input
+                            type="text"
+                            placeholder="Search by name, email, subject, or message..."
+                            value={enquirySearchTerm}
+                            onChange={(e) => setEnquirySearchTerm(e.target.value)}
+                          />
+                        </div>
+
+                        <select
+                          className="filter-dropdown"
+                          value={enquiryStatusFilter}
+                          onChange={(e) => setEnquiryStatusFilter(e.target.value)}
+                        >
+                          <option value="all">All Pending Enquiries</option>
+                          <option value="New">New / Unread</option>
+                          <option value="Read">Read</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="table-responsive">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>SENDER NAME & EMAIL</th>
+                            <th>PILGRIMAGE CENTER / SUBJECT</th>
+                            <th>MESSAGE PREVIEW</th>
+                            <th>RECEIVED DATE</th>
+                            <th>ACTION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredEnquiries.length > 0 ? (
+                            filteredEnquiries.map((enq) => (
+                              <tr key={enq._id}>
+                                <td>
+                                  <div className="user-name" style={{ fontWeight: "700", color: "#f8fafc" }}>
+                                    {enq.name}
+                                  </div>
+                                  <div className="user-contact" style={{ fontFamily: "monospace", color: "#60a5fa" }}>
+                                    {enq.email}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: "600", color: "#38bdf8", fontSize: "13.5px" }}>
+                                    {enq.subject}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ color: "#cbd5e1", fontSize: "12.5px", maxWidth: "280px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {enq.message}
+                                  </div>
+                                </td>
+                                <td className="text-muted">
+                                  {new Date(enq.createdAt).toLocaleString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </td>
+                                <td style={{ whiteSpace: "nowrap" }}>
+                                  <button
+                                    className="btn-table-action"
+                                    onClick={() => {
+                                      setViewingEnquiryModal(enq);
+                                      if (enq.status === "New") {
+                                        handleUpdateEnquiryStatus(enq._id, "Read");
+                                      }
+                                    }}
+                                    style={{ marginRight: "6px" }}
+                                  >
+                                    View
+                                  </button>
+                                  {enq.status === "Replied" ? (
+                                    <button
+                                      className="btn-table-action"
+                                      onClick={() => setViewingReplyModal(enq)}
+                                      style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid #10b981" }}
+                                      title="View sent reply response message"
+                                    >
+                                      💬 View Reply
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="btn-table-action"
+                                      onClick={() => handleOpenReplyFormModal(enq)}
+                                      style={{ background: "#2563eb", color: "#ffffff" }}
+                                      title={`Compose direct email reply to ${enq.email}`}
+                                    >
+                                      ✉️ Reply
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="5" className="text-center" style={{ padding: "40px 20px" }}>
+                                <FiMail size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
+                                <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>
+                                  {loadingEnquiries ? "Loading user enquiries from database..." : "No user enquiries found."}
+                                </p>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
-                  <div>
-                    <button
-                      className="btn-primary"
-                      onClick={() => {
-                        setDoctorAlert({ type: "", message: "" });
-                        setShowDoctorModal(true);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        background: "#2563eb",
-                        border: "none",
-                        color: "#fff",
-                        padding: "9px 18px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)"
-                      }}
-                    >
-                      <FiPlusCircle size={18} /> Register New Doctor
-                    </button>
-                  </div>
-                </div>
+                  {/* DEDICATED REPLIED ENQUIRIES & RESPONSE HISTORY SECTION */}
+                  <div className="admin-panel main-panel" style={{ marginTop: "24px" }}>
+                    <div className="panel-header" style={{ borderBottom: "1px solid #1e293b", paddingBottom: "12px" }}>
+                      <div>
+                        <h3 style={{ color: "#34d399", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                          💬 Replied Enquiries & Admin Response History
+                        </h3>
+                        <p style={{ color: "#94a3b8", fontSize: "13px", marginTop: "4px" }}>
+                          All user inquiries that have received official admin replies ({repliedEnquiriesList.length} total)
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="table-responsive">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>DOCTOR ID</th>
-                        <th>NAME & SPECIALIZATION</th>
-                        <th>LOGIN ID / EMAIL</th>
-                        <th>STATUS</th>
-                        <th>REGISTERED ON</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {registeredDoctors.length > 0 ? (
-                        registeredDoctors.map((doc) => (
-                          <tr key={doc._id}>
-                            <td className="font-mono" style={{ color: "#60a5fa", fontWeight: "bold" }}>
-                              {doc.doctorCode || `DOC-${doc._id ? doc._id.substring(doc._id.length - 4).toUpperCase() : "101"}`}
-                            </td>
-                            <td>
-                              <div className="user-name" style={{ fontSize: "14.5px", fontWeight: "700" }}>
-                                Dr. {doc.name}
-                              </div>
-                              <div className="user-contact" style={{ color: "#38bdf8", fontWeight: "600" }}>
-                                {doc.specialization || "General Physician"}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="user-contact" style={{ fontFamily: "monospace", color: "#f8fafc", fontSize: "13px" }}>
-                                {doc.email}
-                              </div>
-                              <div className="user-contact" style={{ color: "#94a3b8", fontSize: "12px" }}>
-                                {doc.phone || "Phone not provided"}
-                              </div>
-                            </td>
-                            <td>
-                              <span className="status-pill success" style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700 }}>
-                                Active Physician
-                              </span>
-                            </td>
-                            <td className="text-muted">
-                              {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Active"}
+                    <div className="table-responsive">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>RECIPIENT NAME & EMAIL</th>
+                            <th>PILGRIMAGE CENTER / SUBJECT</th>
+                            <th>ORIGINAL INQUIRY</th>
+                            <th>ADMIN RESPONSE CONTENT</th>
+                            <th>REPLIED DATE</th>
+                            <th>ACTION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {repliedEnquiriesList.length > 0 ? (
+                            repliedEnquiriesList.map((enq) => (
+                              <tr key={`replied-${enq._id}`}>
+                                <td>
+                                  <div className="user-name" style={{ fontWeight: "700", color: "#f8fafc" }}>
+                                    {enq.name}
+                                  </div>
+                                  <div className="user-contact" style={{ fontFamily: "monospace", color: "#60a5fa" }}>
+                                    {enq.email}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: "600", color: "#38bdf8", fontSize: "13.5px" }}>
+                                    {enq.subject}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ color: "#94a3b8", fontSize: "12.5px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {enq.message}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ color: "#34d399", fontSize: "12.5px", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600" }}>
+                                    {enq.adminReply || "Replied via Admin Email"}
+                                  </div>
+                                </td>
+                                <td className="text-muted">
+                                  {enq.repliedAt
+                                    ? new Date(enq.repliedAt).toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                    : new Date(enq.updatedAt || enq.createdAt).toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                </td>
+                                <td>
+                                  <button
+                                    className="btn-table-action"
+                                    onClick={() => setViewingReplyModal(enq)}
+                                    style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid #10b981" }}
+                                  >
+                                    💬 View Reply
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="6" className="text-center" style={{ padding: "30px 20px" }}>
+                                <p style={{ color: "#94a3b8", fontSize: "14px", margin: 0 }}>
+                                  No replied enquiries found. When an admin replies to an inquiry, its status becomes Replied and details will appear here.
+                                </p>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : activeTab === "doctors" ? (
+                <div className="admin-panel main-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Physicians & Medical Officers Directory</h3>
+                      <p>
+                        Official medical staff registered for base camp surveillance ({registeredDoctors.length} Registered Doctor{registeredDoctors.length === 1 ? "" : "s"})
+                      </p>
+                    </div>
+
+                    <div>
+                      <button
+                        className="btn-primary"
+                        onClick={() => {
+                          setDoctorAlert({ type: "", message: "" });
+                          setShowDoctorModal(true);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          background: "#2563eb",
+                          border: "none",
+                          color: "#fff",
+                          padding: "9px 18px",
+                          borderRadius: "10px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                          boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)"
+                        }}
+                      >
+                        <FiPlusCircle size={18} /> Register New Doctor
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>DOCTOR ID</th>
+                          <th>NAME & SPECIALIZATION</th>
+                          <th>LOGIN ID / EMAIL</th>
+                          <th>STATUS</th>
+                          <th>REGISTERED ON</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registeredDoctors.length > 0 ? (
+                          registeredDoctors.map((doc) => (
+                            <tr key={doc._id}>
+                              <td className="font-mono" style={{ color: "#60a5fa", fontWeight: "bold" }}>
+                                {doc.doctorCode || `DOC-${doc._id ? doc._id.substring(doc._id.length - 4).toUpperCase() : "101"}`}
+                              </td>
+                              <td>
+                                <div className="user-name" style={{ fontSize: "14.5px", fontWeight: "700" }}>
+                                  Dr. {doc.name}
+                                </div>
+                                <div className="user-contact" style={{ color: "#38bdf8", fontWeight: "600" }}>
+                                  {doc.specialization || "General Physician"}
+                                </div>
+                              </td>
+                              <td>
+                                <div className="user-contact" style={{ fontFamily: "monospace", color: "#f8fafc", fontSize: "13px" }}>
+                                  {doc.email}
+                                </div>
+                                <div className="user-contact" style={{ color: "#94a3b8", fontSize: "12px" }}>
+                                  {doc.phone || "Phone not provided"}
+                                </div>
+                              </td>
+                              <td>
+                                <span className="status-pill success" style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700 }}>
+                                  Active Physician
+                                </span>
+                              </td>
+                              <td className="text-muted">
+                                {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Active"}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" className="text-center" style={{ padding: "40px 20px" }}>
+                              <FiUserCheck size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
+                              <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>No registered doctors found in database.</p>
+                              <p style={{ color: "#94a3b8", fontSize: "13px" }}>Click "+ Register New Doctor" to add a physician and email them credentials.</p>
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="5" className="text-center" style={{ padding: "40px 20px" }}>
-                            <FiUserCheck size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
-                            <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>No registered doctors found in database.</p>
-                            <p style={{ color: "#94a3b8", fontSize: "13px" }}>Click "+ Register New Doctor" to add a physician and email them credentials.</p>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+              ) : (
+                /* Registered Pilgrims Register Table */
+                <div className="admin-panel main-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Pilgrim Health & Risk Register</h3>
+                      <p>
+                        Live status of registered pilgrims ({registeredUserAccounts.length} user account{registeredUserAccounts.length === 1 ? "" : "s"} • {totalFamilyMembersCount} registered family member{totalFamilyMembersCount === 1 ? "" : "s"})
+                      </p>
+                    </div>
+
+                    <div className="table-controls">
+                      <div className="search-box">
+                        <FiSearch className="search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search by user name, email, ID, or family member name..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+
+                      <select
+                        className="filter-dropdown"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="cleared">Cleared</option>
+                        <option value="review">Under Review</option>
+                        <option value="alert">Medical Alert</option>
+                        <option value="has_family">With Family Members</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>PILGRIM ID</th>
+                          <th>NAME & CONTACT</th>
+                          <th>FAMILY MEMBERS</th>
+                          <th>LOCATION</th>
+                          <th>RISK INDEX</th>
+                          <th>STATUS</th>
+                          <th>REGISTERED / CHECK-IN</th>
+                          <th>ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPilgrims.length > 0 ? (
+                          filteredPilgrims.map((pilgrim) => {
+                            const isExpanded = expandedUserIds.has(pilgrim._id);
+                            return (
+                              <React.Fragment key={pilgrim.id}>
+                                <tr>
+                                  <td className="font-mono">{pilgrim.id}</td>
+                                  <td>
+                                    <div className="user-name">
+                                      {pilgrim.name}{" "}
+                                      <span style={{ fontSize: "10px", background: "#2563eb", color: "#fff", padding: "1px 5px", borderRadius: "4px", marginLeft: "4px" }}>
+                                        Registered User
+                                      </span>
+                                    </div>
+                                    <div className="user-contact">{pilgrim.email}</div>
+                                    {pilgrim.phone && pilgrim.phone !== "Not provided" && (
+                                      <div className="user-contact" style={{ color: "#94a3b8" }}>{pilgrim.phone}</div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {pilgrim.familyMembers && pilgrim.familyMembers.length > 0 ? (
+                                      <button
+                                        className="family-count-pill"
+                                        onClick={() => toggleExpandUser(pilgrim._id)}
+                                        title="Click to view family members list"
+                                      >
+                                        👨‍👩‍👧‍👦 {pilgrim.familyMembers.length} Member{pilgrim.familyMembers.length === 1 ? "" : "s"}{" "}
+                                        {isExpanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                                      </button>
+                                    ) : (
+                                      <span className="no-family-badge">No family added</span>
+                                    )}
+                                  </td>
+                                  <td>{pilgrim.location}</td>
+                                  <td>
+                                    <span className="risk-badge low">
+                                      {pilgrim.riskScore}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="status-pill success">
+                                      {pilgrim.status}
+                                    </span>
+                                  </td>
+                                  <td className="text-muted">{pilgrim.lastCheckin}</td>
+                                  <td>
+                                    <button
+                                      className="btn-table-action"
+                                      onClick={() => setViewingPilgrimModal(pilgrim)}
+                                    >
+                                      View
+                                    </button>
+                                  </td>
+                                </tr>
+
+                                {/* Expanded Family Sub-Table Row */}
+                                {isExpanded && pilgrim.familyMembers && pilgrim.familyMembers.length > 0 && (
+                                  <tr className="expanded-family-row">
+                                    <td colSpan="8">
+                                      <div className="family-subtable-box">
+                                        <div className="family-subtable-header">
+                                          <h4>
+                                            👨‍👩‍👧‍👦 Family Members Registered by {pilgrim.name} ({pilgrim.familyMembers.length})
+                                          </h4>
+                                          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                                            User Email: {pilgrim.email}
+                                          </span>
+                                        </div>
+                                        <div className="family-cards-grid">
+                                          {pilgrim.familyMembers.map((fm, idx) => (
+                                            <div key={fm._id || idx} className="admin-family-card">
+                                              <div className="family-card-head">
+                                                <span className="family-card-name">{fm.name}</span>
+                                                <span className="family-relation-tag">{fm.relationship || "Family Member"}</span>
+                                              </div>
+                                              <div className="family-card-detail">
+                                                <strong>Age / Gender:</strong> {fm.age ? `${fm.age} Yrs` : "N/A"} {fm.gender ? `• ${fm.gender}` : ""}
+                                              </div>
+                                              <div className="family-card-detail">
+                                                <strong>Blood Group:</strong> <span style={{ color: "#f43f5e", fontWeight: "bold" }}>{fm.bloodGroup || "Not specified"}</span>
+                                              </div>
+                                              {fm.phone && (
+                                                <div className="family-card-detail">
+                                                  <strong>Phone:</strong> {fm.phone}
+                                                </div>
+                                              )}
+                                              {fm.emergencyContactName && (
+                                                <div className="family-card-detail">
+                                                  <strong>Emergency Contact:</strong> {fm.emergencyContactName} ({fm.emergencyContactPhone || "No phone"})
+                                                </div>
+                                              )}
+                                              {(fm.chronicConditions || (fm.existingConditions && fm.existingConditions.length > 0)) && (
+                                                <div className="family-card-detail">
+                                                  <strong>Medical Notes:</strong>{" "}
+                                                  <span style={{ color: "#fbbf24" }}>
+                                                    {fm.chronicConditions || fm.existingConditions.join(", ")}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              <div className="family-vitals-row">
+                                                <span>BP: {fm.bloodPressure || "120/80"}</span>
+                                                <span>SpO2: {fm.spo2 || "98%"}</span>
+                                                <span>Pulse: {fm.heartRate || "72 bpm"}</span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="8" className="text-center">
+                              {loadingUsers ? "Loading registered users from database..." : "No registered user accounts found."}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Right Side Panels: Base Camp Operations & Admin Quick Tools (Hidden in User Enquiries tab) */}
+              {activeTab !== "enquiries" && (
+                <div className="admin-sidebar-panels">
+                  {/* Medical Stations Summary */}
+                  <div className="admin-panel">
+                    <div className="panel-header-simple">
+                      <FiMapPin /> <h4>Base Camp Operations</h4>
+                    </div>
+                    <ul className="station-list">
+                      <li>
+                        <div className="station-info">
+                          <span className="station-name">Pamba Central Medical Unit</span>
+                          <span className="station-meta">Capacity: 84% • 12 Doctors</span>
+                        </div>
+                        <span className="badge-online">Active</span>
+                      </li>
+                      <li>
+                        <div className="station-info">
+                          <span className="station-name">Neelimala Oxygen Station</span>
+                          <span className="station-meta">Capacity: 62% • 6 Medics</span>
+                        </div>
+                        <span className="badge-online">Active</span>
+                      </li>
+                      <li>
+                        <div className="station-info">
+                          <span className="station-name">Appachimedu Cardiac Response</span>
+                          <span className="station-meta">Capacity: 91% • High Priority</span>
+                        </div>
+                        <span className="badge-busy">Busy</span>
+                      </li>
+                      <li>
+                        <div className="station-info">
+                          <span className="station-name">Sannidhanam Multi-Specialty</span>
+                          <span className="station-meta">Capacity: 45% • 18 Doctors</span>
+                        </div>
+                        <span className="badge-online">Active</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Quick Admin Tools */}
+                  <div className="admin-panel">
+                    <div className="panel-header-simple">
+                      <FiSettings /> <h4>Quick Management Tools</h4>
+                    </div>
+                    <div className="admin-tools-grid">
+                      <button
+                        className="tool-btn"
+                        onClick={() => {
+                          setDoctorAlert({ type: "", message: "" });
+                          setShowDoctorModal(true);
+                        }}
+                        style={{ border: "1px solid #2563eb", background: "rgba(37, 99, 235, 0.15)" }}
+                      >
+                        <FiUserCheck style={{ color: "#60a5fa" }} />
+                        <span style={{ color: "#ffffff", fontWeight: 700 }}>+ Register Doctor</span>
+                      </button>
+                      <button className="tool-btn" onClick={() => triggerAction("Ran AI Risk Assessment Sync")}>
+                        <FiActivity /> Sync AI Model
+                      </button>
+                      <button className="tool-btn" onClick={() => triggerAction("Downloaded System Logs")}>
+                        <FiFileText /> System Logs
+                      </button>
+                      <button className="tool-btn" onClick={() => triggerAction("Refreshed Emergency Grid")}>
+                        <FiShield /> Reset Grid
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+
+        {/* Pilgrim & Family Details Modal */}
+        {viewingPilgrimModal && (
+          <div className="modal-overlay">
+            <div className="modal-card" style={{ maxWidth: "750px", width: "92%" }}>
+              <div className="modal-header">
+                <h3>
+                  👤 Pilgrim & Family Profile Details
+                </h3>
+                <button className="btn-close-modal" onClick={() => setViewingPilgrimModal(null)}>
+                  <FiX />
+                </button>
               </div>
-            ) : (
-              /* Registered Pilgrims Register Table */
-              <div className="admin-panel main-panel">
-              <div className="panel-header">
-                <div>
-                  <h3>Pilgrim Health & Risk Register</h3>
-                  <p>
-                    Live status of registered pilgrims ({registeredUserAccounts.length} registered user{registeredUserAccounts.length === 1 ? "" : "s"})
-                  </p>
+
+              <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto", padding: "20px" }}>
+                {/* Registered Account Info */}
+                <div style={{ background: "#1e293b", padding: "18px", borderRadius: "12px", border: "1px solid #334155", marginBottom: "20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <h4 style={{ margin: 0, color: "#60a5fa", fontSize: "16px" }}>
+                      {viewingPilgrimModal.name} ({viewingPilgrimModal.id})
+                    </h4>
+                    <span className="status-pill success">Registered Account</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "13px", color: "#cbd5e1" }}>
+                    <div><strong>Email:</strong> {viewingPilgrimModal.email}</div>
+                    <div><strong>Phone:</strong> {viewingPilgrimModal.phone}</div>
+                    <div><strong>Location:</strong> {viewingPilgrimModal.location}</div>
+                    <div><strong>Risk Index:</strong> <span style={{ color: "#34d399", fontWeight: "bold" }}>{viewingPilgrimModal.riskScore}</span></div>
+                    <div><strong>Check-in:</strong> {viewingPilgrimModal.lastCheckin}</div>
+                    <div><strong>Family Members Registered:</strong> {viewingPilgrimModal.familyMembers.length}</div>
+                  </div>
                 </div>
 
-                <div className="table-controls">
-                  <div className="search-box">
-                    <FiSearch className="search-icon" />
+                {/* Family Members List */}
+                <div>
+                  <h4 style={{ color: "#38bdf8", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    👨‍👩‍👧‍👦 Registered Family Members ({viewingPilgrimModal.familyMembers.length})
+                  </h4>
+
+                  {viewingPilgrimModal.familyMembers.length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      {viewingPilgrimModal.familyMembers.map((fm, idx) => (
+                        <div key={fm._id || idx} style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", padding: "16px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span style={{ fontSize: "15px", fontWeight: "bold", color: "#ffffff" }}>{fm.name}</span>
+                            <span className="family-relation-tag">{fm.relationship || "Family Member"}</span>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12.5px", color: "#94a3b8" }}>
+                            <div><strong style={{ color: "#cbd5e1" }}>Age / Gender:</strong> {fm.age ? `${fm.age} Yrs` : "N/A"} {fm.gender ? `• ${fm.gender}` : ""}</div>
+                            <div><strong style={{ color: "#cbd5e1" }}>Blood Group:</strong> <span style={{ color: "#f43f5e", fontWeight: "bold" }}>{fm.bloodGroup || "Not specified"}</span></div>
+                            <div><strong style={{ color: "#cbd5e1" }}>Phone:</strong> {fm.phone || "Not provided"}</div>
+                            <div><strong style={{ color: "#cbd5e1" }}>Emergency Contact:</strong> {fm.emergencyContactName ? `${fm.emergencyContactName} (${fm.emergencyContactPhone || ""})` : "Not specified"}</div>
+                          </div>
+                          {(fm.chronicConditions || (fm.existingConditions && fm.existingConditions.length > 0)) && (
+                            <div style={{ marginTop: "10px", fontSize: "12.5px", color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)", padding: "8px 12px", borderRadius: "6px" }}>
+                              <strong>Medical History / Chronic Conditions:</strong> {fm.chronicConditions || fm.existingConditions.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "24px", color: "#64748b", background: "#0f172a", borderRadius: "10px", border: "1px dashed #334155" }}>
+                      No family members added yet by this registered user.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => setViewingPilgrimModal(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enquiry Detail Modal */}
+        {viewingEnquiryModal && (
+          <div className="modal-overlay">
+            <div className="modal-card" style={{ maxWidth: "650px", width: "92%" }}>
+              <div className="modal-header">
+                <h3>📩 User Inquiry Details</h3>
+                <button className="btn-close-modal" onClick={() => setViewingEnquiryModal(null)}>
+                  <FiX />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ padding: "20px" }}>
+                <div style={{ background: "#1e293b", padding: "16px", borderRadius: "10px", border: "1px solid #334155", marginBottom: "16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <div>
+                      <h4 style={{ margin: 0, color: "#f8fafc", fontSize: "16px" }}>{viewingEnquiryModal.name}</h4>
+                      <a href={`mailto:${viewingEnquiryModal.email}`} style={{ color: "#60a5fa", fontSize: "13px", fontFamily: "monospace" }}>
+                        {viewingEnquiryModal.email}
+                      </a>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      {new Date(viewingEnquiryModal.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div style={{ marginTop: "12px", borderTop: "1px solid #334155", paddingTop: "12px" }}>
+                    <span style={{ fontSize: "12px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold" }}>Pilgrimage Center / Subject</span>
+                    <h4 style={{ margin: "4px 0 0 0", color: "#38bdf8", fontSize: "15px" }}>{viewingEnquiryModal.subject}</h4>
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: "12px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold" }}>Inquiry Message</span>
+                  <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", padding: "16px", marginTop: "6px", color: "#f1f5f9", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
+                    {viewingEnquiryModal.message}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => handleUpdateEnquiryStatus(viewingEnquiryModal._id, "Read")}
+                    style={{ background: "#334155", color: "#fff" }}
+                  >
+                    Mark as Read
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-submit-doctor"
+                    onClick={() => handleUpdateEnquiryStatus(viewingEnquiryModal._id, "Replied")}
+                    style={{ background: "#10b981" }}
+                  >
+                    Mark as Replied
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="btn-submit-doctor"
+                    onClick={() => handleOpenReplyFormModal(viewingEnquiryModal)}
+                    style={{ background: "#2563eb", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <FiSend size={15} /> Compose Email Reply
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => handleOpenGmailWeb(viewingEnquiryModal)}
+                    style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid #10b981", cursor: "pointer" }}
+                    title="Opens Gmail web compose directly in browser"
+                  >
+                    🌐 Open Web Gmail
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Direct Email Reply Modal */}
+        {showReplyFormModal && replyingEnquiry && (
+          <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div className="modal-card" style={{ maxWidth: "680px", width: "92%" }}>
+              <div className="modal-header">
+                <h3>✉️ Compose Email Reply</h3>
+                <button className="btn-close-modal" onClick={() => setShowReplyFormModal(false)}>
+                  <FiX />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendDirectEmailReply}>
+                <div className="modal-body" style={{ padding: "20px" }}>
+                  <div style={{ background: "#1e293b", padding: "14px", borderRadius: "10px", border: "1px solid #334155", marginBottom: "16px" }}>
+                    <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                      <strong>To:</strong> <span style={{ color: "#60a5fa", fontFamily: "monospace", fontSize: "14px" }}>{replyingEnquiry.email}</span> ({replyingEnquiry.name})
+                    </div>
+                    <div style={{ fontSize: "13px", color: "#cbd5e1" }}>
+                      <strong>Subject:</strong> {replySubjectText}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "14px" }}>
+                    <label style={{ color: "#f8fafc", fontWeight: "700", marginBottom: "6px", display: "block" }}>
+                      Email Subject
+                    </label>
                     <input
                       type="text"
-                      placeholder="Search by ID, name or email..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      value={replySubjectText}
+                      onChange={(e) => setReplySubjectText(e.target.value)}
+                      required
+                      style={{ background: "#0f172a", border: "1px solid #334155", color: "#ffffff", padding: "10px 14px", borderRadius: "8px", width: "100%" }}
                     />
                   </div>
 
-                  <select
-                    className="filter-dropdown"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="cleared">Cleared</option>
-                    <option value="review">Under Review</option>
-                    <option value="alert">Medical Alert</option>
-                  </select>
+                  <div className="form-group">
+                    <label style={{ color: "#f8fafc", fontWeight: "700", marginBottom: "6px", display: "block" }}>
+                      Your Reply Message
+                    </label>
+                    <textarea
+                      rows="8"
+                      value={replyMessageText}
+                      onChange={(e) => setReplyMessageText(e.target.value)}
+                      required
+                      placeholder="Type your response here..."
+                      style={{ background: "#0f172a", border: "1px solid #334155", color: "#ffffff", padding: "12px 14px", borderRadius: "8px", width: "100%", fontFamily: "inherit", fontSize: "14px", lineHeight: "1.6" }}
+                    ></textarea>
+                  </div>
                 </div>
-              </div>
 
-              <div className="table-responsive">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>PILGRIM ID</th>
-                      <th>NAME & CONTACT</th>
-                      <th>LOCATION</th>
-                      <th>RISK INDEX</th>
-                      <th>STATUS</th>
-                      <th>REGISTERED / CHECK-IN</th>
-                      <th>ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPilgrims.length > 0 ? (
-                      filteredPilgrims.map((pilgrim) => (
-                        <tr key={pilgrim.id}>
-                          <td className="font-mono">{pilgrim.id}</td>
-                          <td>
-                            <div className="user-name">
-                              {pilgrim.name}{" "}
-                              <span style={{ fontSize: "10px", background: "#2563eb", color: "#fff", padding: "1px 5px", borderRadius: "4px", marginLeft: "4px" }}>
-                                Registered User
-                              </span>
-                            </div>
-                            <div className="user-contact">{pilgrim.email}</div>
-                            {pilgrim.phone && pilgrim.phone !== "Not provided" && (
-                              <div className="user-contact" style={{ color: "#94a3b8" }}>{pilgrim.phone}</div>
-                            )}
-                          </td>
-                          <td>{pilgrim.location}</td>
-                          <td>
-                            <span className="risk-badge low">
-                              {pilgrim.riskScore}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="status-pill success">
-                              {pilgrim.status}
-                            </span>
-                          </td>
-                          <td className="text-muted">{pilgrim.lastCheckin}</td>
-                          <td>
-                            <button
-                              className="btn-table-action"
-                              onClick={() => triggerAction(`Inspected Pilgrim ${pilgrim.id} (${pilgrim.email})`)}
-                            >
-                              View
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="7" className="text-center">
-                          {loadingUsers ? "Loading registered users from database..." : "No registered user accounts found."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            )}
-
-            {/* Right Side Panels: Base Camp Operations & Admin Quick Tools */}
-            <div className="admin-sidebar-panels">
-              {/* Medical Stations Summary */}
-              <div className="admin-panel">
-                <div className="panel-header-simple">
-                  <FiMapPin /> <h4>Base Camp Operations</h4>
-                </div>
-                <ul className="station-list">
-                  <li>
-                    <div className="station-info">
-                      <span className="station-name">Pamba Central Medical Unit</span>
-                      <span className="station-meta">Capacity: 84% • 12 Doctors</span>
-                    </div>
-                    <span className="badge-online">Active</span>
-                  </li>
-                  <li>
-                    <div className="station-info">
-                      <span className="station-name">Neelimala Oxygen Station</span>
-                      <span className="station-meta">Capacity: 62% • 6 Medics</span>
-                    </div>
-                    <span className="badge-online">Active</span>
-                  </li>
-                  <li>
-                    <div className="station-info">
-                      <span className="station-name">Appachimedu Cardiac Response</span>
-                      <span className="station-meta">Capacity: 91% • High Priority</span>
-                    </div>
-                    <span className="badge-busy">Busy</span>
-                  </li>
-                  <li>
-                    <div className="station-info">
-                      <span className="station-name">Sannidhanam Multi-Specialty</span>
-                      <span className="station-meta">Capacity: 45% • 18 Doctors</span>
-                    </div>
-                    <span className="badge-online">Active</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Quick Admin Tools */}
-              <div className="admin-panel">
-                <div className="panel-header-simple">
-                  <FiSettings /> <h4>Quick Management Tools</h4>
-                </div>
-                <div className="admin-tools-grid">
+                <div className="modal-footer" style={{ justifyContent: "space-between" }}>
                   <button
-                    className="tool-btn"
-                    onClick={() => {
-                      setDoctorAlert({ type: "", message: "" });
-                      setShowDoctorModal(true);
-                    }}
-                    style={{ border: "1px solid #2563eb", background: "rgba(37, 99, 235, 0.15)" }}
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => setShowReplyFormModal(false)}
+                    disabled={sendingReply}
                   >
-                    <FiUserCheck style={{ color: "#60a5fa" }} />
-                    <span style={{ color: "#ffffff", fontWeight: 700 }}>+ Register Doctor</span>
+                    Cancel
                   </button>
-                  <button className="tool-btn" onClick={() => triggerAction("Ran AI Risk Assessment Sync")}>
-                    <FiActivity /> Sync AI Model
-                  </button>
-                  <button className="tool-btn" onClick={() => triggerAction("Downloaded System Logs")}>
-                    <FiFileText /> System Logs
-                  </button>
-                  <button className="tool-btn" onClick={() => triggerAction("Refreshed Emergency Grid")}>
-                    <FiShield /> Reset Grid
+                  <button
+                    type="submit"
+                    className="btn-submit-doctor"
+                    disabled={sendingReply}
+                    style={{ background: "#2563eb", display: "flex", alignItems: "center", gap: "8px" }}
+                  >
+                    {sendingReply ? "Dispatching Email..." : "📨 Send Reply Email"}
                   </button>
                 </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* View Sent Reply Modal */}
+        {viewingReplyModal && (
+          <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div className="modal-card" style={{ maxWidth: "680px", width: "92%", background: "#0f172a", color: "#f8fafc", border: "1px solid #1e293b", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)" }}>
+              <div className="modal-header" style={{ borderBottom: "1px solid #1e293b", padding: "16px 20px" }}>
+                <h3 style={{ display: "flex", alignItems: "center", gap: "8px", color: "#34d399", margin: 0 }}>
+                  💬 Sent Admin Response Details
+                </h3>
+                <button className="btn-close-modal" onClick={() => setViewingReplyModal(null)} style={{ color: "#94a3b8" }}>
+                  <FiX />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ padding: "20px", background: "#0f172a" }}>
+                <div style={{ background: "#1e293b", padding: "14px 18px", borderRadius: "10px", border: "1px solid #334155", marginBottom: "16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                    <div>
+                      <span style={{ fontSize: "12px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold" }}>Recipient</span>
+                      <div style={{ color: "#ffffff", fontWeight: "700", fontSize: "15px" }}>{viewingReplyModal.name}</div>
+                      <div style={{ color: "#60a5fa", fontFamily: "monospace", fontSize: "13.5px" }}>{viewingReplyModal.email}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span className="status-pill success" style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid #10b981", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 700 }}>
+                        ✅ Status: Replied
+                      </span>
+                      <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "6px" }}>
+                        Sent: {viewingReplyModal.repliedAt ? new Date(viewingReplyModal.repliedAt).toLocaleString() : new Date(viewingReplyModal.updatedAt || viewingReplyModal.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: "10px", borderTop: "1px solid #334155", paddingTop: "10px" }}>
+                    <span style={{ fontSize: "12px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold" }}>Subject</span>
+                    <div style={{ color: "#38bdf8", fontWeight: "600", fontSize: "14px" }}>{viewingReplyModal.subject}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "18px" }}>
+                  <span style={{ fontSize: "12px", color: "#34d399", textTransform: "uppercase", fontWeight: "bold", display: "block", marginBottom: "6px" }}>
+                    📨 Admin Response Message Sent To User
+                  </span>
+                  <div style={{ background: "#1e293b", borderLeft: "4px solid #10b981", border: "1px solid #334155", borderLeftWidth: "4px", borderRadius: "8px", padding: "16px", color: "#ffffff", fontSize: "14.5px", lineHeight: "1.6", whiteSpace: "pre-wrap", fontWeight: "500" }}>
+                    {viewingReplyModal.adminReply || `Hello ${viewingReplyModal.name},\n\nThank you for contacting PilgrimIQ Support. Your inquiry has been reviewed and responded to by our administration team.`}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: "12px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "bold", display: "block", marginBottom: "6px" }}>
+                    📩 Original User Inquiry
+                  </span>
+                  <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "8px", padding: "14px", color: "#cbd5e1", fontSize: "13.5px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
+                    "{viewingReplyModal.message}"
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ justifyContent: "space-between", background: "#0f172a", borderTop: "1px solid #1e293b", padding: "16px 20px" }}>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setViewingReplyModal(null)}
+                  style={{ background: "#334155", color: "#ffffff", border: "none", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
+                >
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-submit-doctor"
+                  onClick={() => {
+                    setViewingReplyModal(null);
+                    handleOpenReplyFormModal(viewingReplyModal);
+                  }}
+                  style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontWeight: "700" }}
+                >
+                  ✉️ Send Follow-Up Reply
+                </button>
               </div>
             </div>
           </div>
-        </main>
+        )}
 
         {/* Register Doctor Modal */}
         {showDoctorModal && (
@@ -822,7 +1644,7 @@ function AdminDashboard() {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#000000", fontWeight: "800" }}>Email Address (Login ID) *</label>
+                      <label style={{ color: "#000000", fontWeight: "800" }}>Email Address *</label>
                       <input
                         name="email"
                         type="email"

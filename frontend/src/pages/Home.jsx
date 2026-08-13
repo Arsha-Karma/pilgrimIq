@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "../styles/Home.css";
 import Navbar from "../components/Navbar";
 import { Link } from "react-router-dom";
 import { FiArrowRight, FiCompass, FiCalendar, FiShield } from "react-icons/fi";
 import { FaHeartbeat, FaPrayingHands } from "react-icons/fa";
+import { apiGetPilgrimageCenters } from "../services/api";
 
 import hero from "../assets/index-background.png";
 
@@ -11,6 +12,24 @@ function Home() {
   const [heartRate, setHeartRate] = useState(74);
   const [spo2, setSpo2] = useState(98);
   const [altitude, setAltitude] = useState(2800);
+
+  const [featuredCenters, setFeaturedCenters] = useState([]);
+  const [loadingFeatured, setLoadingFeatured] = useState(true);
+
+  useEffect(() => {
+    const loadFeaturedCenters = async () => {
+      try {
+        setLoadingFeatured(true);
+        const data = await apiGetPilgrimageCenters();
+        setFeaturedCenters((data || []).slice(0, 3));
+      } catch (err) {
+        console.error("Home featured centers load error:", err);
+      } finally {
+        setLoadingFeatured(false);
+      }
+    };
+    loadFeaturedCenters();
+  }, []);
 
   const calculatePsi = () => {
     let score = 100;
@@ -257,6 +276,55 @@ function Home() {
               <p>Embark with live weather alerts, crowd updates, and emergency SOS backup.</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* FEATURED PILGRIMAGE CENTERS SECTION */}
+      <section className="home-centers-preview-section" style={{ background: "#ffffff", padding: "60px 0" }}>
+        <div className="home-container">
+          <div className="home-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", textAlign: "left", marginBottom: "32px" }}>
+            <div>
+              <span className="home-badge">SACRED DESTINATIONS</span>
+              <h2>Featured Pilgrimage Centers</h2>
+              <p>Explore official pilgrimage centers added and monitored by administrators.</p>
+            </div>
+            <Link to="/centers" style={{ color: "#2563eb", fontWeight: 700, textDecoration: "none", fontSize: "14.5px" }}>
+              View All Centers →
+            </Link>
+          </div>
+
+          {loadingFeatured ? (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
+              Loading featured centers...
+            </div>
+          ) : featuredCenters.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e1" }}>
+              <p style={{ color: "#64748b", margin: 0 }}>No pilgrimage centers are currently available.</p>
+            </div>
+          ) : (
+            <div className="home-centers-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+              {featuredCenters.map((center) => (
+                <div key={center._id} style={{ background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 16px rgba(15,23,42,0.04)" }}>
+                  <img
+                    src={center.image || "https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=600&auto=format&fit=crop"}
+                    alt={center.name}
+                    style={{ width: "100%", height: "180px", objectFit: "cover" }}
+                  />
+                  <div style={{ padding: "20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <span style={{ background: "#eff6ff", color: "#2563eb", padding: "2px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 600 }}>{center.religion}</span>
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>{center.visitingInformation?.bestSeason || "All Year"}</span>
+                    </div>
+                    <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", margin: "0 0 6px 0" }}>{center.name}</h3>
+                    <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 14px 0" }}>📍 {center.location?.city}, {center.location?.state}</p>
+                    <Link to={`/pilgrimage-centers/${center._id}`} style={{ display: "inline-block", background: "#2563eb", color: "#ffffff", padding: "8px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+                      View Details →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

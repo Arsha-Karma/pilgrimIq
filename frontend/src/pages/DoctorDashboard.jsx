@@ -19,6 +19,8 @@ import {
 } from "react-icons/fi";
 import { FaHeartbeat, FaLungs, FaStethoscope } from "react-icons/fa";
 
+import { apiGetPhysicianReviews, apiSubmitPhysicianReview } from "../services/medicalReportService";
+
 function DoctorDashboard() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ function DoctorDashboard() {
   const [notificationMsg, setNotificationMsg] = useState("");
   const [dbUsers, setDbUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [medicalReviews, setMedicalReviews] = useState([]);
 
   // Selected Pilgrim for Medical Action / Consultation Modal
   const [selectedPilgrim, setSelectedPilgrim] = useState(null);
@@ -38,6 +41,18 @@ function DoctorDashboard() {
   const [consultationNotes, setConsultationNotes] = useState("");
   const [spo2Input, setSpo2Input] = useState(97);
   const [heartRateInput, setHeartRateInput] = useState(78);
+
+  const loadMedicalReviews = async () => {
+    if (!token) return;
+    try {
+      const res = await apiGetPhysicianReviews(token);
+      if (res && Array.isArray(res.reviews)) {
+        setMedicalReviews(res.reviews);
+      }
+    } catch (err) {
+      console.error("Failed to load medical report reviews:", err);
+    }
+  };
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -53,7 +68,21 @@ function DoctorDashboard() {
         setLoadingUsers(false);
       }
     };
+
+    const fetchMedicalReviews = async () => {
+      if (!token) return;
+      try {
+        const res = await apiGetPhysicianReviews(token);
+        if (res && Array.isArray(res.reviews)) {
+          setMedicalReviews(res.reviews);
+        }
+      } catch (err) {
+        console.error("Failed to load medical report reviews:", err);
+      }
+    };
+
     loadUsers();
+    fetchMedicalReviews();
   }, [token]);
 
   const handleLogout = () => {
@@ -67,6 +96,22 @@ function DoctorDashboard() {
     setTimeout(() => {
       setShowNotification(false);
     }, 4000);
+  };
+
+  const handlePhysicianReviewAction = async (reportId, decision) => {
+    try {
+      const res = await apiSubmitPhysicianReview(
+        reportId,
+        { decision, comments: `Physician decision recorded as ${decision.toUpperCase()}` },
+        token
+      );
+      if (res && res.success) {
+        triggerAction(`Report review decision saved as ${decision.toUpperCase()}`);
+        loadMedicalReviews();
+      }
+    } catch (err) {
+      triggerAction(`Error: ${err.message}`);
+    }
   };
 
   // Filter out doctors and admins, list registered pilgrims with health vitals
@@ -167,6 +212,15 @@ function DoctorDashboard() {
             <FiActivity className="nav-icon" />
             <span>Pilgrim Health Triage</span>
             <span className="nav-count-pill">{registeredPilgrimList.length}</span>
+          </button>
+
+          <button
+            className={`nav-item ${activeTab === "reviews" ? "active" : ""}`}
+            onClick={() => setActiveTab("reviews")}
+          >
+            <FiFileText className="nav-icon" />
+            <span>AI Report Reviews</span>
+            {medicalReviews.length > 0 && <span className="nav-count-pill">{medicalReviews.length}</span>}
           </button>
 
           <button
@@ -381,13 +435,12 @@ function DoctorDashboard() {
                           </td>
                           <td>
                             <span
-                              className={`status-pill ${
-                                pilgrim.riskLevel === "High Risk"
-                                  ? "danger"
-                                  : pilgrim.riskLevel === "Moderate"
+                              className={`status-pill ${pilgrim.riskLevel === "High Risk"
+                                ? "danger"
+                                : pilgrim.riskLevel === "Moderate"
                                   ? "warning"
                                   : "success"
-                              }`}
+                                }`}
                             >
                               {pilgrim.riskLevel}
                             </span>
@@ -423,6 +476,100 @@ function DoctorDashboard() {
                 </table>
               </div>
             </div>
+
+
+            {activeTab === "reviews" && (
+              <div className="admin-panel main-panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>AI Medical Report Review Queue</h3>
+                    <p>Physician evaluation for high-risk or flagged medical reports requiring clinical clearance</p>
+                  </div>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>PATIENT / OWNER</th>
+                        <th>REPORT FILE</th>
+                        <th>AI READINESS STATUS</th>
+                        <th>SUMMARY & FINDINGS</th>
+                        <th>PHYSICIAN DECISION</th>
+                        <th>CLINICAL ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {medicalReviews.length > 0 ? (
+                        medicalReviews.map((rev) => {
+                          const pName = rev.ownerType === "family_member" && rev.familyMemberId ? rev.familyMemberId.name : rev.userId?.name || "Patient";
+                          const rel = rev.ownerType === "family_member" && rev.familyMemberId ? `Family (${rev.familyMemberId.relationship})` : "Main User";
+                          const aiStatus = rev.aiRiskAssessment?.overallStatus || rev.finalStatus;
+                          const physStatus = rev.physicianReview?.status || "none";
+
+                          return (
+                            <tr key={rev._id}>
+                              <td>
+                                <div style={{ fontSize: "14px", fontWeight: "700" }}>{pName}</div>
+                                <div style={{ fontSize: "12px", color: "#94a3b8" }}>{rel}</div>
+                              </td>
+                              <td>
+                                <div style={{ fontSize: "13px", fontWeight: "600", color: "#60a5fa" }}>📄 {rev.fileName}</div>
+                                <div style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(rev.createdAt).toLocaleDateString()}</div>
+                              </td>
+                              <td>
+                                <span className={`status-pill ${aiStatus === "MEDICAL_REVIEW_REQUIRED" ? "danger" : aiStatus === "CAUTION" ? "warning" : "success"}`}>
+                                  {aiStatus}
+                                </span>
+                              </td>
+                              <td style={{ maxWidth: "260px", fontSize: "12.5px" }}>
+                                {rev.aiSummary ? rev.aiSummary.slice(0, 100) + "..." : "No summary."}
+                              </td>
+                              <td>
+                                <span style={{ fontSize: "12px", fontWeight: "800", color: physStatus === "approved" ? "#34d399" : physStatus === "not_approved" ? "#f87171" : "#fbbf24" }}>
+                                  {physStatus.toUpperCase()}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                  <button
+                                    className="btn-table-action"
+                                    style={{ background: "#10b981", color: "#fff", border: "none" }}
+                                    onClick={() => handlePhysicianReviewAction(rev._id, "approved")}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    className="btn-table-action"
+                                    style={{ background: "#ef4444", color: "#fff", border: "none" }}
+                                    onClick={() => handlePhysicianReviewAction(rev._id, "not_approved")}
+                                  >
+                                    Decline
+                                  </button>
+                                  <button
+                                    className="btn-table-action"
+                                    style={{ background: "#2563eb", color: "#fff", border: "none" }}
+                                    onClick={() => navigate(`/medical-analysis/${rev._id}`)}
+                                  >
+                                    View Full AI Analysis
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="text-center" style={{ padding: "40px" }}>
+                            No medical reports currently pending physician review.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

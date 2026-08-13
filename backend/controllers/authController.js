@@ -734,16 +734,29 @@ const verifyResetCode = async (req, res, next) => {
   }
 };
 
-// @desc    Get all registered users for Admin Dashboard
+// @desc    Get all registered users & their family members for Admin Dashboard
 // @route   GET /api/auth/users
 // @access  Public
 const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find({}).select("-password").sort({ createdAt: -1 });
+    const users = await User.find({}).select("-password").sort({ createdAt: -1 }).lean();
+    const familyMembers = await FamilyMember.find({}).sort({ createdAt: -1 }).lean();
+
+    const usersWithFamily = users.map((u) => {
+      const members = familyMembers.filter(
+        (fm) => fm.user && fm.user.toString() === u._id.toString()
+      );
+      return {
+        ...u,
+        familyMembers: members,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: users.length,
-      users: users,
+      count: usersWithFamily.length,
+      users: usersWithFamily,
+      familyMembers: familyMembers,
     });
   } catch (error) {
     next(error);

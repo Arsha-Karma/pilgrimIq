@@ -273,10 +273,12 @@
   font-family: inherit;
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
-  border-color: var(--secondary-blue);
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+.form-group input.readonly-input {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  cursor: not-allowed !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 600 !important;
 }
 
 .submit-btn {

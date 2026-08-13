@@ -55,13 +55,13 @@ function Register() {
         if (!value || !value.trim()) {
           error = "Phone Number is required";
         } else if (/[^\d]/.test(value)) {
-          error = "Phone number must contain digits only";
+          error = "Phone number can only contain digits (letters and symbols are not allowed)";
         } else if (/^[0-5]/.test(value)) {
-          error = "Phone number cannot start with 0, 1, 2, 3, 4, or 5";
+          error = "Phone number must start with a digit between 6 and 9";
         } else if (value.length !== 10) {
           error = "Phone number must be exactly 10 digits";
-        } else if (/^(\d)\1{9}$/.test(value)) {
-          error = "Invalid phone number format (e.g., 1000000000 is not allowed)";
+        } else if (/^(\d)\1{9}$/.test(value) || /^[6-9]0{8,9}$/.test(value) || /^[6-9](\d)\1{8}$/.test(value)) {
+          error = "Invalid phone number format (repetitive numbers like 7000000000 are not allowed)";
         }
         break;
 

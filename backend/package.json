@@ -19,7 +19,9 @@
     "google-auth-library": "^9.11.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.1",
-    "nodemailer": "^9.0.3"
+    "nodemailer": "^9.0.3",
+    "pdf-parse": "^2.4.5",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.3"

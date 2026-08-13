@@ -8,6 +8,7 @@ import {
   apiUpdateFamilyMember,
   apiDeleteFamilyMember,
 } from "../services/api";
+import { apiUploadMedicalReport, apiGetMyMedicalReports } from "../services/medicalReportService";
 import "../styles/Profile.css";
 import Navbar from "../components/Navbar";
 import {
@@ -32,6 +33,7 @@ import {
   FiPhone,
   FiFileText,
   FiUpload,
+  FiActivity,
   FiCheck,
   FiMapPin,
   FiPhoneCall,
@@ -578,9 +580,9 @@ function Profile() {
   const [familyMembers, setFamilyMembers] = useState(authUser?.familyMembers || []);
   const [selectedMemberId, setSelectedMemberId] = useState(authUser?.familyMembers?.[0]?._id || null);
 
-  // Navigation & Menu States
   const [sidebarOpen] = useState(true);
   const [familyHealthTab, setFamilyHealthTab] = useState("info");
+  const [dbMedicalReports, setDbMedicalReports] = useState([]);
 
   // Alert State
   const [alert, setAlert] = useState({ type: "", message: "" });
@@ -597,7 +599,22 @@ function Profile() {
   const [memberFormTab, setMemberFormTab] = useState("personal");
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [showUploadReportModal, setShowUploadReportModal] = useState(false);
+  const [showEditReportModal, setShowEditReportModal] = useState(false);
+  const [editingReportIndex, setEditingReportIndex] = useState(null);
+  const [editReportFile, setEditReportFile] = useState(null);
+  const [editReportForm, setEditReportForm] = useState({ fileName: "" });
+  const [reportFileNameFocused, setReportFileNameFocused] = useState(false);
+  const [editReportFileNameFocused, setEditReportFileNameFocused] = useState(false);
+  const [reportTarget, setReportTarget] = useState("family"); // "family" or "user"
   const [showPsiModal, setShowPsiModal] = useState(false);
+
+  // Custom Delete Confirmation Modal State
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
 
   // Focus and Validation States
   const [focusedField, setFocusedField] = useState("");
@@ -781,7 +798,6 @@ function Profile() {
           if (members.length > 0 && !selectedMemberId) {
             setSelectedMemberId(members[0]._id);
           }
-
           const isCompleted = data.profileCompleted === true;
 
           // Initialize user profile form
@@ -875,7 +891,20 @@ function Profile() {
       }
     };
 
+    const fetchDbReports = async () => {
+      try {
+        const res = await apiGetMyMedicalReports(token);
+        if (res && Array.isArray(res.reports)) {
+          setDbMedicalReports(res.reports);
+        }
+      } catch (err) {
+        console.error("Failed to load AI medical reports:", err);
+      }
+    };
+
     fetchProfile();
+    fetchDbReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, navigate, authUser]);
 
   const showAlert = (type, message) => {
@@ -896,7 +925,7 @@ function Profile() {
       return `${fieldLabel} is required`;
     }
     if (/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(trimmed)) {
-      return "Numbers and special symbols are not allowed in name";
+      return "Only letters and spaces are allowed (numbers and special symbols not allowed)";
     }
     if (trimmed.length < 2) {
       return `${fieldLabel} must be at least 2 letters`;
@@ -910,18 +939,75 @@ function Profile() {
       return isRequired ? `${fieldLabel} is required` : "";
     }
     if (/[^\d]/.test(trimmed)) {
-      return "Phone number must contain digits only";
+      return "Phone number can only contain digits (letters and symbols are not allowed)";
     }
     if (/^[0-5]/.test(trimmed)) {
-      return "Phone number cannot start with 0, 1, 2, 3, 4, or 5";
+      return "Phone number must start with a digit between 6 and 9";
     }
     if (trimmed.length !== 10) {
       return "Phone number must be exactly 10 digits";
     }
-    if (/^(\d)\1{9}$/.test(trimmed)) {
-      return "Invalid phone number format (e.g., 1000000000 is not allowed)";
+    if (/^(\d)\1{9}$/.test(trimmed) || /^[6-9]0{8,9}$/.test(trimmed) || /^[6-9](\d)\1{8}$/.test(trimmed)) {
+      return "Invalid phone number format (repetitive numbers like 7000000000 are not allowed)";
     }
     return "";
+  };
+
+  // OnFocus Validation Guidance & Error Renderer
+  const renderOnFocusValidation = (isFocused, value, errorMsg, fieldType = "letters", customHint = "") => {
+    if (!isFocused && !errorMsg) return null;
+
+    const strVal = value !== undefined && value !== null ? String(value) : "";
+    const hasValue = strVal.length > 0;
+    
+    let isLettersOnly = fieldType === "letters";
+    let isNumbersOnly = fieldType === "numbers";
+    let isPhone = fieldType === "phone";
+
+    let hasError = !!errorMsg;
+    if (!hasError && hasValue) {
+      if (isLettersOnly && /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(strVal)) {
+        hasError = true;
+      } else if (isNumbersOnly && /[^\d.]/.test(strVal)) {
+        hasError = true;
+      } else if (isPhone && /[^\d]/.test(strVal)) {
+        hasError = true;
+      }
+    }
+
+    let text = "";
+    if (hasError) {
+      text = errorMsg || (isLettersOnly ? "Numbers and special characters are not allowed. Only letters and spaces are allowed." : isNumbersOnly ? "Only numbers are allowed for this field." : "Only digits are allowed.");
+    } else {
+      if (customHint) text = customHint;
+      else if (isLettersOnly) text = "Only letters and spaces are allowed for this field.";
+      else if (isNumbersOnly) text = "Only numbers are allowed for this field.";
+      else if (isPhone) text = "Please enter a valid 10-digit mobile number.";
+      else text = "Please enter valid details.";
+    }
+
+    return (
+      <div
+        className="onfocus-validation-msg"
+        style={{
+          marginTop: "5px",
+          padding: "6px 10px",
+          borderRadius: "6px",
+          background: hasError ? "#fef2f2" : "#eff6ff",
+          border: hasError ? "1px solid #fecaca" : "1px solid #bfdbfe",
+          color: hasError ? "#dc2626" : "#1e40af",
+          fontSize: "12px",
+          fontWeight: "600",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+        }}
+      >
+        <FiAlertCircle size={13} style={{ flexShrink: 0 }} />
+        <span>{hasError ? `⚠️ ${text}` : `ℹ️ ${text}`}</span>
+      </div>
+    );
   };
 
   // Real-time Validation Rules
@@ -980,6 +1066,8 @@ function Profile() {
       case "relationship":
         if (!strVal) {
           error = "Relationship is required";
+        } else if (/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(strVal)) {
+          error = "Only letters and spaces are allowed for relationship";
         }
         break;
 
@@ -1022,18 +1110,24 @@ function Profile() {
       case "nationality":
         if (!strVal) {
           error = "Nationality is required";
+        } else if (/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(strVal)) {
+          error = "Only letters and spaces are allowed for nationality";
         }
         break;
 
       case "state":
         if (!strVal) {
           error = "State is required";
+        } else if (/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(strVal)) {
+          error = "Only letters and spaces are allowed for state";
         }
         break;
 
       case "district":
         if (!strVal) {
           error = "District is required";
+        } else if (/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(strVal)) {
+          error = "Only letters and spaces are allowed for district";
         }
         break;
 
@@ -1781,77 +1875,275 @@ function Profile() {
   };
 
   // Delete Family Member
-  const handleDeleteMember = async (memberId, memberName) => {
-    if (!window.confirm(`Are you sure you want to remove ${memberName}?`)) {
-      return;
-    }
-
-    try {
-      const res = await apiDeleteFamilyMember(memberId, token);
-      showAlert("success", `${memberName} removed.`);
-      if (res && res.familyMembers) {
-        setFamilyMembers(res.familyMembers);
-        if (res.familyMembers.length > 0) {
-          setSelectedMemberId(res.familyMembers[0]._id);
-        } else {
-          setSelectedMemberId(null);
+  const handleDeleteMember = (memberId, memberName) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: "Remove Family Member",
+      message: `Are you sure you want to remove ${memberName}? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const res = await apiDeleteFamilyMember(memberId, token);
+          showAlert("success", `${memberName} removed successfully.`);
+          if (res && res.familyMembers) {
+            setFamilyMembers(res.familyMembers);
+            if (res.familyMembers.length > 0) {
+              setSelectedMemberId(res.familyMembers[0]._id);
+            } else {
+              setSelectedMemberId(null);
+            }
+          }
+        } catch (err) {
+          showAlert("error", err.message || "Failed to delete family member.");
         }
-      }
-    } catch (err) {
-      showAlert("error", err.message || "Failed to delete family member.");
-    }
+      },
+    });
   };
 
-  // Upload Medical Report
+  // Upload Medical Report (User Profile or Family Member)
   const handleAddReportSubmit = async (e) => {
     e.preventDefault();
-    if (!activeMember) return;
-    if (!reportFile && !reportForm.fileName.trim()) {
+    if (!reportFile) {
       showAlert("error", "Please choose a medical report file to upload.");
       return;
     }
+    if (!reportForm.fileName || !reportForm.fileName.trim()) {
+      showAlert("error", "Please enter a report file name.");
+      return;
+    }
+    if (!/^[A-Za-z\s]+$/.test(reportForm.fileName.trim())) {
+      showAlert("error", "Only letters and spaces are allowed for report file name.");
+      return;
+    }
 
-    const finalFileName = reportForm.fileName.trim() || (reportFile ? reportFile.name : "Medical_Report");
+    const finalFileName = reportForm.fileName.trim();
+    const ext = reportFile.name.split(".").pop().toLowerCase();
+    const derivedFileType = ext === "pdf" ? "pdf" : "jpg";
 
     let fileUrl = "";
     if (reportFile) {
       try {
-        fileUrl = await compressImage(reportFile, 1000, 1000, 0.85);
+        fileUrl = await readFileAsBase64(reportFile);
       } catch (err) {
-        fileUrl = "";
+        console.error("File base64 error:", err);
+        showAlert("error", "Unable to read the selected file. Please select a valid document or image.");
+        return;
       }
     }
 
-    const newReport = {
-      fileName: finalFileName,
-      fileType: reportForm.fileType,
-      uploadDate: new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      uploadedBy: profileData?.name || authUser?.name || "User",
-      url: fileUrl,
-      isVerifiedByDoctor: false,
-    };
-
-    const updatedReports = [...(activeMember.reports || []), newReport];
-
     try {
       setSubmitting(true);
-      const res = await apiUpdateFamilyMember(
-        activeMember._id,
-        { reports: updatedReports, reportSummary: reportForm.reportSummary },
+      const isUserReport = reportTarget === "user" || activeTab === "profile";
+      const targetFamilyMemberId = isUserReport ? null : activeMember?._id;
+
+      if (!isUserReport && !targetFamilyMemberId) {
+        showAlert("error", "Please select a family member for this report.");
+        return;
+      }
+
+      // Trigger AI Medical Report Analysis Backend Pipeline
+      const aiRes = await apiUploadMedicalReport(
+        {
+          fileName: finalFileName,
+          fileType: derivedFileType,
+          mimeType: reportFile ? reportFile.type : "application/pdf",
+          fileData: fileUrl,
+          ownerType: isUserReport ? "user" : "family_member",
+          familyMemberId: targetFamilyMemberId,
+        },
         token
       );
-      if (res && res.familyMembers) {
-        setFamilyMembers(res.familyMembers);
+
+      const createdReportId = aiRes?.report?._id || "";
+
+      const newReport = {
+        _id: createdReportId,
+        fileName: finalFileName,
+        fileType: derivedFileType,
+        uploadDate: new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        uploadedBy: profileData?.name || authUser?.name || "User",
+        url: fileUrl,
+        isVerifiedByDoctor: false,
+      };
+
+      if (isUserReport) {
+        const existingReports = profileData?.medicalReports || [];
+        const updatedReports = [...existingReports, newReport];
+        const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
+        if (res) {
+          setProfileData(res);
+        }
+      } else {
+        if (!activeMember) {
+          showAlert("error", "No active family member selected.");
+          return;
+        }
+        const updatedReports = [...(activeMember.reports || []), newReport];
+        const res = await apiUpdateFamilyMember(
+          activeMember._id,
+          { reports: updatedReports, reportSummary: reportForm.reportSummary },
+          token
+        );
+        if (res && res.familyMembers) {
+          setFamilyMembers(res.familyMembers);
+        }
       }
       setShowUploadReportModal(false);
       setReportFile(null);
       setReportForm({ fileName: "", fileType: "pdf", reportSummary: {} });
-      showAlert("success", "Medical report uploaded successfully!");
+      showAlert("success", "Medical report uploaded & analyzed by AI!");
+
+      if (createdReportId) {
+        navigate(`/medical-analysis/${createdReportId}`);
+      }
     } catch (err) {
       showAlert("error", err.message || "Failed to upload report.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Open Edit Medical Report Modal
+  const handleOpenEditReport = (rep, index, target = "family") => {
+    setReportTarget(target);
+    setEditingReportIndex(index);
+    setEditReportForm({ fileName: rep.fileName || "" });
+    setEditReportFile(null);
+    setShowEditReportModal(true);
+  };
+
+  // Submit Edit Medical Report
+  const handleEditReportSubmit = async (e) => {
+    e.preventDefault();
+    if (editingReportIndex === null) return;
+
+    if (!editReportForm.fileName || !editReportForm.fileName.trim()) {
+      showAlert("error", "Report file name cannot be empty.");
+      return;
+    }
+    if (!/^[A-Za-z\s]+$/.test(editReportForm.fileName.trim())) {
+      showAlert("error", "Only letters and spaces are allowed for report file name.");
+      return;
+    }
+
+    const existingReports = reportTarget === "user" ? (profileData?.medicalReports || []) : (activeMember?.reports || []);
+    const existingReport = existingReports[editingReportIndex];
+    if (!existingReport) return;
+
+    let fileUrl = existingReport.url;
+    let fileType = existingReport.fileType || "pdf";
+
+    if (editReportFile) {
+      try {
+        fileUrl = await readFileAsBase64(editReportFile);
+        const ext = editReportFile.name.split(".").pop().toLowerCase();
+        fileType = ext === "pdf" ? "pdf" : "jpg";
+      } catch (err) {
+        fileUrl = existingReport.url;
+      }
+    }
+
+    const updatedReport = {
+      ...existingReport,
+      fileName: editReportForm.fileName.trim(),
+      fileType: fileType,
+      url: fileUrl,
+    };
+
+    const updatedReports = [...existingReports];
+    updatedReports[editingReportIndex] = updatedReport;
+
+    try {
+      setSubmitting(true);
+      if (reportTarget === "user") {
+        const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
+        if (res) {
+          setProfileData(res);
+        }
+      } else {
+        if (!activeMember) return;
+        const res = await apiUpdateFamilyMember(
+          activeMember._id,
+          { reports: updatedReports },
+          token
+        );
+        if (res && res.familyMembers) {
+          setFamilyMembers(res.familyMembers);
+        }
+      }
+      setShowEditReportModal(false);
+      setEditingReportIndex(null);
+      setEditReportFile(null);
+      setEditReportForm({ fileName: "" });
+      showAlert("success", "Medical report updated successfully!");
+    } catch (err) {
+      showAlert("error", err.message || "Failed to update report.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete Medical Report
+  const handleDeleteReport = (index, target = "family") => {
+    const existingReports = target === "user" ? (profileData?.medicalReports || []) : (activeMember?.reports || []);
+    const repToDelete = existingReports[index];
+    const repName = repToDelete ? repToDelete.fileName : "this report";
+
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: "Delete Medical Report",
+      message: `Are you sure you want to delete "${repName}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        const updatedReports = existingReports.filter((_, idx) => idx !== index);
+
+        try {
+          setSubmitting(true);
+          if (target === "user") {
+            const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
+            if (res) {
+              setProfileData(res);
+            }
+          } else {
+            if (!activeMember) return;
+            const res = await apiUpdateFamilyMember(
+              activeMember._id,
+              { reports: updatedReports },
+              token
+            );
+            if (res && res.familyMembers) {
+              setFamilyMembers(res.familyMembers);
+            }
+          }
+          showAlert("success", `Medical report "${repName}" deleted successfully.`);
+        } catch (err) {
+          showAlert("error", err.message || "Failed to delete medical report.");
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
+  // Universal Helper to read any file (PDF or Image) as Base64 Data URL reliably
+  const readFileAsBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve("");
+      const ext = file.name ? file.name.split(".").pop().toLowerCase() : "";
+      if (ext === "pdf" || file.type === "application/pdf") {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Failed to read PDF file"));
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      } else {
+        compressImage(file, 1000, 1000, 0.85)
+          .then(resolve)
+          .catch(() => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error("Failed to read image file"));
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+          });
+      }
+    });
   };
 
   // Helper to compress image to lightweight base64 data URL
@@ -1972,7 +2264,10 @@ function Profile() {
               <span>Health Records</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Journey Planner feature")}>
+            <button
+              className={`sidebar-link ${activeTab === "journey" ? "active" : ""}`}
+              onClick={() => navigate("/my-journeys")}
+            >
               <FiCompass className="nav-icon" />
               <span>Journey Planner</span>
             </button>
@@ -2309,6 +2604,103 @@ function Profile() {
                   </div>
                 </div>
               </div>
+
+              {/* USER MEDICAL REPORTS CARD */}
+              <div className="info-section-card" style={{ marginTop: "24px" }}>
+                <div className="card-header-styled" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div className="card-title-group">
+                    <div className="card-icon-circle blue">
+                      <FiFileText />
+                    </div>
+                    <h3>Uploaded Medical Reports ({(profileData?.medicalReports || []).length})</h3>
+                  </div>
+                  <button
+                    className="btn-primary-blue"
+                    onClick={() => {
+                      setReportTarget("user");
+                      setReportFile(null);
+                      setReportForm({ fileName: "", fileType: "pdf", reportSummary: {} });
+                      setShowUploadReportModal(true);
+                    }}
+                  >
+                    <FiUpload size={14} /> Upload Report
+                  </button>
+                </div>
+
+                <div className="reports-list" style={{ marginTop: "16px" }}>
+                  {(profileData?.medicalReports || []).length === 0 ? (
+                    <p style={{ fontSize: "13.5px", color: "#64748b", padding: "16px", background: "#f8fafc", borderRadius: "10px", margin: 0, textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                      No medical reports uploaded for your profile yet. Click "Upload Report" above to add your medical documents.
+                    </p>
+                  ) : (
+                    (profileData?.medicalReports || []).map((rep, idx) => {
+                      const aiReport = dbMedicalReports.find(
+                        (r) => (rep._id && r._id === rep._id) || (r.fileName && rep.fileName && r.fileName.toLowerCase() === rep.fileName.toLowerCase() && r.ownerType === "user")
+                      );
+                      const targetReportId = rep._id || (aiReport ? aiReport._id : null);
+                      const statusVal = aiReport?.aiRiskAssessment?.overallStatus || aiReport?.finalStatus;
+
+                      return (
+                        <div key={idx} className="report-item-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", marginBottom: 10 }}>
+                          <div className="report-file-info">
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span className="file-name" style={{ fontWeight: 700, color: "#0f172a", fontSize: "14.5px" }}>📄 {rep.fileName}</span>
+                              {statusVal && (
+                                <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "12px", background: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#fef2f2" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#fffbeb" : "#f0fdf4", color: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#b91c1c" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#b45309" : "#15803d", border: "1px solid rgba(0,0,0,0.05)" }}>
+                                  {statusVal === "MEDICAL_REVIEW_REQUIRED" ? "🔴 Medical Review" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "🟡 Caution" : "🟢 Low Risk"}
+                                </span>
+                              )}
+                            </div>
+                            <span className="upload-meta" style={{ fontSize: 12, color: "#64748b", marginTop: "3px", display: "block" }}>Uploaded: {rep.uploadDate || "Recently"}</span>
+                          </div>
+                          <div className="report-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                            {targetReportId && (
+                              <button
+                                type="button"
+                                className="btn-view-ai-analysis"
+                                onClick={() => navigate(`/medical-analysis/${targetReportId}`)}
+                                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "8px", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: "700", border: "none", cursor: "pointer", boxShadow: "0 2px 6px rgba(37,99,235,0.2)" }}
+                              >
+                                <FiActivity size={14} /> View AI Analysis
+                              </button>
+                            )}
+                            {rep.url && (
+                              <a
+                                href={rep.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-report-act download"
+                                title="View File"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
+                              >
+                                <FiEye size={15} />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-report-act edit"
+                              title="Edit Report"
+                              onClick={() => handleOpenEditReport(rep, idx, "user")}
+                              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", cursor: "pointer" }}
+                            >
+                              <FiEdit2 size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-report-act delete"
+                              title="Delete Report"
+                              onClick={() => handleDeleteReport(idx, "user")}
+                              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
+                            >
+                              <FiTrash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -2620,7 +3012,15 @@ function Profile() {
                     <div className="health-reports-right">
                       <div className="reports-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                         <h4 style={{ color: "#0f172a", fontSize: 15, fontWeight: 700 }}>Uploaded Medical Reports</h4>
-                        <button className="btn-primary-blue" onClick={() => setShowUploadReportModal(true)}>
+                        <button
+                          className="btn-primary-blue"
+                          onClick={() => {
+                            setReportTarget("family");
+                            setReportFile(null);
+                            setReportForm({ fileName: "", fileType: "pdf", reportSummary: {} });
+                            setShowUploadReportModal(true);
+                          }}
+                        >
                           <FiUpload size={14} /> Upload Report
                         </button>
                       </div>
@@ -2631,14 +3031,71 @@ function Profile() {
                             No medical reports uploaded for {activeMember.name} yet.
                           </p>
                         ) : (
-                          activeMember.reports.map((rep, idx) => (
-                            <div key={idx} className="report-item-card" style={{ display: "flex", justifyContent: "space-between", padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8 }}>
-                              <div className="report-file-info">
-                                <span className="file-name" style={{ fontWeight: 600, color: "#0f172a", display: "block" }}>{rep.fileName}</span>
-                                <span className="upload-meta" style={{ fontSize: 11, color: "#64748b" }}>Uploaded: {rep.uploadDate}</span>
+                          activeMember.reports.map((rep, idx) => {
+                            const aiReport = dbMedicalReports.find(
+                              (r) => (rep._id && r._id === rep._id) || (r.familyMemberId && (r.familyMemberId._id === activeMember._id || r.familyMemberId === activeMember._id) && r.fileName && rep.fileName && r.fileName.toLowerCase() === rep.fileName.toLowerCase())
+                            );
+                            const targetReportId = rep._id || (aiReport ? aiReport._id : null);
+                            const statusVal = aiReport?.aiRiskAssessment?.overallStatus || aiReport?.finalStatus;
+
+                            return (
+                              <div key={idx} className="report-item-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", marginBottom: 10 }}>
+                                <div className="report-file-info">
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span className="file-name" style={{ fontWeight: 700, color: "#0f172a", fontSize: "14.5px" }}>📄 {rep.fileName}</span>
+                                    {statusVal && (
+                                      <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "12px", background: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#fef2f2" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#fffbeb" : "#f0fdf4", color: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#b91c1c" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#b45309" : "#15803d", border: "1px solid rgba(0,0,0,0.05)" }}>
+                                        {statusVal === "MEDICAL_REVIEW_REQUIRED" ? "🔴 Medical Review" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "🟡 Caution" : "🟢 Low Risk"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="upload-meta" style={{ fontSize: 12, color: "#64748b", marginTop: "3px", display: "block" }}>Uploaded: {rep.uploadDate || "Recently"}</span>
+                                </div>
+                                <div className="report-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                  {targetReportId && (
+                                    <button
+                                      type="button"
+                                      className="btn-view-ai-analysis"
+                                      onClick={() => navigate(`/medical-analysis/${targetReportId}`)}
+                                      style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "8px", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: "700", border: "none", cursor: "pointer", boxShadow: "0 2px 6px rgba(37,99,235,0.2)" }}
+                                    >
+                                      <FiActivity size={14} /> View AI Analysis
+                                    </button>
+                                  )}
+                                  {rep.url && (
+                                    <a
+                                      href={rep.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="btn-report-act download"
+                                      title="View File"
+                                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
+                                    >
+                                      <FiEye size={15} />
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-report-act edit"
+                                    title="Edit Report"
+                                    onClick={() => handleOpenEditReport(rep, idx, "family")}
+                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", cursor: "pointer" }}
+                                  >
+                                    <FiEdit2 size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-report-act delete"
+                                    title="Delete Report"
+                                    onClick={() => handleDeleteReport(idx, "family")}
+                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
+                                  >
+                                    <FiTrash2 size={15} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -2699,9 +3156,7 @@ function Profile() {
                     }}
                     className={profileErrors.name ? "invalid" : ""}
                   />
-                  {(focusedField === "profile_name" || profileErrors.name) && profileErrors.name && (
-                    <span className="field-error-msg">⚠️ {profileErrors.name}</span>
-                  )}
+                  {renderOnFocusValidation(focusedField === "profile_name", profileForm.name, profileErrors.name, "letters")}
                 </div>
 
                 <div className="form-row two-col">
@@ -2718,9 +3173,7 @@ function Profile() {
                       }}
                       className={profileErrors.phone ? "invalid" : ""}
                     />
-                    {(focusedField === "profile_phone" || profileErrors.phone) && profileErrors.phone && (
-                      <span className="field-error-msg">⚠️ {profileErrors.phone}</span>
-                    )}
+                    {renderOnFocusValidation(focusedField === "profile_phone", profileForm.phone, profileErrors.phone, "phone")}
                   </div>
 
                   <div className="form-group">
@@ -2748,9 +3201,7 @@ function Profile() {
                       }}
                       className={profileErrors.age ? "invalid" : ""}
                     />
-                    {(focusedField === "profile_age" || profileErrors.age) && profileErrors.age && (
-                      <span className="field-error-msg">⚠️ {profileErrors.age}</span>
-                    )}
+                    {renderOnFocusValidation(focusedField === "profile_age", profileForm.age, profileErrors.age, "numbers")}
                   </div>
 
                   <div className="form-group">
@@ -2794,9 +3245,7 @@ function Profile() {
                       }}
                       className={profileErrors.height ? "invalid" : ""}
                     />
-                    {(focusedField === "profile_height" || profileErrors.height) && profileErrors.height && (
-                      <span className="field-error-msg">⚠️ {profileErrors.height}</span>
-                    )}
+                    {renderOnFocusValidation(focusedField === "profile_height", profileForm.height, profileErrors.height, "numbers")}
                   </div>
 
                   <div className="form-group">
@@ -2812,9 +3261,7 @@ function Profile() {
                       }}
                       className={profileErrors.weight ? "invalid" : ""}
                     />
-                    {(focusedField === "profile_weight" || profileErrors.weight) && profileErrors.weight && (
-                      <span className="field-error-msg">⚠️ {profileErrors.weight}</span>
-                    )}
+                    {renderOnFocusValidation(focusedField === "profile_weight", profileForm.weight, profileErrors.weight, "numbers")}
                   </div>
                 </div>
 
@@ -2869,9 +3316,7 @@ function Profile() {
                     }}
                     className={emergencyErrors.contactName ? "invalid" : ""}
                   />
-                  {(focusedField === "em_name" || emergencyErrors.contactName) && emergencyErrors.contactName && (
-                    <span className="field-error-msg">⚠️ {emergencyErrors.contactName}</span>
-                  )}
+                  {renderOnFocusValidation(focusedField === "em_name", emergencyForm.contactName, emergencyErrors.contactName, "letters")}
                 </div>
 
                 <div className="form-group">
@@ -2891,9 +3336,7 @@ function Profile() {
                       <option key={rel} value={rel}>{rel}</option>
                     ))}
                   </select>
-                  {(focusedField === "em_rel" || emergencyErrors.relationship) && emergencyErrors.relationship && (
-                    <span className="field-error-msg">⚠️ {emergencyErrors.relationship}</span>
-                  )}
+                  {renderOnFocusValidation(focusedField === "em_rel", emergencyForm.relationship, emergencyErrors.relationship, "letters")}
                 </div>
 
                 <div className="form-row two-col">
@@ -2910,9 +3353,7 @@ function Profile() {
                       }}
                       className={emergencyErrors.phone ? "invalid" : ""}
                     />
-                    {(focusedField === "em_phone" || emergencyErrors.phone) && emergencyErrors.phone && (
-                      <span className="field-error-msg">⚠️ {emergencyErrors.phone}</span>
-                    )}
+                    {renderOnFocusValidation(focusedField === "em_phone", emergencyForm.phone, emergencyErrors.phone, "phone")}
                   </div>
 
                   <div className="form-group">
@@ -2920,8 +3361,11 @@ function Profile() {
                     <input
                       type="text"
                       value={emergencyForm.alternatePhone}
+                      onFocus={() => setFocusedField("em_alt_phone")}
+                      onBlur={() => setFocusedField("")}
                       onChange={(e) => setEmergencyForm({ ...emergencyForm, alternatePhone: e.target.value })}
                     />
+                    {renderOnFocusValidation(focusedField === "em_alt_phone", emergencyForm.alternatePhone, emergencyErrors.alternatePhone, "phone")}
                   </div>
                 </div>
               </div>
@@ -3134,11 +3578,6 @@ function Profile() {
                           return;
                         }
                         setReportFile(file);
-                        setReportForm((prev) => ({
-                          ...prev,
-                          fileName: prev.fileName || file.name.replace(/\.[^/.]+$/, ""),
-                          fileType: ext === "pdf" ? "pdf" : "jpg"
-                        }));
                       }
                     }}
                     style={{ padding: "8px", border: "1px solid #cbd5e1", borderRadius: "8px", width: "100%", background: "#f8fafc" }}
@@ -3150,26 +3589,57 @@ function Profile() {
                   )}
                 </div>
 
-                <div className="form-group">
-                  <label>Report File Name *</label>
+                <div className="form-group" style={{ position: "relative" }}>
+                  <label>Report File Name <span className="req">*</span></label>
                   <input
                     type="text"
-                    placeholder="e.g. Blood_Test_Report"
+                    placeholder="e.g. blood test"
                     value={reportForm.fileName}
                     onChange={(e) => setReportForm({ ...reportForm, fileName: e.target.value })}
+                    onFocus={() => setReportFileNameFocused(true)}
+                    onBlur={() => setReportFileNameFocused(false)}
+                    pattern="[A-Za-z\s]+"
+                    onInvalid={(e) => e.target.setCustomValidity("Only letters and spaces are allowed for report file name.")}
+                    onInput={(e) => e.target.setCustomValidity("")}
                     required
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName)
+                        ? "2px solid #ef4444"
+                        : reportFileNameFocused
+                        ? "2px solid #2563eb"
+                        : "1px solid #cbd5e1",
+                      outline: "none",
+                      width: "100%",
+                      fontSize: "14px"
+                    }}
                   />
-                </div>
-
-                <div className="form-group">
-                  <label>File Format</label>
-                  <select
-                    value={reportForm.fileType}
-                    onChange={(e) => setReportForm({ ...reportForm, fileType: e.target.value })}
-                  >
-                    <option value="pdf">PDF Document (.pdf)</option>
-                    <option value="jpg">Image (.jpg / .png / .jpeg)</option>
-                  </select>
+                  {(reportFileNameFocused || (reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName))) && (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        background: reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName) ? "#fef2f2" : "#eff6ff",
+                        border: reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName) ? "1px solid #fecaca" : "1px solid #bfdbfe",
+                        color: reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName) ? "#dc2626" : "#1e40af",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                      }}
+                    >
+                      <FiAlertCircle size={14} style={{ flexShrink: 0 }} />
+                      <span>
+                        {reportForm.fileName && !/^[A-Za-z\s]+$/.test(reportForm.fileName)
+                          ? "Invalid characters detected! Only letters and spaces are allowed."
+                          : "Only letters and spaces are allowed for report file name."}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">
@@ -3181,6 +3651,172 @@ function Profile() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT REPORT MODAL */}
+      {showEditReportModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <div className="modal-header">
+              <h3><FiEdit2 /> Edit Medical Report</h3>
+              <button className="close-modal-btn" onClick={() => setShowEditReportModal(false)}><FiX size={20} /></button>
+            </div>
+            <form onSubmit={handleEditReportSubmit}>
+              <div className="modal-body">
+                <div className="form-group" style={{ position: "relative" }}>
+                  <label>Report File Name <span className="req">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. blood test"
+                    value={editReportForm.fileName}
+                    onChange={(e) => setEditReportForm({ ...editReportForm, fileName: e.target.value })}
+                    onFocus={() => setEditReportFileNameFocused(true)}
+                    onBlur={() => setEditReportFileNameFocused(false)}
+                    pattern="[A-Za-z\s]+"
+                    onInvalid={(e) => e.target.setCustomValidity("Only letters and spaces are allowed for report file name.")}
+                    onInput={(e) => e.target.setCustomValidity("")}
+                    required
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName)
+                        ? "2px solid #ef4444"
+                        : editReportFileNameFocused
+                        ? "2px solid #2563eb"
+                        : "1px solid #cbd5e1",
+                      outline: "none",
+                      width: "100%",
+                      fontSize: "14px"
+                    }}
+                  />
+                  {(editReportFileNameFocused || (editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName))) && (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        background: editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName) ? "#fef2f2" : "#eff6ff",
+                        border: editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName) ? "1px solid #fecaca" : "1px solid #bfdbfe",
+                        color: editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName) ? "#dc2626" : "#1e40af",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                      }}
+                    >
+                      <FiAlertCircle size={14} style={{ flexShrink: 0 }} />
+                      <span>
+                        {editReportForm.fileName && !/^[A-Za-z\s]+$/.test(editReportForm.fileName)
+                          ? "Invalid characters detected! Only letters and spaces are allowed."
+                          : "Only letters and spaces are allowed for report file name."}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label>Replace File (Optional - PDF, PNG, JPG, JPEG)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        const allowedExts = ["pdf", "png", "jpg", "jpeg", "webp"];
+                        const ext = file.name.split(".").pop().toLowerCase();
+                        if (!allowedExts.includes(ext)) {
+                          showAlert("error", "Invalid file format. Only PDF, PNG, JPG, JPEG, and WEBP files are allowed.");
+                          e.target.value = "";
+                          return;
+                        }
+                        setEditReportFile(file);
+                      }
+                    }}
+                    style={{ padding: "8px", border: "1px solid #cbd5e1", borderRadius: "8px", width: "100%", background: "#f8fafc" }}
+                  />
+                  {editReportFile && (
+                    <span style={{ fontSize: "12.5px", color: "#166534", fontWeight: "700", marginTop: "6px", display: "block" }}>
+                      📄 New Selected File: {editReportFile.name} ({(editReportFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => setShowEditReportModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-save" disabled={submitting}>
+                  {submitting ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM DELETE CONFIRMATION MODAL */}
+      {deleteConfirmModal.isOpen && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div
+            className="modal-box"
+            style={{
+              maxWidth: "440px",
+              borderRadius: "16px",
+              padding: "0",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+            }}
+          >
+            <div style={{ background: "#fef2f2", padding: "20px 24px", borderBottom: "1px solid #fee2e2", display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#fee2e2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <FiTrash2 size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700", color: "#991b1b" }}>
+                  {deleteConfirmModal.title || "Confirm Delete"}
+                </h3>
+                <span style={{ fontSize: "12px", color: "#b91c1c", fontWeight: "500" }}>PilgrimIQ Confirmation</span>
+              </div>
+              <button
+                type="button"
+                className="close-modal-btn"
+                onClick={() => setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                style={{ background: "transparent", border: "none", color: "#991b1b", cursor: "pointer", padding: "4px" }}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "24px 24px", background: "#ffffff", textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: "14.5px", color: "#1e293b", lineHeight: "1.6", fontWeight: "500", textAlign: "center" }}>
+                {deleteConfirmModal.message}
+              </p>
+            </div>
+
+            <div style={{ padding: "14px 24px 18px", background: "#f8fafc", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                style={{ padding: "9px 20px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#f1f5f9", color: "#334155", fontWeight: "600", cursor: "pointer", fontSize: "13.5px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const action = deleteConfirmModal.onConfirm;
+                  setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }));
+                  if (action) await action();
+                }}
+                style={{ padding: "9px 20px", borderRadius: "8px", border: "none", background: "#dc2626", color: "#ffffff", fontWeight: "600", cursor: "pointer", fontSize: "13.5px", display: "inline-flex", alignItems: "center", gap: "6px", boxShadow: "0 2px 4px rgba(220, 38, 38, 0.2)" }}
+              >
+                <FiTrash2 size={15} /> Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3314,9 +3950,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("name", e.target.value)}
                           className={memberErrors.name && (touchedMemberFields.name || focusedMemberField === "name") ? "invalid" : ""}
                         />
-                        {memberErrors.name && (touchedMemberFields.name || focusedMemberField === "name") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.name}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "name", memberForm.name, memberErrors.name, "letters")}
                       </div>
 
                       <div className="form-group">
@@ -3333,9 +3967,7 @@ function Profile() {
                             <option key={rel} value={rel}>{rel}</option>
                           ))}
                         </select>
-                        {memberErrors.relationship && (touchedMemberFields.relationship || focusedMemberField === "relationship") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.relationship}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "relationship", memberForm.relationship, memberErrors.relationship, "letters")}
                       </div>
                     </div>
 
@@ -3344,15 +3976,14 @@ function Profile() {
                         <label>Date of Birth</label>
                         <input
                           type="date"
+                          max="2099-12-31"
                           value={memberForm.dob}
                           onFocus={() => handleMemberFieldFocus("dob", memberForm.dob)}
                           onBlur={() => handleMemberFieldBlur("dob", memberForm.dob)}
                           onChange={(e) => handleMemberDobChange(e.target.value)}
                           className={memberErrors.dob && (touchedMemberFields.dob || focusedMemberField === "dob") ? "invalid" : ""}
                         />
-                        {memberErrors.dob && (touchedMemberFields.dob || focusedMemberField === "dob") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.dob}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "dob", memberForm.dob, memberErrors.dob, "date")}
                       </div>
 
                       <div className="form-group">
@@ -3366,9 +3997,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("age", e.target.value)}
                           className={memberErrors.age && (touchedMemberFields.age || focusedMemberField === "age") ? "invalid" : ""}
                         />
-                        {memberErrors.age && (touchedMemberFields.age || focusedMemberField === "age") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.age}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "age", memberForm.age, memberErrors.age, "numbers")}
                       </div>
 
                       <div className="form-group">
@@ -3397,9 +4026,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("height", e.target.value)}
                           className={memberErrors.height && (touchedMemberFields.height || focusedMemberField === "height") ? "invalid" : ""}
                         />
-                        {memberErrors.height && (touchedMemberFields.height || focusedMemberField === "height") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.height}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "height", memberForm.height, memberErrors.height, "numbers")}
                       </div>
 
                       <div className="form-group">
@@ -3413,9 +4040,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("weight", e.target.value)}
                           className={memberErrors.weight && (touchedMemberFields.weight || focusedMemberField === "weight") ? "invalid" : ""}
                         />
-                        {memberErrors.weight && (touchedMemberFields.weight || focusedMemberField === "weight") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.weight}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "weight", memberForm.weight, memberErrors.weight, "numbers")}
                       </div>
 
                       <div className="form-group">
@@ -3447,9 +4072,7 @@ function Profile() {
                             <option key={nat} value={nat}>{nat}</option>
                           ))}
                         </select>
-                        {memberErrors.nationality && (touchedMemberFields.nationality || focusedMemberField === "nationality") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.nationality}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "nationality", memberForm.nationality, memberErrors.nationality, "letters")}
                       </div>
 
                       <div className="form-group">
@@ -3471,9 +4094,7 @@ function Profile() {
                             <option key={st} value={st}>{st}</option>
                           ))}
                         </select>
-                        {memberErrors.state && (touchedMemberFields.state || focusedMemberField === "state") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.state}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "state", memberForm.state, memberErrors.state, "letters")}
                       </div>
 
                       <div className="form-group">
@@ -3495,9 +4116,7 @@ function Profile() {
                             <option key={dist} value={dist}>{dist}</option>
                           ))}
                         </select>
-                        {memberErrors.district && (touchedMemberFields.district || focusedMemberField === "district") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.district}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "district", memberForm.district, memberErrors.district, "letters")}
                       </div>
                     </div>
 
@@ -3513,9 +4132,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("address", e.target.value)}
                           className={memberErrors.address && (touchedMemberFields.address || focusedMemberField === "address") ? "invalid" : ""}
                         />
-                        {memberErrors.address && (touchedMemberFields.address || focusedMemberField === "address") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.address}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "address", memberForm.address, memberErrors.address, "text")}
                       </div>
 
                       <div className="form-group">
@@ -3529,9 +4146,7 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("phone", e.target.value)}
                           className={memberErrors.phone && (touchedMemberFields.phone || focusedMemberField === "phone") ? "invalid" : ""}
                         />
-                        {memberErrors.phone && (touchedMemberFields.phone || focusedMemberField === "phone") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.phone}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "phone", memberForm.phone, memberErrors.phone, "phone")}
                       </div>
                     </div>
                   </div>
@@ -3922,14 +4537,7 @@ function Profile() {
                 className={`stepper-tab-btn ${profileWizardStep === 6 ? "active" : ""}`}
                 onClick={() => setProfileWizardStep(6)}
               >
-                6. Medical Reports
-              </button>
-              <button
-                type="button"
-                className={`stepper-tab-btn ${profileWizardStep === 7 ? "active" : ""}`}
-                onClick={() => setProfileWizardStep(7)}
-              >
-                7. Consent & Submit
+                6. Consent & Submit
               </button>
             </div>
 
@@ -3943,6 +4551,7 @@ function Profile() {
                         <label>Date of Birth *</label>
                         <input
                           type="date"
+                          max="2099-12-31"
                           value={fullProfileForm.dob}
                           onFocus={() => handleWizardFieldFocus("dob", fullProfileForm.dob)}
                           onBlur={() => handleWizardFieldBlur("dob", fullProfileForm.dob)}
@@ -3965,9 +4574,7 @@ function Profile() {
                           onChange={(e) => handleWizardFieldChange("age", e.target.value)}
                           className={wizardErrors.age && (touchedFields.age || focusedField === "age") ? "invalid" : ""}
                         />
-                        {wizardErrors.age && (touchedFields.age || focusedField === "age") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.age}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "age", fullProfileForm.age, wizardErrors.age, "numbers")}
                       </div>
                     </div>
 
@@ -4002,9 +4609,7 @@ function Profile() {
                           onChange={(e) => handleWizardFieldChange("height", e.target.value)}
                           className={wizardErrors.height && (touchedFields.height || focusedField === "height") ? "invalid" : ""}
                         />
-                        {wizardErrors.height && (touchedFields.height || focusedField === "height") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.height}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "height", fullProfileForm.height, wizardErrors.height, "numbers")}
                       </div>
 
                       <div className="form-group">
@@ -4018,9 +4623,7 @@ function Profile() {
                           onChange={(e) => handleWizardFieldChange("weight", e.target.value)}
                           className={wizardErrors.weight && (touchedFields.weight || focusedField === "weight") ? "invalid" : ""}
                         />
-                        {wizardErrors.weight && (touchedFields.weight || focusedField === "weight") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.weight}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "weight", fullProfileForm.weight, wizardErrors.weight, "numbers")}
                       </div>
                     </div>
 
@@ -4064,9 +4667,7 @@ function Profile() {
                             <option key={nat} value={nat}>{nat}</option>
                           ))}
                         </select>
-                        {wizardErrors.nationality && (touchedFields.nationality || focusedField === "nationality") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.nationality}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "nationality", fullProfileForm.nationality, wizardErrors.nationality, "letters")}
                       </div>
                     </div>
 
@@ -4090,9 +4691,7 @@ function Profile() {
                             <option key={st} value={st}>{st}</option>
                           ))}
                         </select>
-                        {wizardErrors.state && (touchedFields.state || focusedField === "state") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.state}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "state", fullProfileForm.state, wizardErrors.state, "letters")}
                       </div>
 
                       <div className="form-group">
@@ -4114,9 +4713,7 @@ function Profile() {
                             <option key={dist} value={dist}>{dist}</option>
                           ))}
                         </select>
-                        {wizardErrors.district && (touchedFields.district || focusedField === "district") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.district}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "district", fullProfileForm.district, wizardErrors.district, "letters")}
                       </div>
                     </div>
 
@@ -4131,9 +4728,7 @@ function Profile() {
                         onChange={(e) => handleWizardFieldChange("address", e.target.value)}
                         className={wizardErrors.address && (touchedFields.address || focusedField === "address") ? "invalid" : ""}
                       />
-                      {wizardErrors.address && (touchedFields.address || focusedField === "address") && (
-                        <span className="field-error-msg">⚠️ {wizardErrors.address}</span>
-                      )}
+                      {renderOnFocusValidation(focusedField === "address", fullProfileForm.address, wizardErrors.address, "text")}
                     </div>
                   </div>
                 )}
@@ -4157,9 +4752,7 @@ function Profile() {
                         onChange={(e) => handleWizardFieldChange("contactName", e.target.value)}
                         className={wizardErrors.contactName && (touchedFields.contactName || focusedField === "contactName") ? "invalid" : ""}
                       />
-                      {wizardErrors.contactName && (touchedFields.contactName || focusedField === "contactName") && (
-                        <span className="field-error-msg">⚠️ {wizardErrors.contactName}</span>
-                      )}
+                      {renderOnFocusValidation(focusedField === "contactName", fullProfileForm.contactName, wizardErrors.contactName, "letters")}
                     </div>
 
                     <div className="form-group">
@@ -4176,9 +4769,7 @@ function Profile() {
                           <option key={rel} value={rel}>{rel}</option>
                         ))}
                       </select>
-                      {wizardErrors.relationship && (touchedFields.relationship || focusedField === "relationship") && (
-                        <span className="field-error-msg">⚠️ {wizardErrors.relationship}</span>
-                      )}
+                      {renderOnFocusValidation(focusedField === "relationship", fullProfileForm.relationship, wizardErrors.relationship, "letters")}
                     </div>
 
                     <div className="form-row two-col">
@@ -4193,9 +4784,7 @@ function Profile() {
                           onChange={(e) => handleWizardFieldChange("phone", e.target.value)}
                           className={wizardErrors.phone && (touchedFields.phone || focusedField === "phone") ? "invalid" : ""}
                         />
-                        {wizardErrors.phone && (touchedFields.phone || focusedField === "phone") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.phone}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "phone", fullProfileForm.phone, wizardErrors.phone, "phone")}
                       </div>
 
                       <div className="form-group">
@@ -4209,9 +4798,7 @@ function Profile() {
                           onChange={(e) => handleWizardFieldChange("alternatePhone", e.target.value)}
                           className={wizardErrors.alternatePhone && (touchedFields.alternatePhone || focusedField === "alternatePhone") ? "invalid" : ""}
                         />
-                        {wizardErrors.alternatePhone && (touchedFields.alternatePhone || focusedField === "alternatePhone") && (
-                          <span className="field-error-msg">⚠️ {wizardErrors.alternatePhone}</span>
-                        )}
+                        {renderOnFocusValidation(focusedField === "alternatePhone", fullProfileForm.alternatePhone, wizardErrors.alternatePhone, "phone")}
                       </div>
                     </div>
                   </div>
@@ -4529,32 +5116,8 @@ function Profile() {
                   </div>
                 )}
 
-                {/* SECTION 6: MEDICAL REPORT UPLOAD */}
+                {/* SECTION 6: CONSENT & SUBMISSION */}
                 {profileWizardStep === 6 && (
-                  <div className="wizard-step-panel">
-                    <h4>Medical Report Upload (Optional)</h4>
-                    <p style={{ color: "#64748b", fontSize: "13px", marginBottom: "16px" }}>
-                      Upload your recent medical documents for AI analysis & OCR processing.
-                    </p>
-
-                    <div className="form-group">
-                      <label>Report File (PDF or Image)</label>
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        className="file-input-control"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            showAlert("info", `Report file selected: ${e.target.files[0].name}`);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* SECTION 7: CONSENT & SUBMISSION */}
-                {profileWizardStep === 7 && (
                   <div className="wizard-step-panel">
                     <h4>Consent & Final Submission</h4>
                     <p style={{ color: "#64748b", fontSize: "13px", marginBottom: "16px" }}>
@@ -4604,7 +5167,7 @@ function Profile() {
                   </button>
                 )}
 
-                {profileWizardStep < 7 ? (
+                {profileWizardStep < 6 ? (
                   <button
                     type="button"
                     className="btn-save"
@@ -4624,7 +5187,7 @@ function Profile() {
                     className="btn-save"
                     disabled={submitting || !fullProfileForm.consentAccurate || !fullProfileForm.consentTerms}
                   >
-                    {submitting ? "Saving to MongoDB..." : "Submit & Complete Profile"}
+                    {submitting ? "Saving..." : "Submit & Complete Profile"}
                   </button>
                 )}
               </div>
