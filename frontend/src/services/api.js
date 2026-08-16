@@ -226,6 +226,20 @@ export const apiReplyEnquiry = async (id, replyData, token = null) => {
   });
 };
 
+export const apiGetNotifications = async (token) => {
+  return fetchAPI("/notifications", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+export const apiMarkNotificationRead = async (id, token) => {
+  return fetchAPI(`/notifications/${id}/read`, {
+    method: "PUT",
+    headers: getHeaders(token),
+  });
+};
+
 
 
 

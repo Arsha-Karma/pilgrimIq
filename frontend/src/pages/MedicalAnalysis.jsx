@@ -3,6 +3,7 @@ import "../styles/MedicalAnalysis.css";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiGetMedicalReportById, apiSendReportForReview, apiAnalyzeMedicalReport } from "../services/medicalReportService";
+import { apiAcceptResponsibility } from "../services/journeyService";
 import {
   FiActivity,
   FiAlertTriangle,
@@ -15,7 +16,8 @@ import {
   FiRefreshCw,
   FiSend,
   FiCheck,
-  FiHeart
+  FiHeart,
+  FiX
 } from "react-icons/fi";
 
 function MedicalAnalysis() {
@@ -28,6 +30,8 @@ function MedicalAnalysis() {
   const [error, setError] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [showRespModal, setShowRespModal] = useState(false);
+  const [acceptingResp, setAcceptingResp] = useState(false);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -66,6 +70,23 @@ function MedicalAnalysis() {
       setError(err.message || "Failed to send report for physician review.");
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleConfirmAcceptResponsibility = async () => {
+    try {
+      setAcceptingResp(true);
+      const payload = report.ownerType === "family_member"
+        ? { personType: "family_member", familyMemberId: report.familyMemberId?._id || report.familyMemberId }
+        : { personType: "user" };
+
+      await apiAcceptResponsibility(payload, token);
+      setShowRespModal(false);
+      navigate("/centers");
+    } catch (err) {
+      setError(err.message || "Failed to accept responsibility.");
+    } finally {
+      setAcceptingResp(false);
     }
   };
 
@@ -132,6 +153,7 @@ function MedicalAnalysis() {
   const abnormalFindings = report.extractedMedicalData?.abnormalFindings || [];
   const riskAss = report.aiRiskAssessment || {};
   const physicianRev = report.physicianReview || {};
+  const finalStatus = report.finalStatus || riskAss.overallStatus || "";
 
   const getStatusBadge = () => {
     const status = report.finalStatus || riskAss.overallStatus;
@@ -369,10 +391,86 @@ function MedicalAnalysis() {
           <FiSend /> {physicianRev.status === "pending" ? "Submitted for Physician Review" : "Request Physician Review"}
         </button>
 
-        <button className="btn-continue" onClick={() => navigate("/journey-planner")}>
-          Continue to Journey Planner →
-        </button>
+        {physicianRev.status === "pending" || finalStatus === "MEDICAL_REVIEW_REQUIRED" ? (
+          <button className="btn-continue" disabled style={{ opacity: 0.6, cursor: "not-allowed", background: "#64748b" }}>
+            Doctor Approval Required (Pending Review)
+          </button>
+        ) : physicianRev.status === "approved" || finalStatus === "PHYSICIAN_APPROVED" ? (
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <span style={{ color: "#34d399", fontWeight: "700", fontSize: "14px" }}>✓ Doctor Approved</span>
+            <button className="btn-continue" onClick={() => setShowRespModal(true)}>
+              Travel in Your Own Responsibility →
+            </button>
+          </div>
+        ) : physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? (
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <span style={{ color: "#f87171", fontWeight: "700", fontSize: "14px" }}>✕ Doctor Rejected</span>
+            <button className="btn-continue" style={{ background: "#dc2626" }} onClick={() => setShowRespModal(true)}>
+              Travel in Your Own Responsibility →
+            </button>
+          </div>
+        ) : (
+          <button className="btn-continue" onClick={() => navigate("/centers")}>
+            Continue to Journey Planner →
+          </button>
+        )}
       </div>
+
+      {/* Responsibility Confirmation Modal */}
+      {showRespModal && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="modal-card" style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "16px", padding: "24px", maxWidth: "520px", width: "90%", color: "#f8fafc" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, color: physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? "#ef4444" : "#3b82f6" }}>
+                {physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? "⚠️ Travel Responsibility Warning" : "Travel Responsibility Confirmation"}
+              </h3>
+              <button onClick={() => setShowRespModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" }}>
+                <FiX />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "20px", fontSize: "14px", lineHeight: "1.6", color: "#cbd5e1" }}>
+              {physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? (
+                <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "14px", borderRadius: "10px", color: "#fca5a5" }}>
+                  "The doctor has rejected travel for <strong>{report.familyMemberId?.name || user?.name}</strong> because of the identified medical risk ({physicianRev.comments || "Medical risk parameters"}). Continuing the journey despite the doctor's rejection is entirely at your own responsibility. Professional medical advice should be followed."
+                </div>
+              ) : (
+                <div style={{ background: "#064e3b", border: "1px solid #059669", padding: "14px", borderRadius: "10px", color: "#a7f3d0" }}>
+                  "The doctor has approved the travel. By continuing, you acknowledge the medical risk and agree to travel under your own responsibility."
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowRespModal(false)}
+                style={{ padding: "10px 18px", borderRadius: "8px", background: "#334155", color: "#fff", border: "none", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmAcceptResponsibility}
+                disabled={acceptingResp}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  background: physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? "#dc2626" : "#2563eb",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                {acceptingResp
+                  ? "Processing..."
+                  : physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED"
+                  ? "I Understand – Travel in My Own Responsibility"
+                  : "Confirm & Continue Journey"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,12 +7,14 @@ const {
   getJourneyById,
   updateJourney,
   deleteJourney,
+  acceptResponsibility,
 } = require("../controllers/journeyController");
 const { protect } = require("../middleware/authMiddleware");
 
 // All journey endpoints require JWT authentication
 router.use(protect);
 
+router.post("/accept-responsibility", acceptResponsibility);
 router.route("/user/my-journeys").get(getMyJourneys);
 
 router.route("/")

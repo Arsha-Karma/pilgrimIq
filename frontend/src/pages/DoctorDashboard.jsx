@@ -42,12 +42,18 @@ function DoctorDashboard() {
   const [spo2Input, setSpo2Input] = useState(97);
   const [heartRateInput, setHeartRateInput] = useState(78);
 
+  const [doctorReviews, setDoctorReviews] = useState([]);
+  const [selectedReviewForRejection, setSelectedReviewForRejection] = useState(null);
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState("");
+
   const loadMedicalReviews = async () => {
     if (!token) return;
     try {
       const res = await apiGetPhysicianReviews(token);
-      if (res && Array.isArray(res.reviews)) {
-        setMedicalReviews(res.reviews);
+      if (res) {
+        if (Array.isArray(res.doctorReviews)) setDoctorReviews(res.doctorReviews);
+        if (Array.isArray(res.reviews)) setMedicalReviews(res.reviews);
       }
     } catch (err) {
       console.error("Failed to load medical report reviews:", err);
@@ -69,20 +75,8 @@ function DoctorDashboard() {
       }
     };
 
-    const fetchMedicalReviews = async () => {
-      if (!token) return;
-      try {
-        const res = await apiGetPhysicianReviews(token);
-        if (res && Array.isArray(res.reviews)) {
-          setMedicalReviews(res.reviews);
-        }
-      } catch (err) {
-        console.error("Failed to load medical report reviews:", err);
-      }
-    };
-
     loadUsers();
-    fetchMedicalReviews();
+    loadMedicalReviews();
   }, [token]);
 
   const handleLogout = () => {
@@ -98,20 +92,38 @@ function DoctorDashboard() {
     }, 4000);
   };
 
-  const handlePhysicianReviewAction = async (reportId, decision) => {
+  const handlePhysicianReviewAction = async (reviewId, decision, customReason = "") => {
+    if (decision === "rejected" && !customReason) {
+      const targetItem = doctorReviews.find((r) => r._id === reviewId) || medicalReviews.find((m) => m._id === reviewId);
+      setSelectedReviewForRejection({ id: reviewId, item: targetItem });
+      setRejectionReasonInput("");
+      setShowRejectionModal(true);
+      return;
+    }
+
     try {
       const res = await apiSubmitPhysicianReview(
-        reportId,
-        { decision, comments: `Physician decision recorded as ${decision.toUpperCase()}` },
+        reviewId,
+        { decision, comments: customReason || `Physician decision recorded as ${decision.toUpperCase()}` },
         token
       );
       if (res && res.success) {
-        triggerAction(`Report review decision saved as ${decision.toUpperCase()}`);
+        triggerAction(`Physician evaluation recorded as ${decision.toUpperCase()}.`);
+        setShowRejectionModal(false);
         loadMedicalReviews();
       }
     } catch (err) {
       triggerAction(`Error: ${err.message}`);
     }
+  };
+
+  const handleConfirmRejection = (e) => {
+    e.preventDefault();
+    if (!selectedReviewForRejection || !rejectionReasonInput.trim()) {
+      triggerAction("Error: Rejection reason is required.");
+      return;
+    }
+    handlePhysicianReviewAction(selectedReviewForRejection.id, "rejected", rejectionReasonInput.trim());
   };
 
   // Filter out doctors and admins, list registered pilgrims with health vitals
@@ -482,8 +494,8 @@ function DoctorDashboard() {
               <div className="admin-panel main-panel">
                 <div className="panel-header">
                   <div>
-                    <h3>AI Medical Report Review Queue</h3>
-                    <p>Physician evaluation for high-risk or flagged medical reports requiring clinical clearance</p>
+                    <h3>High-Risk Pilgrim Doctor Review Queue</h3>
+                    <p>Official medical authorization step for high-risk pilgrims (Main User and Family Members)</p>
                   </div>
                 </div>
 
@@ -491,68 +503,118 @@ function DoctorDashboard() {
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>PATIENT / OWNER</th>
-                        <th>REPORT FILE</th>
-                        <th>AI READINESS STATUS</th>
-                        <th>SUMMARY & FINDINGS</th>
-                        <th>PHYSICIAN DECISION</th>
-                        <th>CLINICAL ACTION</th>
+                        <th>APPLICANT & RELATIONSHIP</th>
+                        <th>HEALTH & REPORT SUMMARY</th>
+                        <th>PSI SCORE & RISK</th>
+                        <th>JOURNEY DETAILS</th>
+                        <th>DOCTOR DECISION</th>
+                        <th>CLINICAL DECISION</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {medicalReviews.length > 0 ? (
-                        medicalReviews.map((rev) => {
-                          const pName = rev.ownerType === "family_member" && rev.familyMemberId ? rev.familyMemberId.name : rev.userId?.name || "Patient";
-                          const rel = rev.ownerType === "family_member" && rev.familyMemberId ? `Family (${rev.familyMemberId.relationship})` : "Main User";
-                          const aiStatus = rev.aiRiskAssessment?.overallStatus || rev.finalStatus;
-                          const physStatus = rev.physicianReview?.status || "none";
+                      {(doctorReviews.length > 0 || medicalReviews.length > 0) ? (
+                        [...doctorReviews, ...medicalReviews].map((item) => {
+                          const isDoctorRevModel = !!item.personName;
+                          const revId = item._id;
+                          const pName = isDoctorRevModel
+                            ? item.personName
+                            : item.ownerType === "family_member" && item.familyMemberId
+                            ? item.familyMemberId.name
+                            : item.userId?.name || "Patient";
+
+                          const rel = isDoctorRevModel
+                            ? item.relationship || "Self"
+                            : item.ownerType === "family_member" && item.familyMemberId
+                            ? item.familyMemberId.relationship || "Family Member"
+                            : "Main User";
+
+                          const ageGender = `${item.age || 40} Yrs ${item.gender ? `• ${item.gender}` : ""}`;
+                          const psi = item.psiScore || 50;
+                          const aiRisk = isDoctorRevModel
+                            ? item.aiRiskLevel
+                            : item.aiRiskAssessment?.overallStatus || item.finalStatus;
+                          const status = item.doctorDecision || item.physicianReview?.status || item.status || "pending";
+
+                          const healthSummaryText = isDoctorRevModel
+                            ? item.healthSummary?.chronicConditions || item.riskFactors?.join(", ") || "High risk parameters"
+                            : item.aiSummary || "Medical report submitted for clearance.";
+
+                          const recommendations = item.aiRecommendations || ["Consult physician for clearance"];
 
                           return (
-                            <tr key={rev._id}>
+                            <tr key={revId}>
                               <td>
-                                <div style={{ fontSize: "14px", fontWeight: "700" }}>{pName}</div>
-                                <div style={{ fontSize: "12px", color: "#94a3b8" }}>{rel}</div>
-                              </td>
-                              <td>
-                                <div style={{ fontSize: "13px", fontWeight: "600", color: "#60a5fa" }}>📄 {rev.fileName}</div>
-                                <div style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(rev.createdAt).toLocaleDateString()}</div>
-                              </td>
-                              <td>
-                                <span className={`status-pill ${aiStatus === "MEDICAL_REVIEW_REQUIRED" ? "danger" : aiStatus === "CAUTION" ? "warning" : "success"}`}>
-                                  {aiStatus}
-                                </span>
+                                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>{pName}</div>
+                                <div style={{ fontSize: "12px", color: "#60a5fa", fontWeight: "600" }}>{rel}</div>
+                                <div style={{ fontSize: "11px", color: "#94a3b8" }}>{ageGender}</div>
                               </td>
                               <td style={{ maxWidth: "260px", fontSize: "12.5px" }}>
-                                {rev.aiSummary ? rev.aiSummary.slice(0, 100) + "..." : "No summary."}
+                                <div style={{ color: "#cbd5e1" }}>{healthSummaryText.slice(0, 110)}...</div>
+                                {recommendations && recommendations.length > 0 && (
+                                  <div style={{ fontSize: "11px", color: "#a7f3d0", marginTop: "4px" }}>
+                                    💡 {recommendations[0]}
+                                  </div>
+                                )}
                               </td>
                               <td>
-                                <span style={{ fontSize: "12px", fontWeight: "800", color: physStatus === "approved" ? "#34d399" : physStatus === "not_approved" ? "#f87171" : "#fbbf24" }}>
-                                  {physStatus.toUpperCase()}
+                                <div style={{ marginBottom: "4px" }}>
+                                  <span
+                                    style={{
+                                      background: psi >= 75 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                                      color: psi >= 75 ? "#34d399" : "#f87171",
+                                      padding: "3px 8px",
+                                      borderRadius: "6px",
+                                      fontWeight: "800",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    PSI: {psi} / 100
+                                  </span>
+                                </div>
+                                <span className={`status-pill ${aiRisk === "HIGH_RISK" || aiRisk === "MEDICAL_REVIEW_REQUIRED" ? "danger" : "warning"}`}>
+                                  {aiRisk}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: "12px", color: "#cbd5e1" }}>
+                                <div>📍 {item.journeyDetails?.centerName || "Sabarimala Center"}</div>
+                                <div style={{ color: "#94a3b8" }}>🗓️ {item.journeyDetails?.journeyDate || "Upcoming Trip"}</div>
+                              </td>
+                              <td>
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    fontWeight: "800",
+                                    color: status === "approved" ? "#34d399" : status === "rejected" || status === "not_approved" ? "#f87171" : "#fbbf24",
+                                  }}
+                                >
+                                  {status.toUpperCase()}
                                 </span>
                               </td>
                               <td>
                                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                   <button
                                     className="btn-table-action"
-                                    style={{ background: "#10b981", color: "#fff", border: "none" }}
-                                    onClick={() => handlePhysicianReviewAction(rev._id, "approved")}
+                                    style={{ background: "#10b981", color: "#fff", border: "none", padding: "6px 12px", fontWeight: "700" }}
+                                    onClick={() => handlePhysicianReviewAction(revId, "approved")}
                                   >
-                                    Approve
+                                    ✓ APPROVE
                                   </button>
                                   <button
                                     className="btn-table-action"
-                                    style={{ background: "#ef4444", color: "#fff", border: "none" }}
-                                    onClick={() => handlePhysicianReviewAction(rev._id, "not_approved")}
+                                    style={{ background: "#ef4444", color: "#fff", border: "none", padding: "6px 12px", fontWeight: "700" }}
+                                    onClick={() => handlePhysicianReviewAction(revId, "rejected")}
                                   >
-                                    Decline
+                                    ✕ REJECT
                                   </button>
-                                  <button
-                                    className="btn-table-action"
-                                    style={{ background: "#2563eb", color: "#fff", border: "none" }}
-                                    onClick={() => navigate(`/medical-analysis/${rev._id}`)}
-                                  >
-                                    View Full AI Analysis
-                                  </button>
+                                  {item.medicalReportId && (
+                                    <button
+                                      className="btn-table-action"
+                                      style={{ background: "#2563eb", color: "#fff", border: "none" }}
+                                      onClick={() => navigate(`/medical-analysis/${item.medicalReportId}`)}
+                                    >
+                                      View Report
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -561,7 +623,7 @@ function DoctorDashboard() {
                       ) : (
                         <tr>
                           <td colSpan="6" className="text-center" style={{ padding: "40px" }}>
-                            No medical reports currently pending physician review.
+                            No medical review requests currently pending doctor authorization.
                           </td>
                         </tr>
                       )}
@@ -573,6 +635,51 @@ function DoctorDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Doctor Rejection Reason Modal */}
+      {showRejectionModal && selectedReviewForRejection && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3 style={{ color: "#ef4444" }}>
+                <FiAlertTriangle /> Reject Medical Clearance
+              </h3>
+              <button className="btn-close-modal" onClick={() => setShowRejectionModal(false)}>
+                <FiX />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmRejection}>
+              <div className="modal-body">
+                <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "12px", borderRadius: "8px", color: "#fca5a5", fontSize: "13px", marginBottom: "14px" }}>
+                  <strong>Important:</strong> Rejecting travel for <strong>{selectedReviewForRejection.item?.personName || "this applicant"}</strong> will notify the Main User via email and in-app notification.
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: "700", color: "#f8fafc" }}>Doctor's Medical Rejection Reason *</label>
+                  <textarea
+                    className="form-input"
+                    rows="4"
+                    required
+                    placeholder="Enter explicit medical reasoning for rejecting travel clearance (e.g. Uncontrolled stage-2 hypertension, severe respiratory instability at high altitude)..."
+                    value={rejectionReasonInput}
+                    onChange={(e) => setRejectionReasonInput(e.target.value)}
+                  ></textarea>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => setShowRejectionModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-submit-doctor" style={{ background: "#dc2626" }}>
+                  Confirm Rejection & Notify User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Doctor Action Modal */}
       {showActionModal && selectedPilgrim && (

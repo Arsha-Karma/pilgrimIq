@@ -138,6 +138,23 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "Low Risk",
     },
+    doctorApprovalStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
+    responsibilityAccepted: {
+      type: Boolean,
+      default: false,
+    },
+    responsibilityAcceptedAt: {
+      type: Date,
+      default: null,
+    },
+    doctorReason: {
+      type: String,
+      default: "",
+    },
     healthInfo: {
       chronicDiseases: { type: String, default: "" },
       allergies: { type: String, default: "" },

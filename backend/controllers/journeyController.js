@@ -1,6 +1,8 @@
 const Journey = require("../models/Journey");
 const PilgrimageCenter = require("../models/PilgrimageCenter");
 const FamilyMember = require("../models/FamilyMember");
+const User = require("../models/User");
+const DoctorReview = require("../models/DoctorReview");
 
 // @desc    Create a new journey plan
 // @route   POST /api/journeys
@@ -62,7 +64,20 @@ const createJourney = async (req, res, next) => {
       throw new Error("Selected Pilgrimage Center not found");
     }
 
-    // 3. Security check: Verify all selected family members belong to logged-in user
+    // 3. Medical Authorization & Doctor Approval Backend Enforcement
+    const currentUser = await User.findById(req.user._id);
+    if (currentUser && (currentUser.doctorApprovalStatus === "pending" || currentUser.psiRiskLevel === "High Risk")) {
+      if (currentUser.doctorApprovalStatus === "pending" && !currentUser.responsibilityAccepted) {
+        res.status(403);
+        throw new Error(`Doctor approval is required for ${currentUser.name} (Main User) before creating a journey.`);
+      }
+      if (currentUser.doctorApprovalStatus === "rejected" && !currentUser.responsibilityAccepted) {
+        res.status(403);
+        throw new Error(`Travel request for ${currentUser.name} (Main User) was rejected by doctor. You must explicitly accept responsibility before continuing.`);
+      }
+    }
+
+    // 4. Security check & Medical Risk check on selected family members
     let validFamilyMembers = [];
     if (!travelingAlone && Array.isArray(travelingFamilyMembers) && travelingFamilyMembers.length > 0) {
       const ownedMembers = await FamilyMember.find({
@@ -74,6 +89,22 @@ const createJourney = async (req, res, next) => {
         res.status(403);
         throw new Error("Unauthorized: One or more selected family members do not belong to your profile.");
       }
+
+      // Check each family member for doctor approval status
+      for (const fm of ownedMembers) {
+        const isHighRiskFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected";
+        if (isHighRiskFm) {
+          if (fm.doctorApprovalStatus === "pending" && !fm.responsibilityAccepted) {
+            res.status(403);
+            throw new Error(`Doctor approval is required for family member ${fm.name} (${fm.relationship}) before creating a journey.`);
+          }
+          if (fm.doctorApprovalStatus === "rejected" && !fm.responsibilityAccepted) {
+            res.status(403);
+            throw new Error(`Travel request for family member ${fm.name} (${fm.relationship}) was rejected by doctor. You must explicitly accept responsibility before continuing.`);
+          }
+        }
+      }
+
       validFamilyMembers = ownedMembers.map((m) => m._id);
     }
 
@@ -304,6 +335,63 @@ const deleteJourney = async (req, res, next) => {
   }
 };
 
+// @desc    Accept responsibility for high risk travel
+// @route   POST /api/journeys/accept-responsibility
+// @access  Private (Authenticated User)
+const acceptResponsibility = async (req, res, next) => {
+  try {
+    const { personType = "user", familyMemberId } = req.body;
+
+    const now = new Date();
+
+    if (personType === "family_member" && familyMemberId) {
+      const familyMember = await FamilyMember.findOne({ _id: familyMemberId, user: req.user._id });
+      if (!familyMember) {
+        res.status(404);
+        throw new Error("Family member not found.");
+      }
+      familyMember.responsibilityAccepted = true;
+      familyMember.responsibilityAcceptedAt = now;
+      await familyMember.save();
+
+      await DoctorReview.updateMany(
+        { userId: req.user._id, familyMemberId },
+        { responsibilityAccepted: true, responsibilityAcceptedAt: now }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: `Responsibility accepted for family member ${familyMember.name}.`,
+        personType: "family_member",
+        personName: familyMember.name,
+      });
+    } else {
+      const user = await User.findById(req.user._id);
+      if (!user) {
+        res.status(404);
+        throw new Error("User profile not found.");
+      }
+      user.responsibilityAccepted = true;
+      user.responsibilityAcceptedAt = now;
+      await user.save();
+
+      await DoctorReview.updateMany(
+        { userId: req.user._id, personType: "user" },
+        { responsibilityAccepted: true, responsibilityAcceptedAt: now }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: `Responsibility accepted for main user ${user.name}.`,
+        personType: "user",
+        personName: user.name,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createJourney,
   getJourneys,
@@ -311,4 +399,5 @@ module.exports = {
   getJourneyById,
   updateJourney,
   deleteJourney,
+  acceptResponsibility,
 };

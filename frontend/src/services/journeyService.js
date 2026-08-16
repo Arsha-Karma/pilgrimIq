@@ -9,6 +9,15 @@ export const apiCreateJourney = async (journeyData, token) => {
   });
 };
 
+// Accept responsibility for travel under own risk
+export const apiAcceptResponsibility = async (payload, token) => {
+  return fetchAPI("/journeys/accept-responsibility", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(payload),
+  });
+};
+
 // Get current user's journeys
 export const apiGetMyJourneys = async (token) => {
   return fetchAPI("/journeys/user/my-journeys", {

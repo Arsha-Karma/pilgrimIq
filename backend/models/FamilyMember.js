@@ -176,6 +176,34 @@ const familyMemberSchema = new mongoose.Schema(
         url: { type: String, default: "" },
       },
     ],
+
+    // Risk Assessment & Doctor Approval Status
+    aiRiskLevel: {
+      type: String,
+      enum: ["LOW_RISK", "MODERATE_RISK", "HIGH_RISK", "CRITICAL_RISK"],
+      default: "LOW_RISK",
+    },
+    psiScore: {
+      type: Number,
+      default: 100,
+    },
+    doctorApprovalStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
+    responsibilityAccepted: {
+      type: Boolean,
+      default: false,
+    },
+    responsibilityAcceptedAt: {
+      type: Date,
+      default: null,
+    },
+    doctorReason: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,

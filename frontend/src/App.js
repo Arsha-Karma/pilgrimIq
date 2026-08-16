@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -29,6 +29,7 @@ function App() {
         <Route path="/family" element={<Profile />} />
         <Route path="/my-family" element={<Profile />} />
         <Route path="/medical-analysis/:reportId" element={<MedicalAnalysis />} />
+        <Route path="/journey-planner" element={<Navigate to="/centers" replace />} />
         <Route path="/journey-planner/:pilgrimageCenterId" element={<JourneyPlanner />} />
         <Route path="/journey/:journeyId" element={<JourneyDetails />} />
         <Route path="/my-journeys" element={<MyJourneys />} />

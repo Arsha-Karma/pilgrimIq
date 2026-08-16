@@ -7,6 +7,8 @@ import {
   apiAddFamilyMember,
   apiUpdateFamilyMember,
   apiDeleteFamilyMember,
+  apiGetNotifications,
+  apiMarkNotificationRead,
 } from "../services/api";
 import { apiUploadMedicalReport, apiGetMyMedicalReports } from "../services/medicalReportService";
 import "../styles/Profile.css";
@@ -26,6 +28,8 @@ import {
   FiLogOut,
   FiCheckCircle,
   FiAlertCircle,
+  FiAlertTriangle,
+  FiBell,
   FiX,
   FiEdit2,
   FiTrash2,
@@ -607,6 +611,40 @@ function Profile() {
   const [editReportFileNameFocused, setEditReportFileNameFocused] = useState(false);
   const [reportTarget, setReportTarget] = useState("family"); // "family" or "user"
   const [showPsiModal, setShowPsiModal] = useState(false);
+
+  // In-App Notification State (for Profile Page)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+
+  useEffect(() => {
+    const loadNotifs = async () => {
+      if (!token) return;
+      try {
+        const res = await apiGetNotifications(token);
+        if (res && res.success) {
+          setNotifications(res.notifications || []);
+          setUnreadCount(res.unreadCount || 0);
+        }
+      } catch (err) {
+        console.error("Failed to load notifications:", err);
+      }
+    };
+
+    loadNotifs();
+    const interval = setInterval(loadNotifs, 15000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  const handleMarkNotifRead = async (id) => {
+    try {
+      await apiMarkNotificationRead(id, token);
+      setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, read: true } : n)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Failed to mark notification read:", err);
+    }
+  };
 
   // Custom Delete Confirmation Modal State
   const [deleteConfirmModal, setDeleteConfirmModal] = useState({
@@ -2345,20 +2383,124 @@ function Profile() {
           {/* ========================================= */}
           {activeTab === "profile" && (
             <div className="view-container profile-view">
-              <div className="page-header">
+              <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div className="header-titles">
                   <h1>User Profile</h1>
                   <p className="breadcrumb-text">Dashboard / My Profile</p>
                 </div>
-                <button
-                  className="btn-primary-blue"
-                  onClick={() => {
-                    setProfileWizardStep(1);
-                    setShowCompleteProfileModal(true);
-                  }}
-                >
-                  <FiEdit2 size={16} /> Edit Profile
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  {/* NOTIFICATION BELL ICON (User Profile Only) */}
+                  <div style={{ position: "relative" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowNotifMenu((prev) => !prev)}
+                      style={{
+                        background: "#f1f5f9",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "50%",
+                        width: "42px",
+                        height: "42px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#1e293b",
+                        cursor: "pointer",
+                        position: "relative",
+                        boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+                      }}
+                      title="User Notifications"
+                    >
+                      <FiBell size={20} />
+                      {unreadCount > 0 && (
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: "-2px",
+                            right: "-2px",
+                            background: "#ef4444",
+                            color: "#fff",
+                            borderRadius: "10px",
+                            padding: "2px 6px",
+                            fontSize: "11px",
+                            fontWeight: "800",
+                          }}
+                        >
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {showNotifMenu && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50px",
+                          right: 0,
+                          width: "350px",
+                          background: "#ffffff",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "12px",
+                          boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                          zIndex: 9999,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
+                          <strong style={{ color: "#0f172a", fontSize: "14px" }}>In-App Notifications</strong>
+                          <span style={{ fontSize: "12px", color: "#64748b" }}>{unreadCount} Unread</span>
+                        </div>
+
+                        <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                          {notifications.length > 0 ? (
+                            notifications.map((notif) => (
+                              <div
+                                key={notif._id}
+                                onClick={() => handleMarkNotifRead(notif._id)}
+                                style={{
+                                  padding: "12px 16px",
+                                  borderBottom: "1px solid #f1f5f9",
+                                  background: notif.read ? "#ffffff" : "#f0f9ff",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                                  {notif.type === "DOCTOR_REJECTION" ? (
+                                    <FiAlertTriangle style={{ color: "#ef4444", marginTop: "2px", flexShrink: 0 }} />
+                                  ) : (
+                                    <FiCheckCircle style={{ color: "#16a34a", marginTop: "2px", flexShrink: 0 }} />
+                                  )}
+                                  <div>
+                                    <div style={{ fontSize: "13px", fontWeight: "700", color: notif.type === "DOCTOR_REJECTION" ? "#dc2626" : "#15803d" }}>
+                                      {notif.title}
+                                    </div>
+                                    <div style={{ fontSize: "12px", color: "#334155", marginTop: "2px" }}>{notif.message}</div>
+                                    <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "4px" }}>
+                                      {new Date(notif.createdAt).toLocaleDateString()} {new Date(notif.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ padding: "20px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                              No notifications yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="btn-primary-blue"
+                    onClick={() => {
+                      setProfileWizardStep(1);
+                      setShowCompleteProfileModal(true);
+                    }}
+                  >
+                    <FiEdit2 size={16} /> Edit Profile
+                  </button>
+                </div>
               </div>
 
               {/* PROFILE COMPLETION PROGRESS BANNER */}
@@ -2605,102 +2747,164 @@ function Profile() {
                 </div>
               </div>
 
-              {/* USER MEDICAL REPORTS CARD */}
-              <div className="info-section-card" style={{ marginTop: "24px" }}>
-                <div className="card-header-styled" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div className="card-title-group">
-                    <div className="card-icon-circle blue">
-                      <FiFileText />
-                    </div>
-                    <h3>Uploaded Medical Reports ({(profileData?.medicalReports || []).length})</h3>
-                  </div>
-                  <button
-                    className="btn-primary-blue"
-                    onClick={() => {
-                      setReportTarget("user");
-                      setReportFile(null);
-                      setReportForm({ fileName: "", fileType: "pdf", reportSummary: {} });
-                      setShowUploadReportModal(true);
-                    }}
-                  >
-                    <FiUpload size={14} /> Upload Report
-                  </button>
-                </div>
+              {/* USER & FAMILY MEDICAL REPORTS CARD */}
+              {(() => {
+                const userReports = (profileData?.medicalReports || []).map((rep, idx) => ({
+                  ...rep,
+                  ownerType: "user",
+                  ownerName: profileData?.name || authUser?.name || "Main User",
+                  ownerRelation: "Self",
+                  userIndex: idx,
+                }));
 
-                <div className="reports-list" style={{ marginTop: "16px" }}>
-                  {(profileData?.medicalReports || []).length === 0 ? (
-                    <p style={{ fontSize: "13.5px", color: "#64748b", padding: "16px", background: "#f8fafc", borderRadius: "10px", margin: 0, textAlign: "center", border: "1px dashed #cbd5e1" }}>
-                      No medical reports uploaded for your profile yet. Click "Upload Report" above to add your medical documents.
-                    </p>
-                  ) : (
-                    (profileData?.medicalReports || []).map((rep, idx) => {
-                      const aiReport = dbMedicalReports.find(
-                        (r) => (rep._id && r._id === rep._id) || (r.fileName && rep.fileName && r.fileName.toLowerCase() === rep.fileName.toLowerCase() && r.ownerType === "user")
-                      );
-                      const targetReportId = rep._id || (aiReport ? aiReport._id : null);
-                      const statusVal = aiReport?.aiRiskAssessment?.overallStatus || aiReport?.finalStatus;
+                const familyReports = [];
+                (profileData?.familyMembers || []).forEach((fm, fmIdx) => {
+                  (fm.reports || []).forEach((rep, repIdx) => {
+                    familyReports.push({
+                      ...rep,
+                      ownerType: "family_member",
+                      familyMemberId: fm._id,
+                      ownerName: fm.name,
+                      ownerRelation: fm.relationship || "Family Member",
+                      fmIndex: fmIdx,
+                      fmReportIndex: repIdx,
+                    });
+                  });
+                });
 
-                      return (
-                        <div key={idx} className="report-item-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", marginBottom: 10 }}>
-                          <div className="report-file-info">
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span className="file-name" style={{ fontWeight: 700, color: "#0f172a", fontSize: "14.5px" }}>📄 {rep.fileName}</span>
-                              {statusVal && (
-                                <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "12px", background: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#fef2f2" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#fffbeb" : "#f0fdf4", color: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#b91c1c" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#b45309" : "#15803d", border: "1px solid rgba(0,0,0,0.05)" }}>
-                                  {statusVal === "MEDICAL_REVIEW_REQUIRED" ? "🔴 Medical Review" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "🟡 Caution" : "🟢 Low Risk"}
-                                </span>
-                              )}
-                            </div>
-                            <span className="upload-meta" style={{ fontSize: 12, color: "#64748b", marginTop: "3px", display: "block" }}>Uploaded: {rep.uploadDate || "Recently"}</span>
-                          </div>
-                          <div className="report-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                            {targetReportId && (
-                              <button
-                                type="button"
-                                className="btn-view-ai-analysis"
-                                onClick={() => navigate(`/medical-analysis/${targetReportId}`)}
-                                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "8px", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: "700", border: "none", cursor: "pointer", boxShadow: "0 2px 6px rgba(37,99,235,0.2)" }}
-                              >
-                                <FiActivity size={14} /> View AI Analysis
-                              </button>
-                            )}
-                            {rep.url && (
-                              <a
-                                href={rep.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn-report-act download"
-                                title="View File"
-                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
-                              >
-                                <FiEye size={15} />
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              className="btn-report-act edit"
-                              title="Edit Report"
-                              onClick={() => handleOpenEditReport(rep, idx, "user")}
-                              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", cursor: "pointer" }}
-                            >
-                              <FiEdit2 size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-report-act delete"
-                              title="Delete Report"
-                              onClick={() => handleDeleteReport(idx, "user")}
-                              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
-                            >
-                              <FiTrash2 size={15} />
-                            </button>
-                          </div>
+                const extraDbReports = [];
+                (dbMedicalReports || []).forEach((dbRep) => {
+                  const existsInUser = userReports.some(
+                    (r) => (dbRep._id && r._id === dbRep._id) || (dbRep.fileName && r.fileName && dbRep.fileName.toLowerCase() === r.fileName.toLowerCase())
+                  );
+                  const existsInFm = familyReports.some(
+                    (r) => (dbRep._id && r._id === dbRep._id) || (dbRep.fileName && r.fileName && dbRep.fileName.toLowerCase() === r.fileName.toLowerCase())
+                  );
+
+                  if (!existsInUser && !existsInFm) {
+                    const isFm = dbRep.ownerType === "family_member" || dbRep.familyMemberId;
+                    const ownerName = isFm ? (dbRep.familyMemberId?.name || "Family Member") : (profileData?.name || authUser?.name || "Main User");
+                    const ownerRelation = isFm ? (dbRep.familyMemberId?.relationship || "Family Member") : "Self";
+
+                    extraDbReports.push({
+                      _id: dbRep._id,
+                      fileName: dbRep.fileName,
+                      url: dbRep.url,
+                      uploadDate: dbRep.createdAt ? new Date(dbRep.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Recently",
+                      ownerType: isFm ? "family_member" : "user",
+                      familyMemberId: dbRep.familyMemberId?._id || dbRep.familyMemberId,
+                      ownerName,
+                      ownerRelation,
+                    });
+                  }
+                });
+
+                const allUploadedReports = [...userReports, ...familyReports, ...extraDbReports];
+
+                return (
+                  <div className="info-section-card" style={{ marginTop: "24px" }}>
+                    <div className="card-header-styled" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div className="card-title-group">
+                        <div className="card-icon-circle blue">
+                          <FiFileText />
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                        <h3>Uploaded Medical Reports ({allUploadedReports.length})</h3>
+                      </div>
+                      <button
+                        className="btn-primary-blue"
+                        onClick={() => {
+                          setReportTarget("user");
+                          setReportFile(null);
+                          setReportForm({ fileName: "", fileType: "pdf", reportSummary: {} });
+                          setShowUploadReportModal(true);
+                        }}
+                      >
+                        <FiUpload size={14} /> Upload Report
+                      </button>
+                    </div>
+
+                    <div className="reports-list" style={{ marginTop: "16px" }}>
+                      {allUploadedReports.length === 0 ? (
+                        <p style={{ fontSize: "13.5px", color: "#64748b", padding: "16px", background: "#f8fafc", borderRadius: "10px", margin: 0, textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                          No medical reports uploaded for your profile or family members yet. Click "Upload Report" above to add your medical documents.
+                        </p>
+                      ) : (
+                        allUploadedReports.map((rep, idx) => {
+                          const aiReport = dbMedicalReports.find(
+                            (r) => (rep._id && r._id === rep._id) || (r.fileName && rep.fileName && r.fileName.toLowerCase() === rep.fileName.toLowerCase())
+                          );
+                          const targetReportId = rep._id || (aiReport ? aiReport._id : null);
+                          const statusVal = aiReport?.aiRiskAssessment?.overallStatus || aiReport?.finalStatus;
+
+                          return (
+                            <div key={idx} className="report-item-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", marginBottom: 10 }}>
+                              <div className="report-file-info">
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                  <span className="file-name" style={{ fontWeight: 700, color: "#0f172a", fontSize: "14.5px" }}>📄 {rep.fileName}</span>
+
+                                  {/* OWNER NAME TAG FOR USER / FAMILY MEMBER */}
+                                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: rep.ownerType === "family_member" ? "#e0f2fe" : "#f1f5f9", color: rep.ownerType === "family_member" ? "#0369a1" : "#475569", border: "1px solid #bfdbfe" }}>
+                                    {rep.ownerType === "family_member" ? `👥 ${rep.ownerName} (${rep.ownerRelation})` : `👤 ${rep.ownerName} (${rep.ownerRelation})`}
+                                  </span>
+
+                                  {statusVal && (
+                                    <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "12px", background: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#fef2f2" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#fffbeb" : "#f0fdf4", color: statusVal === "MEDICAL_REVIEW_REQUIRED" ? "#b91c1c" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "#b45309" : "#15803d", border: "1px solid rgba(0,0,0,0.05)" }}>
+                                      {statusVal === "MEDICAL_REVIEW_REQUIRED" ? "🔴 Medical Review" : statusVal === "CAUTION" || statusVal === "AI_PRELIMINARY_CAUTION" ? "🟡 Caution" : "🟢 Low Risk"}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="upload-meta" style={{ fontSize: 12, color: "#64748b", marginTop: "3px", display: "block" }}>Uploaded: {rep.uploadDate || "Recently"}</span>
+                              </div>
+                              <div className="report-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                {targetReportId && (
+                                  <button
+                                    type="button"
+                                    className="btn-view-ai-analysis"
+                                    onClick={() => navigate(`/medical-analysis/${targetReportId}`)}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "8px", background: "#2563eb", color: "#ffffff", fontSize: "13px", fontWeight: "700", border: "none", cursor: "pointer", boxShadow: "0 2px 6px rgba(37,99,235,0.2)" }}
+                                  >
+                                    <FiActivity size={14} /> View AI Analysis
+                                  </button>
+                                )}
+                                {rep.url && (
+                                  <a
+                                    href={rep.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn-report-act download"
+                                    title="View File"
+                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
+                                  >
+                                    <FiEye size={15} />
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn-report-act edit"
+                                  title="Edit Report"
+                                  onClick={() => handleOpenEditReport(rep, rep.userIndex !== undefined ? rep.userIndex : rep.fmReportIndex, rep.ownerType)}
+                                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", cursor: "pointer" }}
+                                >
+                                  <FiEdit2 size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-report-act delete"
+                                  title="Delete Report"
+                                  onClick={() => handleDeleteReport(rep.userIndex !== undefined ? rep.userIndex : rep.fmReportIndex, rep.ownerType)}
+                                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
+                                >
+                                  <FiTrash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

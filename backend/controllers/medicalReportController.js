@@ -1,10 +1,23 @@
 const MedicalReport = require("../models/MedicalReport");
 const FamilyMember = require("../models/FamilyMember");
 const User = require("../models/User");
+const DoctorReview = require("../models/DoctorReview");
 const { extractTextFromReport } = require("../services/medicalOCRService");
 const { parseMedicalEntities } = require("../services/medicalNLPService");
 const { assessTravelRisk } = require("../services/medicalRiskService");
 const { generateMedicalSummary } = require("../services/medicalSummaryService");
+
+// Helper to calculate estimated PSI Score (100 - risk factors)
+const calculatePsiScore = (riskAssessment, nlpData) => {
+  let score = 95;
+  if (riskAssessment?.overallStatus === "MEDICAL_REVIEW_REQUIRED") score -= 35;
+  else if (riskAssessment?.overallStatus === "CAUTION") score -= 15;
+
+  if (nlpData?.conditions?.length > 0) score -= nlpData.conditions.length * 5;
+  if (nlpData?.abnormalFindings?.length > 0) score -= nlpData.abnormalFindings.length * 5;
+
+  return Math.max(15, Math.min(100, score));
+};
 
 // @desc    Upload and analyze a new medical report
 // @route   POST /api/medical-reports/upload
@@ -128,6 +141,69 @@ const uploadAndAnalyzeReport = async (req, res, next) => {
       },
       finalStatus,
     });
+
+    const isHighRisk = physicianRequired || riskAssessment.overallStatus === "MEDICAL_REVIEW_REQUIRED";
+    const riskLevel = isHighRisk
+      ? "HIGH_RISK"
+      : riskAssessment.overallStatus === "CAUTION"
+      ? "MODERATE_RISK"
+      : "LOW_RISK";
+
+    const computedPsi = calculatePsiScore(riskAssessment, nlpResult.extractedMedicalData);
+
+    // Update target person status (User or Family Member)
+    if (ownerType === "family_member" && verifiedFamilyMemberId) {
+      await FamilyMember.findByIdAndUpdate(verifiedFamilyMemberId, {
+        aiRiskLevel: riskLevel,
+        psiScore: computedPsi,
+        doctorApprovalStatus: isHighRisk ? "pending" : "none",
+        responsibilityAccepted: false,
+      });
+    } else {
+      await User.findByIdAndUpdate(req.user._id, {
+        psiRiskLevel: riskLevel === "HIGH_RISK" ? "High Risk" : riskLevel === "MODERATE_RISK" ? "Moderate Risk" : "Low Risk",
+        psiScore: computedPsi,
+        doctorApprovalStatus: isHighRisk ? "pending" : "none",
+        responsibilityAccepted: false,
+      });
+    }
+
+    // Create a DoctorReview record if High Risk / Critical Risk
+    if (isHighRisk) {
+      let relationshipLabel = "Self";
+      if (ownerType === "family_member" && verifiedFamilyMemberId) {
+        const fm = await FamilyMember.findById(verifiedFamilyMemberId);
+        if (fm) relationshipLabel = fm.relationship || "Family Member";
+      }
+
+      await DoctorReview.create({
+        userId: req.user._id,
+        personType: ownerType,
+        familyMemberId: verifiedFamilyMemberId,
+        personName: targetPatientName,
+        relationship: relationshipLabel,
+        age: targetAge,
+        gender: req.user.gender || "",
+        medicalReportId: report._id,
+        healthSummary: {
+          vitals: nlpResult.extractedMedicalData?.vitals || {},
+          chronicConditions: nlpResult.extractedMedicalData?.conditions?.join(", ") || "",
+          labValues: nlpResult.extractedMedicalData?.laboratoryValues || [],
+          extractedText: extractedText || "",
+          abnormalFindings: nlpResult.extractedMedicalData?.abnormalFindings || [],
+        },
+        aiRiskLevel: "HIGH_RISK",
+        psiScore: computedPsi,
+        riskFactors: riskAssessment?.explanation || ["High risk medical parameter detected"],
+        aiRecommendations: [
+          "Consult physician for clinical clearance.",
+          "Restrict high-altitude strenuous walking.",
+          "Ensure continuous hydration and medication availability.",
+        ],
+        status: "pending",
+        doctorDecision: "none",
+      });
+    }
 
     res.status(201).json({
       success: true,

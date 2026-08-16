@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetPilgrimageCenterById, apiGetProfile } from "../services/api";
-import { apiCreateJourney, apiGetNearbyServices } from "../services/journeyService";
+import { apiCreateJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
 import "../styles/JourneyPlanner.css";
 import {
   FiMapPin,
@@ -15,7 +15,9 @@ import {
   FiCheckCircle,
   FiArrowLeft,
   FiAlertCircle,
-  FiCompass
+  FiCompass,
+  FiShield,
+  FiX
 } from "react-icons/fi";
 
 const INDIAN_STATES_AND_UTS = [
@@ -60,15 +62,21 @@ const INDIAN_STATES_AND_UTS = [
 function JourneyPlanner() {
   const { pilgrimageCenterId } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user: authUser } = useAuth();
 
   // Step 1: Center & User Data state
   const [center, setCenter] = useState(null);
   const [loadingCenter, setLoadingCenter] = useState(true);
   const [centerError, setCenterError] = useState("");
 
+  const [userProfile, setUserProfile] = useState(null);
   const [familyMembers, setFamilyMembers] = useState([]);
   const [loadingFamily, setLoadingFamily] = useState(true);
+
+  // Responsibility Confirmation Modal State
+  const [showResponsibilityModal, setShowResponsibilityModal] = useState(false);
+  const [responsibilityTarget, setResponsibilityTarget] = useState(null); // { type: 'user'|'family_member', name, relationship, familyMemberId, isRejected, doctorReason }
+  const [submittingResponsibility, setSubmittingResponsibility] = useState(false);
 
   // Form State
   const [journeyDate, setJourneyDate] = useState("");
@@ -154,24 +162,65 @@ function JourneyPlanner() {
     }
   }, [pilgrimageCenterId]);
 
-  // Load User Family Members
+  // Load User Profile & Family Members
   useEffect(() => {
     const fetchUserFamily = async () => {
       if (!token) return;
       try {
         setLoadingFamily(true);
         const profile = await apiGetProfile(token);
-        if (profile && Array.isArray(profile.familyMembers)) {
-          setFamilyMembers(profile.familyMembers);
+        if (profile) {
+          setUserProfile(profile);
+          if (Array.isArray(profile.familyMembers)) {
+            setFamilyMembers(profile.familyMembers);
+          }
         }
       } catch (err) {
-        console.error("Failed to load family members:", err);
+        console.error("Failed to load user profile & family members:", err);
       } finally {
         setLoadingFamily(false);
       }
     };
     fetchUserFamily();
   }, [token]);
+
+  const refreshProfileData = async () => {
+    if (!token) return;
+    try {
+      const profile = await apiGetProfile(token);
+      if (profile) {
+        setUserProfile(profile);
+        if (Array.isArray(profile.familyMembers)) {
+          setFamilyMembers(profile.familyMembers);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh profile:", err);
+    }
+  };
+
+  const handleOpenResponsibilityModal = (target) => {
+    setResponsibilityTarget(target);
+    setShowResponsibilityModal(true);
+  };
+
+  const handleConfirmAcceptResponsibility = async () => {
+    if (!responsibilityTarget) return;
+    try {
+      setSubmittingResponsibility(true);
+      const payload = responsibilityTarget.type === "family_member"
+        ? { personType: "family_member", familyMemberId: responsibilityTarget.familyMemberId }
+        : { personType: "user" };
+
+      await apiAcceptResponsibility(payload, token);
+      setShowResponsibilityModal(false);
+      await refreshProfileData();
+    } catch (err) {
+      setSubmitError(err.message || "Failed to accept travel responsibility.");
+    } finally {
+      setSubmittingResponsibility(false);
+    }
+  };
 
   // Fetch Nearby Services when center coordinates or active category/radius change
   useEffect(() => {
@@ -766,6 +815,178 @@ function JourneyPlanner() {
               </div>
             </div>
 
+            {/* SECTION 2.5: MEDICAL RISK ASSESSMENT & DOCTOR AUTHORIZATION */}
+            <div className="form-section-card" style={{ background: "#0f172a", border: "1px solid #1e293b", color: "#f8fafc" }}>
+              <div className="section-title">
+                <FiShield className="sec-icon" style={{ color: "#3b82f6" }} />
+                <div>
+                  <h3 style={{ color: "#f8fafc" }}>Medical Risk Assessment & Travel Authorization</h3>
+                  <p style={{ color: "#94a3b8" }}>Individual clinical risk index, PSI score, and doctor clearance status for each traveler</p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginTop: "16px" }}>
+                {/* MAIN USER CARD */}
+                {(() => {
+                  const mainUserRisk = userProfile?.psiRiskLevel || "Low Risk";
+                  const isHigh = mainUserRisk === "High Risk" || userProfile?.doctorApprovalStatus === "pending" || userProfile?.doctorApprovalStatus === "rejected";
+                  const isMod = mainUserRisk === "Moderate Risk";
+                  const docStatus = userProfile?.doctorApprovalStatus || "none";
+                  const respAcc = userProfile?.responsibilityAccepted;
+
+                  let statusText = "Safe to Continue";
+                  let statusBg = "rgba(16,185,129,0.15)";
+                  let statusColor = "#34d399";
+
+                  if (isHigh) {
+                    if (docStatus === "approved") {
+                      statusText = "✓ Doctor Approved";
+                      statusBg = "rgba(16,185,129,0.2)";
+                      statusColor = "#34d399";
+                    } else if (docStatus === "rejected") {
+                      statusText = "✕ Doctor Rejected";
+                      statusBg = "rgba(239,68,68,0.2)";
+                      statusColor = "#f87171";
+                    } else {
+                      statusText = "Doctor Approval Required";
+                      statusBg = "rgba(239,68,68,0.2)";
+                      statusColor = "#f87171";
+                    }
+                  } else if (isMod) {
+                    statusText = "Safety Advice";
+                    statusBg = "rgba(245,158,11,0.2)";
+                    statusColor = "#fbbf24";
+                  }
+
+                  return (
+                    <div style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHigh ? "1px solid #ef4444" : "1px solid #334155" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+                          👤 {userProfile?.name || authUser?.name || "Main User"} (Self)
+                        </span>
+                        <span style={{ fontSize: "11px", background: statusBg, color: statusColor, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
+                          {statusText}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                        Medical Risk: <strong style={{ color: isHigh ? "#f87171" : isMod ? "#fbbf24" : "#34d399" }}>{isHigh ? "HIGH / CRITICAL" : isMod ? "MODERATE" : "LOW"}</strong>
+                        {" • "}PSI: <strong>{userProfile?.psiScore || 95}/100</strong>
+                      </div>
+
+                      {docStatus === "rejected" && userProfile?.doctorReason && (
+                        <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
+                          <strong>Doctor Reason:</strong> {userProfile.doctorReason}
+                        </div>
+                      )}
+
+                      {/* Main User ONLY gets Journey Buttons */}
+                      <div style={{ marginTop: "12px" }}>
+                        {!isHigh || respAcc ? (
+                          <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FiCheckCircle /> Cleared to Continue Journey
+                          </div>
+                        ) : docStatus === "pending" ? (
+                          <button type="button" disabled style={{ width: "100%", padding: "8px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", cursor: "not-allowed", opacity: 0.7, fontSize: "12.5px" }}>
+                            [ Continue Journey ] ← DISABLED (Pending Doctor Approval)
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenResponsibilityModal({
+                              type: "user",
+                              name: userProfile?.name || "Main User",
+                              relationship: "Self",
+                              isRejected: docStatus === "rejected",
+                              doctorReason: userProfile?.doctorReason || "",
+                            })}
+                            style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: docStatus === "rejected" ? "#dc2626" : "#2563eb", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12.5px" }}
+                          >
+                            [ Travel in Your Own Responsibility ]
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* FAMILY MEMBER CARDS (NO JOURNEY BUTTONS) */}
+                {!travelingAlone && selectedFamilyObjects.map((fm) => {
+                  const isHighFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected";
+                  const isModFm = fm.aiRiskLevel === "MODERATE_RISK";
+                  const docStatusFm = fm.doctorApprovalStatus || "none";
+
+                  let statusTextFm = "Safe";
+                  let statusBgFm = "rgba(16,185,129,0.15)";
+                  let statusColorFm = "#34d399";
+
+                  if (isHighFm) {
+                    if (docStatusFm === "approved") {
+                      statusTextFm = "✓ Doctor Approved";
+                      statusBgFm = "rgba(16,185,129,0.2)";
+                      statusColorFm = "#34d399";
+                    } else if (docStatusFm === "rejected") {
+                      statusTextFm = "✕ Doctor Rejected";
+                      statusBgFm = "rgba(239,68,68,0.2)";
+                      statusColorFm = "#f87171";
+                    } else {
+                      statusTextFm = "Doctor Approval Required";
+                      statusBgFm = "rgba(239,68,68,0.2)";
+                      statusColorFm = "#f87171";
+                    }
+                  } else if (isModFm) {
+                    statusTextFm = "Safety Advice";
+                    statusBgFm = "rgba(245,158,11,0.2)";
+                    statusColorFm = "#fbbf24";
+                  }
+
+                  return (
+                    <div key={fm._id} style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHighFm ? "1px solid #ef4444" : "1px solid #334155" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+                          👥 {fm.name} ({fm.relationship})
+                        </span>
+                        <span style={{ fontSize: "11px", background: statusBgFm, color: statusColorFm, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
+                          {statusTextFm}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                        Medical Risk: <strong style={{ color: isHighFm ? "#f87171" : isModFm ? "#fbbf24" : "#34d399" }}>{isHighFm ? "HIGH / CRITICAL" : isModFm ? "MODERATE" : "LOW"}</strong>
+                        {" • "}PSI: <strong>{fm.psiScore || 90}/100</strong>
+                      </div>
+
+                      {docStatusFm === "rejected" && fm.doctorReason && (
+                        <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
+                          <strong>Doctor Reason:</strong> {fm.doctorReason}
+                        </div>
+                      )}
+
+                      {/* Explicit Requirement: NO Journey Buttons for Family Members */}
+                      {isHighFm && !fm.responsibilityAccepted && docStatusFm !== "approved" && (
+                        <div style={{ marginTop: "10px" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenResponsibilityModal({
+                              type: "family_member",
+                              familyMemberId: fm._id,
+                              name: fm.name,
+                              relationship: fm.relationship,
+                              isRejected: docStatusFm === "rejected",
+                              doctorReason: fm.doctorReason || "",
+                            })}
+                            style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", background: "#3b82f6", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
+                          >
+                            Main User: Accept Responsibility for {fm.name}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* SECTION 3: STARTING LOCATION */}
             <div className="form-section-card">
               <div className="section-title">
@@ -1269,6 +1490,64 @@ function JourneyPlanner() {
           </div>
         )}
       </div>
+
+      {/* Responsibility Confirmation Modal */}
+      {showResponsibilityModal && responsibilityTarget && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="modal-card" style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "16px", padding: "24px", maxWidth: "520px", width: "90%", color: "#f8fafc" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, color: responsibilityTarget.isRejected ? "#ef4444" : "#3b82f6" }}>
+                {responsibilityTarget.isRejected ? "⚠️ Travel Responsibility Warning" : "Travel Responsibility Confirmation"}
+              </h3>
+              <button onClick={() => setShowResponsibilityModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" }}>
+                <FiX />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "20px", fontSize: "14px", lineHeight: "1.6", color: "#cbd5e1" }}>
+              {responsibilityTarget.isRejected ? (
+                <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "14px", borderRadius: "10px", color: "#fca5a5" }}>
+                  "The doctor has rejected travel for <strong>{responsibilityTarget.name} ({responsibilityTarget.relationship})</strong> because of the identified medical risk ({responsibilityTarget.doctorReason || "Clinical risk assessment"}). Continuing the journey despite the doctor's rejection is entirely at your own responsibility. Professional medical advice should be followed."
+                </div>
+              ) : (
+                <div style={{ background: "#064e3b", border: "1px solid #059669", padding: "14px", borderRadius: "10px", color: "#a7f3d0" }}>
+                  "The doctor has approved the travel. By continuing, you acknowledge the medical risk and agree to travel under your own responsibility."
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowResponsibilityModal(false)}
+                style={{ padding: "10px 18px", borderRadius: "8px", background: "#334155", color: "#fff", border: "none", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAcceptResponsibility}
+                disabled={submittingResponsibility}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  background: responsibilityTarget.isRejected ? "#dc2626" : "#2563eb",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                {submittingResponsibility
+                  ? "Recording Acceptance..."
+                  : responsibilityTarget.isRejected
+                  ? "I Understand – Travel in My Own Responsibility"
+                  : "Confirm & Continue Journey"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
