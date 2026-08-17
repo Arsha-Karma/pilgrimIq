@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "../styles/DoctorDashboard.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -8,16 +8,14 @@ import {
   FiActivity,
   FiAlertTriangle,
   FiCheckCircle,
-  FiClock,
   FiFileText,
-  FiHome,
   FiLogOut,
   FiMapPin,
   FiSearch,
   FiUsers,
   FiX
 } from "react-icons/fi";
-import { FaHeartbeat, FaLungs, FaStethoscope } from "react-icons/fa";
+import { FaLungs, FaStethoscope } from "react-icons/fa";
 
 import { apiGetPhysicianReviews, apiSubmitPhysicianReview } from "../services/medicalReportService";
 
@@ -46,6 +44,32 @@ function DoctorDashboard() {
   const [selectedReviewForRejection, setSelectedReviewForRejection] = useState(null);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState("");
+
+  const getUniqueDoctorReviews = useCallback(() => {
+    const combined = [...doctorReviews, ...medicalReviews];
+    const map = new Map();
+
+    combined.forEach((item) => {
+      const isDocModel = !!item.personName;
+      const pName = isDocModel
+        ? item.personName
+        : item.ownerType === "family_member" && item.familyMemberId
+        ? item.familyMemberId.name
+        : item.userId?.name || "Patient";
+
+      const key = (pName || "").toLowerCase().trim();
+      if (!key) return;
+
+      // Deduplicate: Ensure 1 applicant name appears only 1 time in the review queue
+      if (!map.has(key) || isDocModel) {
+        map.set(key, item);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [doctorReviews, medicalReviews]);
+
+  const uniqueDoctorReviews = getUniqueDoctorReviews();
 
   const loadMedicalReviews = async () => {
     if (!token) return;
@@ -262,10 +286,7 @@ function DoctorDashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="btn-sidebar-user-view" onClick={() => navigate("/")}>
-            <FiHome /> User View
-          </button>
-          <button className="btn-sidebar-logout" onClick={handleLogout}>
+          <button className="btn-sidebar-logout" onClick={handleLogout} style={{ width: "100%" }}>
             <FiLogOut /> Logout
           </button>
         </div>
@@ -329,7 +350,11 @@ function DoctorDashboard() {
                 <span>CLEARANCES GRANTED TODAY</span>
                 <FiCheckCircle className="kpi-icon" />
               </div>
-              <div className="kpi-value">14 Pilgrims</div>
+              <div className="kpi-value">
+                {uniqueDoctorReviews.filter(
+                  (item) => item.status === "approved" || item.doctorDecision === "approved" || item.physicianReview?.status === "approved"
+                ).length} Pilgrims
+              </div>
               <div className="kpi-trend positive">
                 <FiCheckCircle /> Fit for High Altitude Trek
               </div>
@@ -340,154 +365,149 @@ function DoctorDashboard() {
                 <span>CRITICAL / HIGH RISK</span>
                 <FiAlertTriangle className="kpi-icon" />
               </div>
-              <div className="kpi-value">1 Patient</div>
+              <div className="kpi-value">
+                {uniqueDoctorReviews.filter(
+                  (item) => item.status === "pending" || item.status === "rejected" || item.doctorDecision === "rejected"
+                ).length} Patient{uniqueDoctorReviews.filter((item) => item.status === "pending" || item.status === "rejected").length === 1 ? "" : "s"}
+              </div>
               <div className="kpi-trend negative">
                 <FaLungs /> SpO2 Monitoring Required
-              </div>
-            </div>
-
-            <div className="kpi-card purple">
-              <div className="kpi-header">
-                <span>OXYGEN STATION CAPACITY</span>
-                <FaHeartbeat className="kpi-icon" />
-              </div>
-              <div className="kpi-value">84% Available</div>
-              <div className="kpi-trend neutral">
-                <FiClock /> Pamba Central Unit
               </div>
             </div>
           </div>
 
           {/* Content Views */}
           <div className="doctor-content-grid">
-            <div className="admin-panel main-panel">
-              <div className="panel-header">
-                <div>
-                  <h3>Registered Pilgrim Health Directory & Telemetry</h3>
-                  <p>Real-time vital signs monitoring, risk index scoring & physician triage</p>
-                </div>
-
-                <div className="table-controls">
-                  <div className="search-box">
-                    <FiSearch className="search-icon" />
-                    <input
-                      type="text"
-                      placeholder="Search pilgrim by name, ID or email..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            {activeTab === "triage" && (
+              <div className="admin-panel main-panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>Registered Pilgrim Health Directory & Telemetry</h3>
+                    <p>Real-time vital signs monitoring, risk index scoring & physician triage</p>
                   </div>
 
-                  <select
-                    className="filter-dropdown"
-                    value={riskFilter}
-                    onChange={(e) => setRiskFilter(e.target.value)}
-                  >
-                    <option value="all">All Risk Levels</option>
-                    <option value="high">High Risk Only</option>
-                    <option value="moderate">Moderate Risk</option>
-                    <option value="cleared">Cleared</option>
-                  </select>
-                </div>
-              </div>
+                  <div className="table-controls">
+                    <div className="search-box">
+                      <FiSearch className="search-icon" />
+                      <input
+                        type="text"
+                        placeholder="Search pilgrim by name, ID or email..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
 
-              <div className="table-responsive">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>PILGRIM ID</th>
-                      <th>NAME & CONTACT</th>
-                      <th>SPO2 & HEART RATE</th>
-                      <th>PSI SCORE</th>
-                      <th>RISK INDEX</th>
-                      <th>MEDICAL ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPilgrims.length > 0 ? (
-                      filteredPilgrims.map((pilgrim) => (
-                        <tr key={pilgrim.id}>
-                          <td className="font-mono" style={{ color: "#60a5fa", fontWeight: "bold" }}>
-                            {pilgrim.id}
-                          </td>
-                          <td>
-                            <div className="user-name" style={{ fontSize: "14px", fontWeight: "700" }}>
-                              {pilgrim.name}
-                            </div>
-                            <div className="user-contact">{pilgrim.email}</div>
-                            {pilgrim.phone && pilgrim.phone !== "Not provided" && (
-                              <div className="user-contact" style={{ color: "#94a3b8" }}>
-                                📞 {pilgrim.phone}
+                    <select
+                      className="filter-dropdown"
+                      value={riskFilter}
+                      onChange={(e) => setRiskFilter(e.target.value)}
+                    >
+                      <option value="all">All Risk Levels</option>
+                      <option value="high">High Risk Only</option>
+                      <option value="moderate">Moderate Risk</option>
+                      <option value="cleared">Cleared</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>PILGRIM ID</th>
+                        <th>NAME & CONTACT</th>
+                        <th>SPO2 & HEART RATE</th>
+                        <th>PSI SCORE</th>
+                        <th>RISK INDEX</th>
+                        <th>MEDICAL ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPilgrims.length > 0 ? (
+                        filteredPilgrims.map((pilgrim) => (
+                          <tr key={pilgrim.id}>
+                            <td className="font-mono" style={{ color: "#60a5fa", fontWeight: "bold" }}>
+                              {pilgrim.id}
+                            </td>
+                            <td>
+                              <div className="user-name" style={{ fontSize: "14px", fontWeight: "700" }}>
+                                {pilgrim.name}
                               </div>
-                            )}
-                          </td>
-                          <td>
-                            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                              <span style={{ color: pilgrim.spo2 < 95 ? "#f87171" : "#34d399", fontWeight: "700", fontSize: "13px" }}>
-                                🫁 SpO2: {pilgrim.spo2}%
-                              </span>
-                              <span style={{ color: pilgrim.heartRate > 90 ? "#fbbf24" : "#cbd5e1", fontSize: "13px" }}>
-                                ❤️ {pilgrim.heartRate} bpm
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <span
-                              style={{
-                                background: pilgrim.psiScore >= 85 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
-                                color: pilgrim.psiScore >= 85 ? "#34d399" : "#f87171",
-                                padding: "4px 10px",
-                                borderRadius: "8px",
-                                fontWeight: "800",
-                                fontSize: "13px",
-                              }}
-                            >
-                              {pilgrim.psiScore} / 100
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className={`status-pill ${pilgrim.riskLevel === "High Risk"
-                                ? "danger"
-                                : pilgrim.riskLevel === "Moderate"
-                                  ? "warning"
-                                  : "success"
-                                }`}
-                            >
-                              {pilgrim.riskLevel}
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                              <button
-                                className="btn-table-action"
-                                style={{ background: "#2563eb", color: "#fff", border: "none" }}
-                                onClick={() => handleOpenActionModal(pilgrim, "clearance")}
+                              <div className="user-contact">{pilgrim.email}</div>
+                              {pilgrim.phone && pilgrim.phone !== "Not provided" && (
+                                <div className="user-contact" style={{ color: "#94a3b8" }}>
+                                  📞 {pilgrim.phone}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                <span style={{ color: pilgrim.spo2 < 95 ? "#f87171" : "#34d399", fontWeight: "700", fontSize: "13px" }}>
+                                  🫁 SpO2: {pilgrim.spo2}%
+                                </span>
+                                <span style={{ color: pilgrim.heartRate > 90 ? "#fbbf24" : "#cbd5e1", fontSize: "13px" }}>
+                                  ❤️ {pilgrim.heartRate} bpm
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  background: pilgrim.psiScore >= 85 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                                  color: pilgrim.psiScore >= 85 ? "#34d399" : "#f87171",
+                                  padding: "4px 10px",
+                                  borderRadius: "8px",
+                                  fontWeight: "800",
+                                  fontSize: "13px",
+                                }}
                               >
-                                Issue Clearance
-                              </button>
-                              <button
-                                className="btn-table-action"
-                                style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", border: "1px solid #ef4444" }}
-                                onClick={() => handleOpenActionModal(pilgrim, "emergency")}
+                                {pilgrim.psiScore} / 100
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`status-pill ${pilgrim.riskLevel === "High Risk"
+                                  ? "danger"
+                                  : pilgrim.riskLevel === "Moderate"
+                                    ? "warning"
+                                    : "success"
+                                  }`}
                               >
-                                Emergency
-                              </button>
-                            </div>
+                                {pilgrim.riskLevel}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button
+                                  className="btn-table-action"
+                                  style={{ background: "#2563eb", color: "#fff", border: "none" }}
+                                  onClick={() => handleOpenActionModal(pilgrim, "clearance")}
+                                >
+                                  Issue Clearance
+                                </button>
+                                <button
+                                  className="btn-table-action"
+                                  style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", border: "1px solid #ef4444" }}
+                                  onClick={() => handleOpenActionModal(pilgrim, "emergency")}
+                                >
+                                  Emergency
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="text-center" style={{ padding: "40px" }}>
+                            {loadingUsers ? "Loading registered pilgrims..." : "No registered pilgrims match the selected filter."}
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="6" className="text-center" style={{ padding: "40px" }}>
-                          {loadingUsers ? "Loading registered pilgrims from database..." : "No registered pilgrims match the selected filter."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
 
 
             {activeTab === "reviews" && (
@@ -512,8 +532,8 @@ function DoctorDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(doctorReviews.length > 0 || medicalReviews.length > 0) ? (
-                        [...doctorReviews, ...medicalReviews].map((item) => {
+                      {uniqueDoctorReviews.length > 0 ? (
+                        uniqueDoctorReviews.map((item) => {
                           const isDoctorRevModel = !!item.personName;
                           const revId = item._id;
                           const pName = isDoctorRevModel

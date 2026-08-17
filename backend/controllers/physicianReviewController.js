@@ -209,6 +209,13 @@ const submitPhysicianDecision = async (req, res, next) => {
         console.warn(`[NOTIFICATION] Unable to send rejection email to ${mainUser.email}:`, mailErr.message);
       }
 
+      // Delete previous duplicate notifications for this person to ensure strictly 1 notification
+      await Notification.deleteMany({
+        userId: mainUser._id,
+        personName: targetPersonName,
+        type: { $in: ["DOCTOR_REJECTION", "DOCTOR_APPROVAL"] },
+      });
+
       // Create In-App Notification specifically identifying the person
       await Notification.create({
         userId: mainUser._id,
@@ -219,6 +226,13 @@ const submitPhysicianDecision = async (req, res, next) => {
         personRelationship: targetRelationship,
       });
     } else if (normalizedDecision === "approved") {
+      // Delete previous duplicate notifications for this person to ensure strictly 1 notification
+      await Notification.deleteMany({
+        userId: mainUser._id,
+        personName: targetPersonName,
+        type: { $in: ["DOCTOR_REJECTION", "DOCTOR_APPROVAL"] },
+      });
+
       // In-app notification for approval
       await Notification.create({
         userId: mainUser._id,

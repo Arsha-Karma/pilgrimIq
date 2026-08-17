@@ -52,13 +52,17 @@ export const apiDeleteJourney = async (id, token) => {
 };
 
 // Get nearby services (hotels, restaurants, hospitals, ATMs, etc.)
-export const apiGetNearbyServices = async (latitude, longitude, radius = 5, category = "accommodation", token = null) => {
-  const query = new URLSearchParams({
+export const apiGetNearbyServices = async (latitude, longitude, radius = 5, category = "accommodation", dietaryPreference = "No preference", token = null) => {
+  const queryParams = {
     latitude,
     longitude,
     radius,
     category,
-  }).toString();
+  };
+  if (dietaryPreference) {
+    queryParams.dietaryPreference = dietaryPreference;
+  }
+  const query = new URLSearchParams(queryParams).toString();
 
   return fetchAPI(`/nearby-services?${query}`, {
     method: "GET",
@@ -67,8 +71,14 @@ export const apiGetNearbyServices = async (latitude, longitude, radius = 5, cate
 };
 
 // Expand shortened Google Maps link and resolve coordinates (Latitude & Longitude)
-export const apiExpandGoogleMapsUrl = async (url, token = null) => {
-  const query = new URLSearchParams({ url }).toString();
+export const apiExpandGoogleMapsUrl = async (url, meta = {}, token = null) => {
+  const queryParams = { url };
+  if (meta.name) queryParams.name = meta.name;
+  if (meta.city) queryParams.city = meta.city;
+  if (meta.state) queryParams.state = meta.state;
+  if (meta.country) queryParams.country = meta.country;
+
+  const query = new URLSearchParams(queryParams).toString();
   return fetchAPI(`/nearby-services/expand-url?${query}`, {
     method: "GET",
     headers: getHeaders(token),

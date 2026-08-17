@@ -10,7 +10,13 @@ import {
   apiGetNotifications,
   apiMarkNotificationRead,
 } from "../services/api";
-import { apiUploadMedicalReport, apiGetMyMedicalReports } from "../services/medicalReportService";
+import {
+  apiUploadMedicalReport,
+  apiGetMyMedicalReports,
+  apiDeleteMedicalReport,
+  apiGetMedicalReportById,
+  apiUpdateMedicalReport,
+} from "../services/medicalReportService";
 import "../styles/Profile.css";
 import Navbar from "../components/Navbar";
 import {
@@ -43,6 +49,7 @@ import {
   FiPhoneCall,
   FiEye,
   FiCamera,
+  FiExternalLink,
   FiHeart,
   FiHelpCircle
 } from "react-icons/fi";
@@ -605,12 +612,19 @@ function Profile() {
   const [showUploadReportModal, setShowUploadReportModal] = useState(false);
   const [showEditReportModal, setShowEditReportModal] = useState(false);
   const [editingReportIndex, setEditingReportIndex] = useState(null);
+  const [editingReportObj, setEditingReportObj] = useState(null);
   const [editReportFile, setEditReportFile] = useState(null);
   const [editReportForm, setEditReportForm] = useState({ fileName: "" });
   const [reportFileNameFocused, setReportFileNameFocused] = useState(false);
   const [editReportFileNameFocused, setEditReportFileNameFocused] = useState(false);
   const [reportTarget, setReportTarget] = useState("family"); // "family" or "user"
   const [showPsiModal, setShowPsiModal] = useState(false);
+  const [viewDocModal, setViewDocModal] = useState({
+    isOpen: false,
+    fileName: "",
+    fileUrl: "",
+    fileType: "pdf",
+  });
 
   // In-App Notification State (for Profile Page)
   const [notifications, setNotifications] = useState([]);
@@ -1217,8 +1231,8 @@ function Profile() {
       case "foodAllergies":
       case "previousSurgeries":
       case "mobilityLimitations":
-        if (strVal && /[<>{}[\]$%^*=\\]/.test(strVal)) {
-          error = "Special characters < > { } [ ] $ % ^ * are not allowed";
+        if (strVal && !/^[a-zA-Z\s,.\-()]+$/.test(strVal)) {
+          error = "Only letters allowed (no numbers or special characters)";
         } else if (strVal && strVal.length > 200) {
           error = "Text cannot exceed 200 characters";
         }
@@ -1892,7 +1906,7 @@ function Profile() {
         showAlert("success", "Family member details updated successfully!");
       } else {
         res = await apiAddFamilyMember(memberForm, token);
-        showAlert("success", "New family member added and saved to database!");
+        showAlert("success", "New family member added successfully!");
       }
 
       if (res && res.familyMembers) {
@@ -2041,10 +2055,12 @@ function Profile() {
   };
 
   // Open Edit Medical Report Modal
-  const handleOpenEditReport = (rep, index, target = "family") => {
-    setReportTarget(target);
+  const handleOpenEditReport = (rep, index, target = "user") => {
+    const isUser = target === "user" || rep?.ownerType === "user";
+    setReportTarget(isUser ? "user" : "family_member");
     setEditingReportIndex(index);
-    setEditReportForm({ fileName: rep.fileName || "" });
+    setEditingReportObj(rep);
+    setEditReportForm({ fileName: rep?.fileName || "" });
     setEditReportFile(null);
     setShowEditReportModal(true);
   };
@@ -2052,107 +2068,253 @@ function Profile() {
   // Submit Edit Medical Report
   const handleEditReportSubmit = async (e) => {
     e.preventDefault();
-    if (editingReportIndex === null) return;
-
     if (!editReportForm.fileName || !editReportForm.fileName.trim()) {
       showAlert("error", "Report file name cannot be empty.");
       return;
     }
-    if (!/^[A-Za-z\s]+$/.test(editReportForm.fileName.trim())) {
-      showAlert("error", "Only letters and spaces are allowed for report file name.");
+
+    const newName = editReportForm.fileName.trim();
+    if (!/^[A-Za-z0-9\s_\-.]+$/.test(newName)) {
+      showAlert("error", "File name can only contain letters, numbers, spaces, hyphens, and underscores.");
       return;
     }
 
-    const existingReports = reportTarget === "user" ? (profileData?.medicalReports || []) : (activeMember?.reports || []);
-    const existingReport = existingReports[editingReportIndex];
-    if (!existingReport) return;
+    const repToEdit = editingReportObj;
+    const reportId = repToEdit?._id;
+    const isUser = reportTarget === "user" || repToEdit?.ownerType === "user";
 
-    let fileUrl = existingReport.url;
-    let fileType = existingReport.fileType || "pdf";
+    let fileUrl = repToEdit?.url || repToEdit?.fileData || "";
+    let fileType = repToEdit?.fileType || "pdf";
 
     if (editReportFile) {
       try {
         fileUrl = await readFileAsBase64(editReportFile);
         const ext = editReportFile.name.split(".").pop().toLowerCase();
-        fileType = ext === "pdf" ? "pdf" : "jpg";
+        fileType = ext === "pdf" ? "pdf" : ext;
       } catch (err) {
-        fileUrl = existingReport.url;
+        console.error("Base64 error:", err);
       }
     }
 
-    const updatedReport = {
-      ...existingReport,
-      fileName: editReportForm.fileName.trim(),
-      fileType: fileType,
-      url: fileUrl,
-    };
-
-    const updatedReports = [...existingReports];
-    updatedReports[editingReportIndex] = updatedReport;
-
     try {
       setSubmitting(true);
-      if (reportTarget === "user") {
-        const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
-        if (res) {
-          setProfileData(res);
-        }
-      } else {
-        if (!activeMember) return;
-        const res = await apiUpdateFamilyMember(
-          activeMember._id,
-          { reports: updatedReports },
-          token
-        );
-        if (res && res.familyMembers) {
-          setFamilyMembers(res.familyMembers);
+
+      // 1. Update in MongoDB MedicalReport collection if _id exists
+      if (reportId) {
+        try {
+          await apiUpdateMedicalReport(
+            reportId,
+            {
+              fileName: newName,
+              fileData: fileUrl,
+              fileType: fileType,
+            },
+            token
+          );
+        } catch (dbErr) {
+          console.warn("DB update warning:", dbErr.message);
         }
       }
+
+      // 2. Update embedded report array in User profile
+      if (isUser) {
+        const currentReports = profileData?.medicalReports || [];
+        const updatedReports = currentReports.map((r, idx) => {
+          if (reportId && r._id && String(r._id) === String(reportId)) {
+            return { ...r, fileName: newName, fileType: fileType, url: fileUrl || r.url };
+          }
+          if (editingReportIndex !== null && idx === editingReportIndex) {
+            return { ...r, fileName: newName, fileType: fileType, url: fileUrl || r.url };
+          }
+          return r;
+        });
+        const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
+        if (res) setProfileData(res);
+      } else {
+        // 3. Update embedded report array in FamilyMember
+        const fmId = repToEdit?.familyMemberId || (activeMember ? activeMember._id : null);
+        if (fmId) {
+          const targetFm = (familyMembers || []).find((m) => String(m._id) === String(fmId)) || activeMember;
+          if (targetFm) {
+            const currentReports = targetFm.reports || [];
+            const updatedReports = currentReports.map((r, idx) => {
+              if (reportId && r._id && String(r._id) === String(reportId)) {
+                return { ...r, fileName: newName, fileType: fileType, url: fileUrl || r.url };
+              }
+              if (editingReportIndex !== null && idx === editingReportIndex) {
+                return { ...r, fileName: newName, fileType: fileType, url: fileUrl || r.url };
+              }
+              return r;
+            });
+            const res = await apiUpdateFamilyMember(fmId, { reports: updatedReports }, token);
+            if (res && res.familyMembers) {
+              setFamilyMembers(res.familyMembers);
+            }
+          }
+        }
+      }
+
+      // Refresh state
+      if (token) {
+        const updatedProfile = await apiGetProfile(token);
+        if (updatedProfile) {
+          setProfileData(updatedProfile);
+          if (Array.isArray(updatedProfile.familyMembers)) {
+            setFamilyMembers(updatedProfile.familyMembers);
+          }
+        }
+        try {
+          const dbReps = await apiGetMyMedicalReports(token);
+          if (dbReps && Array.isArray(dbReps.reports)) {
+            setDbMedicalReports(dbReps.reports);
+          } else if (Array.isArray(dbReps)) {
+            setDbMedicalReports(dbReps);
+          }
+        } catch (e) {}
+      }
+
       setShowEditReportModal(false);
       setEditingReportIndex(null);
+      setEditingReportObj(null);
       setEditReportFile(null);
       setEditReportForm({ fileName: "" });
       showAlert("success", "Medical report updated successfully!");
     } catch (err) {
+      console.error("Update report error:", err);
       showAlert("error", err.message || "Failed to update report.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Delete Medical Report
-  const handleDeleteReport = (index, target = "family") => {
-    const existingReports = target === "user" ? (profileData?.medicalReports || []) : (activeMember?.reports || []);
-    const repToDelete = existingReports[index];
-    const repName = repToDelete ? repToDelete.fileName : "this report";
+  // Handle View Medical Report Document
+  const handleViewMedicalReportDocument = async (rep) => {
+    if (!rep) return;
+    let urlToView = rep.url || rep.fileData || rep.fileUrl;
+    let fileName = rep.fileName || "Medical_Report";
+    let fileType = rep.fileType || "pdf";
+
+    // If report has ID but base64/url is missing, fetch full report from database
+    if (!urlToView && rep._id) {
+      try {
+        setSubmitting(true);
+        const fullRep = await apiGetMedicalReportById(rep._id, token);
+        if (fullRep && (fullRep.url || fullRep.fileData)) {
+          urlToView = fullRep.url || fullRep.fileData;
+        }
+      } catch (err) {
+        console.error("Failed to fetch full report document:", err);
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    if (!urlToView) {
+      showAlert("error", "Document preview file is not available for this report.");
+      return;
+    }
+
+    // Convert Base64 data URI to browser Blob URL to prevent browser blocking
+    let safeUrl = urlToView;
+    if (urlToView.startsWith("data:")) {
+      try {
+        const parts = urlToView.split(";base64,");
+        const mimeType = parts[0].replace("data:", "") || "application/pdf";
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mimeType });
+        safeUrl = URL.createObjectURL(blob);
+      } catch (err) {
+        console.error("Blob conversion error:", err);
+      }
+    }
+
+    setViewDocModal({
+      isOpen: true,
+      fileName,
+      fileUrl: safeUrl,
+      fileType,
+    });
+  };
+
+  // Robust Delete Medical Report Function
+  const handleDeleteReport = (rep, index, target = "user") => {
+    const repName = rep?.fileName || "this medical report";
+    const reportId = rep?._id;
 
     setDeleteConfirmModal({
       isOpen: true,
       title: "Delete Medical Report",
       message: `Are you sure you want to delete "${repName}"? This action cannot be undone.`,
       onConfirm: async () => {
-        const updatedReports = existingReports.filter((_, idx) => idx !== index);
-
         try {
           setSubmitting(true);
-          if (target === "user") {
-            const res = await apiUpdateProfile({ medicalReports: updatedReports }, token);
-            if (res) {
-              setProfileData(res);
+
+          // 1. Delete from MongoDB MedicalReport collection if ID exists
+          if (reportId) {
+            try {
+              await apiDeleteMedicalReport(reportId, token);
+            } catch (e) {
+              console.warn("DB deletion warning:", e.message);
             }
+          }
+
+          // 2. Remove from User medicalReports array if user report
+          const isUserReport = target === "user" || rep?.ownerType === "user";
+          if (isUserReport) {
+            const currentReports = profileData?.medicalReports || [];
+            const updated = currentReports.filter((r, idx) => {
+              if (reportId && r._id) return String(r._id) !== String(reportId);
+              if (index !== undefined && index !== null && idx === index) return false;
+              return r.fileName !== repName;
+            });
+            const res = await apiUpdateProfile({ medicalReports: updated }, token);
+            if (res) setProfileData(res);
           } else {
-            if (!activeMember) return;
-            const res = await apiUpdateFamilyMember(
-              activeMember._id,
-              { reports: updatedReports },
-              token
-            );
-            if (res && res.familyMembers) {
-              setFamilyMembers(res.familyMembers);
+            // 3. Remove from FamilyMember reports array
+            const fmId = rep?.familyMemberId || (activeMember ? activeMember._id : null);
+            if (fmId) {
+              const targetFm = (familyMembers || []).find((m) => String(m._id) === String(fmId)) || activeMember;
+              if (targetFm) {
+                const currentReports = targetFm.reports || [];
+                const updated = currentReports.filter((r, idx) => {
+                  if (reportId && r._id) return String(r._id) !== String(reportId);
+                  if (index !== undefined && index !== null && idx === index) return false;
+                  return r.fileName !== repName;
+                });
+                const res = await apiUpdateFamilyMember(fmId, { reports: updated }, token);
+                if (res && res.familyMembers) {
+                  setFamilyMembers(res.familyMembers);
+                }
+              }
             }
+          }
+
+          // Refresh full profile data & DB reports
+          if (token) {
+            const updatedProfile = await apiGetProfile(token);
+            if (updatedProfile) {
+              setProfileData(updatedProfile);
+              if (Array.isArray(updatedProfile.familyMembers)) {
+                setFamilyMembers(updatedProfile.familyMembers);
+              }
+            }
+            try {
+              const dbReps = await apiGetMyMedicalReports(token);
+              if (dbReps && Array.isArray(dbReps.reports)) {
+                setDbMedicalReports(dbReps.reports);
+              } else if (Array.isArray(dbReps)) {
+                setDbMedicalReports(dbReps);
+              }
+            } catch (e) {}
           }
           showAlert("success", `Medical report "${repName}" deleted successfully.`);
         } catch (err) {
+          console.error("Delete report error:", err);
           showAlert("error", err.message || "Failed to delete medical report.");
         } finally {
           setSubmitting(false);
@@ -2866,18 +3028,15 @@ function Profile() {
                                     <FiActivity size={14} /> View AI Analysis
                                   </button>
                                 )}
-                                {rep.url && (
-                                  <a
-                                    href={rep.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn-report-act download"
-                                    title="View File"
-                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
-                                  >
-                                    <FiEye size={15} />
-                                  </a>
-                                )}
+                                <button
+                                  type="button"
+                                  className="btn-report-act download"
+                                  title="View Medical Report"
+                                  onClick={() => handleViewMedicalReportDocument(rep)}
+                                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", cursor: "pointer" }}
+                                >
+                                  <FiEye size={15} />
+                                </button>
                                 <button
                                   type="button"
                                   className="btn-report-act edit"
@@ -2891,7 +3050,7 @@ function Profile() {
                                   type="button"
                                   className="btn-report-act delete"
                                   title="Delete Report"
-                                  onClick={() => handleDeleteReport(rep.userIndex !== undefined ? rep.userIndex : rep.fmReportIndex, rep.ownerType)}
+                                  onClick={() => handleDeleteReport(rep, rep.userIndex !== undefined ? rep.userIndex : rep.fmReportIndex, rep.ownerType)}
                                   style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
                                 >
                                   <FiTrash2 size={15} />
@@ -3266,18 +3425,15 @@ function Profile() {
                                       <FiActivity size={14} /> View AI Analysis
                                     </button>
                                   )}
-                                  {rep.url && (
-                                    <a
-                                      href={rep.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="btn-report-act download"
-                                      title="View File"
-                                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", textDecoration: "none" }}
-                                    >
-                                      <FiEye size={15} />
-                                    </a>
-                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-report-act download"
+                                    title="View Medical Report"
+                                    onClick={() => handleViewMedicalReportDocument(rep)}
+                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", cursor: "pointer" }}
+                                  >
+                                    <FiEye size={15} />
+                                  </button>
                                   <button
                                     type="button"
                                     className="btn-report-act edit"
@@ -3291,7 +3447,7 @@ function Profile() {
                                     type="button"
                                     className="btn-report-act delete"
                                     title="Delete Report"
-                                    onClick={() => handleDeleteReport(idx, "family")}
+                                    onClick={() => handleDeleteReport(rep, idx, "family")}
                                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
                                   >
                                     <FiTrash2 size={15} />
@@ -4362,14 +4518,14 @@ function Profile() {
                     <h4 className="wizard-section-title">Medical Information</h4>
                     <br></br>
                     <div className="form-group">
-                      <label>Existing Medical Conditions</label>
+                      <label>Existing Medical Conditions <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                       <input
                         type="text"
                         placeholder="e.g. Diabetes, Asthma, Hypertension, None"
                         value={memberForm.chronicConditions}
                         onFocus={() => handleMemberFieldFocus("chronicConditions", memberForm.chronicConditions)}
                         onBlur={() => handleMemberFieldBlur("chronicConditions", memberForm.chronicConditions)}
-                        onChange={(e) => handleMemberFieldChange("chronicConditions", e.target.value)}
+                        onChange={(e) => handleMemberFieldChange("chronicConditions", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                         className={memberErrors.chronicConditions && (touchedMemberFields.chronicConditions || focusedMemberField === "chronicConditions") ? "invalid" : ""}
                       />
                       {memberErrors.chronicConditions && (touchedMemberFields.chronicConditions || focusedMemberField === "chronicConditions") && (
@@ -4379,14 +4535,14 @@ function Profile() {
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Current Medications</label>
+                        <label>Current Medications <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
-                          placeholder="e.g. Metformin 500mg, Inhaler, None"
+                          placeholder="e.g. Metformin, Inhaler, None"
                           value={memberForm.currentMedicines}
                           onFocus={() => handleMemberFieldFocus("currentMedicines", memberForm.currentMedicines)}
                           onBlur={() => handleMemberFieldBlur("currentMedicines", memberForm.currentMedicines)}
-                          onChange={(e) => handleMemberFieldChange("currentMedicines", e.target.value)}
+                          onChange={(e) => handleMemberFieldChange("currentMedicines", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.currentMedicines && (touchedMemberFields.currentMedicines || focusedMemberField === "currentMedicines") ? "invalid" : ""}
                         />
                         {memberErrors.currentMedicines && (touchedMemberFields.currentMedicines || focusedMemberField === "currentMedicines") && (
@@ -4395,14 +4551,14 @@ function Profile() {
                       </div>
 
                       <div className="form-group">
-                        <label>Drug Allergies</label>
+                        <label>Drug Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Penicillin, Sulfa, None"
                           value={memberForm.drugAllergies}
                           onFocus={() => handleMemberFieldFocus("drugAllergies", memberForm.drugAllergies)}
                           onBlur={() => handleMemberFieldBlur("drugAllergies", memberForm.drugAllergies)}
-                          onChange={(e) => handleMemberFieldChange("drugAllergies", e.target.value)}
+                          onChange={(e) => handleMemberFieldChange("drugAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.drugAllergies && (touchedMemberFields.drugAllergies || focusedMemberField === "drugAllergies") ? "invalid" : ""}
                         />
                         {memberErrors.drugAllergies && (touchedMemberFields.drugAllergies || focusedMemberField === "drugAllergies") && (
@@ -4413,14 +4569,14 @@ function Profile() {
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Food Allergies</label>
+                        <label>Food Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Peanuts, Gluten, None"
                           value={memberForm.foodAllergies}
                           onFocus={() => handleMemberFieldFocus("foodAllergies", memberForm.foodAllergies)}
                           onBlur={() => handleMemberFieldBlur("foodAllergies", memberForm.foodAllergies)}
-                          onChange={(e) => handleMemberFieldChange("foodAllergies", e.target.value)}
+                          onChange={(e) => handleMemberFieldChange("foodAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.foodAllergies && (touchedMemberFields.foodAllergies || focusedMemberField === "foodAllergies") ? "invalid" : ""}
                         />
                         {memberErrors.foodAllergies && (touchedMemberFields.foodAllergies || focusedMemberField === "foodAllergies") && (
@@ -4429,14 +4585,14 @@ function Profile() {
                       </div>
 
                       <div className="form-group">
-                        <label>Previous Surgeries</label>
+                        <label>Previous Surgeries <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
-                          placeholder="e.g. Appendectomy 2020, None"
+                          placeholder="e.g. Appendectomy, Bypass, None"
                           value={memberForm.previousSurgeries}
                           onFocus={() => handleMemberFieldFocus("previousSurgeries", memberForm.previousSurgeries)}
                           onBlur={() => handleMemberFieldBlur("previousSurgeries", memberForm.previousSurgeries)}
-                          onChange={(e) => handleMemberFieldChange("previousSurgeries", e.target.value)}
+                          onChange={(e) => handleMemberFieldChange("previousSurgeries", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.previousSurgeries && (touchedMemberFields.previousSurgeries || focusedMemberField === "previousSurgeries") ? "invalid" : ""}
                         />
                         {memberErrors.previousSurgeries && (touchedMemberFields.previousSurgeries || focusedMemberField === "previousSurgeries") && (
@@ -4446,14 +4602,14 @@ function Profile() {
                     </div>
 
                     <div className="form-group">
-                      <label>Mobility Limitations</label>
+                      <label>Mobility Limitations <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                       <input
                         type="text"
                         placeholder="e.g. Knee Pain, Cannot Walk Long Distances, None"
                         value={memberForm.mobilityLimitations}
                         onFocus={() => handleMemberFieldFocus("mobilityLimitations", memberForm.mobilityLimitations)}
                         onBlur={() => handleMemberFieldBlur("mobilityLimitations", memberForm.mobilityLimitations)}
-                        onChange={(e) => handleMemberFieldChange("mobilityLimitations", e.target.value)}
+                        onChange={(e) => handleMemberFieldChange("mobilityLimitations", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                         className={memberErrors.mobilityLimitations && (touchedMemberFields.mobilityLimitations || focusedMemberField === "mobilityLimitations") ? "invalid" : ""}
                       />
                       {memberErrors.mobilityLimitations && (touchedMemberFields.mobilityLimitations || focusedMemberField === "mobilityLimitations") && (
@@ -5028,87 +5184,87 @@ function Profile() {
                     </div>
 
                     <div className="form-group" style={{ marginTop: "14px" }}>
-                      <label>Other Medical Condition (Specify if any)</label>
+                      <label>Other Medical Condition (Specify if any) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                       <input
                         type="text"
                         placeholder="Specify other condition"
                         value={fullProfileForm.otherCondition}
-                        onChange={(e) => setFullProfileForm({ ...fullProfileForm, otherCondition: e.target.value })}
+                        onChange={(e) => setFullProfileForm({ ...fullProfileForm, otherCondition: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                       />
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Previous Major Surgeries</label>
+                        <label>Previous Major Surgeries <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
-                          placeholder="e.g. Cardiac Bypass 2021 (or None)"
+                          placeholder="e.g. Cardiac Bypass (or None)"
                           value={fullProfileForm.previousSurgeries}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, previousSurgeries: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, previousSurgeries: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
 
                       <div className="form-group">
-                        <label>Current Medications</label>
+                        <label>Current Medications <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
-                          placeholder="e.g. Amlodipine 5mg, Metformin 500mg"
+                          placeholder="e.g. Amlodipine, Metformin"
                           value={fullProfileForm.currentMedications}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, currentMedications: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, currentMedications: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Drug Allergies</label>
+                        <label>Drug Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Penicillin, Aspirin (or None)"
                           value={fullProfileForm.drugAllergies}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, drugAllergies: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, drugAllergies: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
 
                       <div className="form-group">
-                        <label>Food Allergies</label>
+                        <label>Food Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Peanuts, Lactose (or None)"
                           value={fullProfileForm.foodAllergies}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, foodAllergies: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, foodAllergies: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
                     </div>
 
                     <div className="form-row three-col">
                       <div className="form-group">
-                        <label>Mobility Limitations</label>
+                        <label>Mobility Limitations <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Knee pain (or None)"
                           value={fullProfileForm.mobilityLimitations}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, mobilityLimitations: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, mobilityLimitations: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
 
                       <div className="form-group">
-                        <label>Vision Problems (Optional)</label>
+                        <label>Vision Problems (Optional) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Spectacles, Cataract"
                           value={fullProfileForm.visionProblems}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, visionProblems: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, visionProblems: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
 
                       <div className="form-group">
-                        <label>Hearing Problems (Optional)</label>
+                        <label>Hearing Problems (Optional) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
                         <input
                           type="text"
                           placeholder="e.g. Hearing aid"
                           value={fullProfileForm.hearingProblems}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, hearingProblems: e.target.value })}
+                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, hearingProblems: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                         />
                       </div>
                     </div>
@@ -5396,6 +5552,53 @@ function Profile() {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MEDICAL REPORT DOCUMENT PREVIEW MODAL */}
+      {viewDocModal.isOpen && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999, padding: "16px" }}>
+          <div style={{ background: "#ffffff", borderRadius: "16px", width: "100%", maxWidth: "850px", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                📄 {viewDocModal.fileName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setViewDocModal({ isOpen: false, fileName: "", fileUrl: "", fileType: "pdf" })}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", display: "flex", alignItems: "center" }}
+              >
+                <FiX size={22} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, padding: "16px", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto", minHeight: "450px" }}>
+              {viewDocModal.fileUrl.startsWith("data:image/") || viewDocModal.fileType === "png" || viewDocModal.fileType === "jpg" || viewDocModal.fileType === "jpeg" ? (
+                <img src={viewDocModal.fileUrl} alt={viewDocModal.fileName} style={{ maxWidth: "100%", maxHeight: "75vh", objectFit: "contain", borderRadius: "8px" }} />
+              ) : (
+                <iframe src={viewDocModal.fileUrl} title={viewDocModal.fileName} style={{ width: "100%", height: "75vh", border: "none", borderRadius: "8px", background: "#ffffff" }} />
+              )}
+            </div>
+
+            <div style={{ padding: "14px 24px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#ffffff" }}>
+              <a
+                href={viewDocModal.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13.5px", fontWeight: 700, color: "#2563eb", textDecoration: "none" }}
+              >
+                <FiExternalLink size={16} /> Open Document in New Window
+              </a>
+              <button
+                type="button"
+                className="btn-primary-blue"
+                onClick={() => setViewDocModal({ isOpen: false, fileName: "", fileUrl: "", fileType: "pdf" })}
+                style={{ padding: "8px 20px", borderRadius: "8px" }}
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

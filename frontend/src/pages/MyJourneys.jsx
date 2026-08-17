@@ -76,8 +76,7 @@ function MyJourneys() {
       <div className="my-journeys-container">
         {loading ? (
           <div className="loading-card" style={{ padding: "40px", textAlign: "center" }}>
-            <div className="spinner" style={{ margin: "0 auto 12px auto" }}></div>
-            <p style={{ color: "#0f172a", fontWeight: "600", margin: 0 }}>Fetching your planned journeys...</p>
+            <div className="spinner" style={{ margin: "0 auto" }}></div>
           </div>
         ) : error ? (
           <div className="error-card">

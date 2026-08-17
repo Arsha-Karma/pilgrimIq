@@ -5,7 +5,11 @@ import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetPilgrimageCenterById, apiGetProfile } from "../services/api";
 import { apiCreateJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
+import { apiGetWeatherByCenterId } from "../services/weatherService";
+import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyPlanner.css";
+import PlaceDetailsModal from "../components/PlaceDetailsModal";
+import ViewAllServicesModal from "../components/ViewAllServicesModal";
 import {
   FiMapPin,
   FiCalendar,
@@ -17,7 +21,9 @@ import {
   FiAlertCircle,
   FiCompass,
   FiShield,
-  FiX
+  FiX,
+  FiInfo,
+  FiNavigation
 } from "react-icons/fi";
 
 const INDIAN_STATES_AND_UTS = [
@@ -68,6 +74,11 @@ function JourneyPlanner() {
   const [center, setCenter] = useState(null);
   const [loadingCenter, setLoadingCenter] = useState(true);
   const [centerError, setCenterError] = useState("");
+
+  // Weather State
+  const [weatherData, setWeatherData] = useState(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
 
   const [userProfile, setUserProfile] = useState(null);
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -126,6 +137,8 @@ function JourneyPlanner() {
   const [activeCategory, setActiveCategory] = useState("accommodation");
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
+  const [selectedDetailPlace, setSelectedDetailPlace] = useState(null);
+  const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [selectedServices, setSelectedServices] = useState({
     accommodation: [],
     restaurants: [],
@@ -161,6 +174,28 @@ function JourneyPlanner() {
       fetchCenter();
     }
   }, [pilgrimageCenterId]);
+
+  // Load Weather Information for Pilgrimage Center
+  useEffect(() => {
+    const fetchWeather = async () => {
+      if (!pilgrimageCenterId) return;
+      try {
+        setLoadingWeather(true);
+        setWeatherError("");
+        const data = await apiGetWeatherByCenterId(pilgrimageCenterId, token);
+        setWeatherData(data);
+      } catch (err) {
+        console.error("Error loading weather details:", err);
+        setWeatherError(err.message || "Weather information is temporarily unavailable.");
+      } finally {
+        setLoadingWeather(false);
+      }
+    };
+
+    if (pilgrimageCenterId) {
+      fetchWeather();
+    }
+  }, [pilgrimageCenterId, token]);
 
   // Load User Profile & Family Members
   useEffect(() => {
@@ -222,7 +257,7 @@ function JourneyPlanner() {
     }
   };
 
-  // Fetch Nearby Services when center coordinates or active category/radius change
+  // Fetch Nearby Services when center coordinates, active category, search radius, or food preference changes
   useEffect(() => {
     const fetchServices = async () => {
       if (!center || !center.location || !center.location.latitude) return;
@@ -233,20 +268,24 @@ function JourneyPlanner() {
           center.location.longitude,
           searchRadius,
           activeCategory,
+          foodPreference,
           token
         );
         if (data && Array.isArray(data.places)) {
           setNearbyPlaces(data.places);
+        } else {
+          setNearbyPlaces([]);
         }
       } catch (err) {
         console.error("Failed to fetch nearby services:", err);
+        setNearbyPlaces([]);
       } finally {
         setLoadingNearby(false);
       }
     };
 
     fetchServices();
-  }, [center, searchRadius, activeCategory, token]);
+  }, [center, searchRadius, activeCategory, foodPreference, token]);
 
   // Handle Geolocation with IP fallback for guaranteed success
   const handleCurrentLocationSelect = () => {
@@ -582,7 +621,7 @@ function JourneyPlanner() {
       }
     } catch (err) {
       console.error("Save journey error:", err);
-      setSubmitError(err.message || "Failed to save journey to database.");
+      setSubmitError(err.message || "Failed to save journey.");
     } finally {
       setSubmitting(false);
     }
@@ -594,7 +633,6 @@ function JourneyPlanner() {
         <Navbar />
         <div className="planner-loading-card">
           <div className="spinner"></div>
-          <p>Loading Pilgrimage Center details from database...</p>
         </div>
       </div>
     );
@@ -672,6 +710,14 @@ function JourneyPlanner() {
           </div>
         </div>
 
+        {/* WEATHER INTEGRATION MODULE */}
+        <WeatherCard
+          weatherData={weatherData}
+          loading={loadingWeather}
+          error={weatherError}
+          centerName={center?.name}
+        />
+
         {/* STEP CONTROLS / TAB HEADERS */}
         <div className="planner-step-tabs">
           <button
@@ -747,7 +793,7 @@ function JourneyPlanner() {
                 <FiUsers className="sec-icon" />
                 <div>
                   <h3>2. Select Travelling Family Members</h3>
-                  <p>Choose family members accompanying you from your database profile</p>
+                  <p>Choose family members accompanying you from your profile</p>
                 </div>
                 <div className="pilgrim-count-badge">
                   Total Pilgrims: <strong>{totalPilgrimsCount}</strong>
@@ -882,37 +928,37 @@ function JourneyPlanner() {
 
                       {/* Main User ONLY gets Journey Buttons */}
                       <div style={{ marginTop: "12px" }}>
-                        {!isHigh || respAcc ? (
+                        {!isHigh || docStatus === "approved" || respAcc ? (
                           <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
                             <FiCheckCircle /> Cleared to Continue Journey
                           </div>
                         ) : docStatus === "pending" ? (
                           <button type="button" disabled style={{ width: "100%", padding: "8px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", cursor: "not-allowed", opacity: 0.7, fontSize: "12.5px" }}>
-                            [ Continue Journey ] ← DISABLED (Pending Doctor Approval)
+                            Doctor Approval Required (Pending Review)
                           </button>
-                        ) : (
+                        ) : docStatus === "rejected" || docStatus === "not_approved" ? (
                           <button
                             type="button"
                             onClick={() => handleOpenResponsibilityModal({
                               type: "user",
                               name: userProfile?.name || "Main User",
                               relationship: "Self",
-                              isRejected: docStatus === "rejected",
+                              isRejected: true,
                               doctorReason: userProfile?.doctorReason || "",
                             })}
-                            style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: docStatus === "rejected" ? "#dc2626" : "#2563eb", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12.5px" }}
+                            style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12.5px" }}
                           >
-                            [ Travel in Your Own Responsibility ]
+                            Travel in Your Own Responsibility →
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
                 })()}
 
-                {/* FAMILY MEMBER CARDS (NO JOURNEY BUTTONS) */}
+                {/* FAMILY MEMBER CARDS */}
                 {!travelingAlone && selectedFamilyObjects.map((fm) => {
-                  const isHighFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected";
+                  const isHighFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected" || fm.doctorApprovalStatus === "not_approved";
                   const isModFm = fm.aiRiskLevel === "MODERATE_RISK";
                   const docStatusFm = fm.doctorApprovalStatus || "none";
 
@@ -925,7 +971,7 @@ function JourneyPlanner() {
                       statusTextFm = "✓ Doctor Approved";
                       statusBgFm = "rgba(16,185,129,0.2)";
                       statusColorFm = "#34d399";
-                    } else if (docStatusFm === "rejected") {
+                    } else if (docStatusFm === "rejected" || docStatusFm === "not_approved") {
                       statusTextFm = "✕ Doctor Rejected";
                       statusBgFm = "rgba(239,68,68,0.2)";
                       statusColorFm = "#f87171";
@@ -956,29 +1002,39 @@ function JourneyPlanner() {
                         {" • "}PSI: <strong>{fm.psiScore || 90}/100</strong>
                       </div>
 
-                      {docStatusFm === "rejected" && fm.doctorReason && (
+                      {(docStatusFm === "rejected" || docStatusFm === "not_approved") && fm.doctorReason && (
                         <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
                           <strong>Doctor Reason:</strong> {fm.doctorReason}
                         </div>
                       )}
 
-                      {/* Explicit Requirement: NO Journey Buttons for Family Members */}
+                      {/* Responsibility button enabled ONLY when doctor rejects */}
                       {isHighFm && !fm.responsibilityAccepted && docStatusFm !== "approved" && (
                         <div style={{ marginTop: "10px" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenResponsibilityModal({
-                              type: "family_member",
-                              familyMemberId: fm._id,
-                              name: fm.name,
-                              relationship: fm.relationship,
-                              isRejected: docStatusFm === "rejected",
-                              doctorReason: fm.doctorReason || "",
-                            })}
-                            style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", background: "#3b82f6", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
-                          >
-                            Main User: Accept Responsibility for {fm.name}
-                          </button>
+                          {docStatusFm === "rejected" || docStatusFm === "not_approved" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenResponsibilityModal({
+                                type: "family_member",
+                                familyMemberId: fm._id,
+                                name: fm.name,
+                                relationship: fm.relationship,
+                                isRejected: true,
+                                doctorReason: fm.doctorReason || "",
+                              })}
+                              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
+                            >
+                              Main User: Accept Responsibility for {fm.name}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", opacity: 0.65, cursor: "not-allowed", fontSize: "12px", fontWeight: "600" }}
+                            >
+                              Doctor Approval Required (Pending Review)
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1268,7 +1324,7 @@ function JourneyPlanner() {
               <div className="form-group" style={{ marginTop: "16px", maxWidth: "400px" }}>
                 <label>Service Search Radius around Pilgrimage Center *</label>
                 <div className="radius-selector-buttons">
-                  {[1, 2, 5, 10].map((r) => (
+                  {[5, 10, 15, 20].map((r) => (
                     <button
                       key={r}
                       type="button"
@@ -1328,33 +1384,110 @@ function JourneyPlanner() {
 
               {/* Places List Cards */}
               <div className="nearby-places-list">
-                <h4>
-                  Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
-                </h4>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                    Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
+                  </h4>
+                  {nearbyPlaces.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-view-all-services"
+                      onClick={() => setIsViewAllOpen(true)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "7px 14px",
+                        borderRadius: "8px",
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        border: "1px solid #bfdbfe",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <FiInfo size={14} /> View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} ({nearbyPlaces.length})
+                    </button>
+                  )}
+                </div>
 
                 {loadingNearby ? (
-                  <p className="loading-sub">Searching nearby places from map service...</p>
+                  <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                    <p style={{ margin: 0, fontSize: "14px", color: "#2563eb", fontWeight: "600" }}>Searching nearby services...</p>
+                  </div>
                 ) : nearbyPlaces.length > 0 ? (
                   <div className="places-cards-grid">
-                    {nearbyPlaces.map((place, idx) => {
+                    {nearbyPlaces.slice(0, 6).map((place, idx) => {
                       const selectedList = selectedServices[activeCategory] || [];
+                      const placeId = place.externalPlaceId || idx;
                       const isSelected = selectedList.some(
                         (item) => item.externalPlaceId === place.externalPlaceId
                       );
 
-                      return (
-                        <div key={place.externalPlaceId || idx} className={`place-card ${isSelected ? "selected" : ""}`}>
-                          <div className="place-card-header">
-                            <h5>{place.name}</h5>
-                            <span className="distance-badge">📍 {place.distanceKm} km</span>
-                          </div>
-                          <p className="place-address">{place.address}</p>
+                      const originLat = startLocation.latitude || center.location?.latitude;
+                      const originLng = startLocation.longitude || center.location?.longitude;
+                      const directionsUrl = originLat && originLng
+                        ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
 
-                          <div className="place-card-actions">
+                      return (
+                        <div key={placeId} className={`place-card ${isSelected ? "selected" : ""}`}>
+                          <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
+                              {place.placeType || place.category}
+                            </span>
+                            <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
+                              📍 {place.distanceKm} km
+                            </span>
+                          </div>
+
+                          <h5 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h5>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "8px" }}>
+                            <span style={{ color: "#b45309", fontWeight: "700" }}>
+                              {place.rating ? `⭐ ${place.rating} / 5` : "Rating N/A"}
+                            </span>
+                            {place.isOpen !== null && place.isOpen !== undefined && (
+                              <span style={{ fontSize: "11px", fontWeight: "700", color: place.isOpen ? "#047857" : "#b91c1c", background: place.isOpen ? "#ecfdf5" : "#fef2f2", padding: "2px 6px", borderRadius: "4px" }}>
+                                {place.isOpen ? "Open Now" : "Closed"}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="place-address" style={{ margin: "0 0 10px 0", fontSize: "12.5px", color: "#64748b", lineHeight: "1.35" }}>{place.address}</p>
+
+                          {place.dietaryInfo && place.dietaryInfo.isVegetarian && (
+                            <div style={{ marginBottom: "10px" }}>
+                              <span style={{ fontSize: "11px", fontWeight: "700", color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "3px 8px", borderRadius: "6px" }}>
+                                🌱 {place.dietaryInfo.label}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="place-card-actions" style={{ display: "flex", gap: "6px", marginTop: "auto" }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDetailPlace(place)}
+                              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                            >
+                              <FiInfo size={13} /> Details
+                            </button>
+
+                            <a
+                              href={directionsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: "700", textDecoration: "none" }}
+                            >
+                              <FiNavigation size={13} /> Directions
+                            </a>
+
                             <button
                               type="button"
                               className={`btn-select-place ${isSelected ? "selected" : ""}`}
                               onClick={() => handleToggleSelectPlace(place)}
+                              style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
                             >
                               {isSelected ? "✓ Selected" : "+ Select"}
                             </button>
@@ -1364,7 +1497,11 @@ function JourneyPlanner() {
                     })}
                   </div>
                 ) : (
-                  <p className="no-places-text">No locations found for this category within {searchRadius} km.</p>
+                  <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                    <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                      No services found within {searchRadius} km.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1383,7 +1520,7 @@ function JourneyPlanner() {
               <FiCheckCircle className="sum-check-icon" />
               <div>
                 <h2>Journey Plan Summary</h2>
-                <p>Review all details before saving your pilgrimage journey to database.</p>
+                <p>Review all details before confirming your pilgrimage journey.</p>
               </div>
             </div>
 
@@ -1484,7 +1621,7 @@ function JourneyPlanner() {
                 onClick={handleConfirmSaveJourney}
                 disabled={submitting}
               >
-                {submitting ? "Saving Journey to Database..." : "Confirm & Save Journey"}
+                {submitting ? "Saving..." : "Confirm & Save Journey"}
               </button>
             </div>
           </div>
@@ -1547,6 +1684,33 @@ function JourneyPlanner() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Place Details Modal */}
+      {selectedDetailPlace && (
+        <PlaceDetailsModal
+          isOpen={!!selectedDetailPlace}
+          onClose={() => setSelectedDetailPlace(null)}
+          place={selectedDetailPlace}
+          originCoords={startLocation.latitude ? startLocation : center?.location}
+          onSelectPlace={handleToggleSelectPlace}
+          isSelected={(selectedServices[activeCategory] || []).some((s) => s.externalPlaceId === selectedDetailPlace.externalPlaceId)}
+        />
+      )}
+
+      {/* View All Services Modal */}
+      {isViewAllOpen && (
+        <ViewAllServicesModal
+          isOpen={isViewAllOpen}
+          onClose={() => setIsViewAllOpen(false)}
+          category={activeCategory}
+          radiusKm={searchRadius}
+          places={nearbyPlaces}
+          originCoords={startLocation.latitude ? startLocation : center?.location}
+          selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
+          onSelectPlace={handleToggleSelectPlace}
+          onViewDetails={(place) => setSelectedDetailPlace(place)}
+        />
       )}
     </div>
   );

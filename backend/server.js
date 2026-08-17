@@ -30,14 +30,18 @@ app.get("/", (req, res) => {
 const medicalReportRoutes = require("./routes/medicalReportRoutes");
 const physicianReviewRoutes = require("./routes/physicianReviewRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const weatherRoutes = require("./routes/weatherRoutes");
 
 // Health Check route
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "PilgrimIQ Backend API is running smoothly!" });
 });
 
+const baseCampRoutes = require("./routes/baseCampRoutes");
+
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/base-camps", baseCampRoutes);
 app.use("/api/pilgrimage-centers", pilgrimageCenterRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/journeys", journeyRoutes);
@@ -45,6 +49,7 @@ app.use("/api/nearby-services", nearbyServiceRoutes);
 app.use("/api/medical-reports", medicalReportRoutes);
 app.use("/api/physician/medical-reviews", physicianReviewRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/weather", weatherRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

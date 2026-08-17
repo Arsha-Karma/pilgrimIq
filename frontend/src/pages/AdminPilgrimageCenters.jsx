@@ -226,7 +226,7 @@ function AdminPilgrimageCenters({ token, showAlert }) {
         {loading ? (
           <div className="loading-state-box">
             <div className="spinner"></div>
-            <p>Loading pilgrimage centers from database...</p>
+            <p>Loading pilgrimage centers...</p>
           </div>
         ) : centers.length === 0 ? (
           <div className="empty-centers-state">

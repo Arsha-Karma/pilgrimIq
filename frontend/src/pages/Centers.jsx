@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { FiSearch } from "react-icons/fi";
 import "../styles/Centers.css";
 import Navbar from "../components/Navbar";
 import { apiGetPilgrimageCenters } from "../services/api";
@@ -69,7 +70,7 @@ function Centers() {
           </p>
 
           <div className="search-bar-box">
-            <span className="search-icon">🔍</span>
+            <FiSearch className="centers-search-icon" />
             <input
               type="text"
               placeholder="Search center by name, city, state, or religion..."

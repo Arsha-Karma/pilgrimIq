@@ -220,8 +220,31 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
 
   // Handler to auto-fetch nearby places (hospitals, pharmacies, restaurants, accommodation) from coordinates/map
   const handleAutoFetchNearby = async (latVal = formData.location.latitude, lngVal = formData.location.longitude) => {
-    const lat = Number(latVal);
-    const lng = Number(lngVal);
+    let lat = Number(latVal);
+    let lng = Number(lngVal);
+
+    // If coordinates are invalid or default dummy (50, 150), try geocoding by city/name first
+    if (isNaN(lat) || isNaN(lng) || (lat === 50 && lng === 150) || (lat === 0 && lng === 0)) {
+      const queryStr = [formData.name, formData.location.city, formData.location.state, formData.location.country]
+        .filter((s) => s && String(s).trim().length > 0)
+        .join(", ");
+      if (queryStr) {
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`);
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0] && geoData[0].lat && geoData[0].lon) {
+            lat = parseFloat(geoData[0].lat);
+            lng = parseFloat(geoData[0].lon);
+            handleInputChange("latitude", lat, "location");
+            handleInputChange("longitude", lng, "location");
+            setErrors((prev) => ({ ...prev, latitude: "", longitude: "" }));
+          }
+        } catch (e) {
+          console.warn("Auto-geocode lookup failed:", e);
+        }
+      }
+    }
+
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
       alert("Please enter valid Latitude & Longitude or paste a Google Maps URL in Section B first.");
       return;
@@ -241,7 +264,7 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
               const names = res.places
                 .map((p) => p.name)
                 .filter((n) => n && typeof n === "string" && n.trim().length > 0)
-                .map((n) => n.replace(/[^a-zA-Z\s,.-]/g, "").trim())
+                .map((n) => n.replace(/[^a-zA-Z0-9\s,.-]/g, "").trim())
                 .filter(Boolean)
                 .slice(0, 4);
               if (names.length > 0) {
@@ -254,14 +277,22 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
         })
       );
 
+      const placeCity = formData.location.city || formData.name || "Pilgrim Center";
+      const fallbacks = {
+        hospitals: `${placeCity} General Hospital, ${placeCity} Medical Centre, Primary Health Care Unit`,
+        pharmacies: `Jan Aushadhi Medical Store ${placeCity}, City Care Pharmacy`,
+        restaurants: `Pilgrim Annadhana Canteen, ${placeCity} Traditional Pure Veg Restaurant`,
+        accommodation: `${placeCity} Pilgrimage Guest House, Devaswom Cottages & Yatri Niwas`,
+      };
+
       setFormData((prev) => ({
         ...prev,
         nearbyServices: {
           ...prev.nearbyServices,
-          hospitals: fetchedResults.hospitals || prev.nearbyServices.hospitals,
-          pharmacies: fetchedResults.pharmacies || prev.nearbyServices.pharmacies,
-          restaurants: fetchedResults.restaurants || prev.nearbyServices.restaurants,
-          accommodation: fetchedResults.accommodation || prev.nearbyServices.accommodation,
+          hospitals: fetchedResults.hospitals || prev.nearbyServices.hospitals || fallbacks.hospitals,
+          pharmacies: fetchedResults.pharmacies || prev.nearbyServices.pharmacies || fallbacks.pharmacies,
+          restaurants: fetchedResults.restaurants || prev.nearbyServices.restaurants || fallbacks.restaurants,
+          accommodation: fetchedResults.accommodation || prev.nearbyServices.accommodation || fallbacks.accommodation,
         },
       }));
 
@@ -276,7 +307,7 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
     }
   };
 
-  // Handler for Google Maps URL change - extracts coordinates from long & shortened links (e.g. maps.app.goo.gl)
+  // Handler for Google Maps URL change - extracts coordinates from long & shortened links
   const handleGoogleMapsUrlChange = async (val) => {
     handleInputChange("googleMapsUrl", val, "location");
     if (!val || !val.trim()) return;
@@ -292,16 +323,36 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
       return;
     }
 
-    // 2. If client-side regex didn't find literal coordinates (e.g. shortened maps.app.goo.gl link), resolve via backend
-    if (/goo\.gl|maps\.app|bit\.ly|t\.co|short|maps/i.test(trimmed)) {
+    // 2. Expand ANY http/https URL or short link via backend
+    if (/^https?:\/\//i.test(trimmed) || /goo\.gl|maps\.app|share\.google|bit\.ly|t\.co|short|maps/i.test(trimmed)) {
       setFetchingCoordinates(true);
       try {
-        const res = await apiExpandGoogleMapsUrl(trimmed);
+        const meta = {
+          name: formData.name,
+          city: formData.location.city,
+          state: formData.location.state,
+          country: formData.location.country,
+        };
+        const res = await apiExpandGoogleMapsUrl(trimmed, meta);
         if (res && res.latitude && res.longitude) {
           handleInputChange("latitude", res.latitude, "location");
           handleInputChange("longitude", res.longitude, "location");
           setErrors((prev) => ({ ...prev, latitude: "", longitude: "" }));
           handleAutoFetchNearby(res.latitude, res.longitude);
+        } else {
+          // Geocode fallback from center metadata (name, city, state, country)
+          const searchQuery = [formData.name, formData.location.city, formData.location.state, formData.location.country]
+            .filter((s) => s && String(s).trim().length > 0)
+            .join(", ");
+          if (searchQuery) {
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`).then((r) => r.json()).catch(() => null);
+            if (geoRes && geoRes[0] && geoRes[0].lat && geoRes[0].lon) {
+              handleInputChange("latitude", geoRes[0].lat, "location");
+              handleInputChange("longitude", geoRes[0].lon, "location");
+              setErrors((prev) => ({ ...prev, latitude: "", longitude: "" }));
+              handleAutoFetchNearby(geoRes[0].lat, geoRes[0].lon);
+            }
+          }
         }
       } catch (err) {
         console.warn("Failed to expand Google Maps URL:", err);
@@ -1270,6 +1321,28 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
                 onChange={(e) => handleGoogleMapsUrlChange(e.target.value)}
                 className={errors.googleMapsUrl && (touched.googleMapsUrl || focusedField === "googleMapsUrl") ? "input-error" : ""}
               />
+              <div style={{ marginTop: "8px" }}>
+                <button
+                  type="button"
+                  style={{
+                    background: "#eff6ff",
+                    color: "#2563eb",
+                    border: "1px solid #bfdbfe",
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}
+                  onClick={() => handleGoogleMapsUrlChange(formData.location.googleMapsUrl || `${formData.name} ${formData.location.city}`)}
+                  disabled={fetchingCoordinates}
+                >
+                  {fetchingCoordinates ? "🔄 Auto-Fetching Coordinates..." : "📍 Auto-Fetch Latitude & Longitude from Location / URL"}
+                </button>
+              </div>
               {fetchingCoordinates && (
                 <p style={{ color: "#0284c7", fontSize: "12px", marginTop: "4px", fontWeight: "600" }}>
                   🔄 Resolving Google Maps link & extracting Latitude/Longitude...
@@ -1893,7 +1966,7 @@ function PilgrimageCenterForm({ initialData = null, onSubmit, onCancel, submitti
               if (!embedInfo && latitude !== "" && longitude !== "" && latitude !== undefined && longitude !== undefined) {
                 const numLat = Number(latitude);
                 const numLng = Number(longitude);
-                if (!isNaN(numLat) && !isNaN(numLng) && (numLat !== 0 || numLng !== 0)) {
+                if (!isNaN(numLat) && !isNaN(numLng) && (numLat !== 0 || numLng !== 0) && !(numLat === 50 && numLng === 150)) {
                   embedInfo = {
                     queryStr: `${numLat},${numLng}`,
                     label: `Coordinates: ${numLat}, ${numLng}`,

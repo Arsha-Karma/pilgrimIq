@@ -51,12 +51,44 @@ const CATEGORY_ICONS = {
   atms: createCustomIcon("🏧", "#059669"),
 };
 
+// Global Monkey-Patch Guard for Leaflet getPosition & _getMapPanePos to prevent unmount race condition crashes
+if (L && L.DomUtil && L.DomUtil.getPosition) {
+  const originalGetPosition = L.DomUtil.getPosition;
+  L.DomUtil.getPosition = function (el) {
+    if (!el) return new L.Point(0, 0);
+    try {
+      return originalGetPosition.call(this, el);
+    } catch (e) {
+      return new L.Point(0, 0);
+    }
+  };
+}
+
+if (L && L.Map && L.Map.prototype) {
+  const originalGetMapPanePos = L.Map.prototype._getMapPanePos;
+  L.Map.prototype._getMapPanePos = function () {
+    if (!this._mapPane) return new L.Point(0, 0);
+    try {
+      return originalGetMapPanePos.call(this);
+    } catch (e) {
+      return new L.Point(0, 0);
+    }
+  };
+}
+
 // Component to dynamically re-center map when center or places change
 function ChangeView({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1]) {
-      map.setView(center, zoom);
+    if (center && center[0] !== undefined && center[1] !== undefined && !isNaN(center[0]) && !isNaN(center[1])) {
+      try {
+        if (map && typeof map.stop === "function") {
+          map.stop();
+        }
+        map.setView(center, zoom, { animate: false });
+      } catch (e) {
+        // Prevent Leaflet unmount / animation race condition errors
+      }
     }
   }, [center, zoom, map]);
   return null;
@@ -96,30 +128,57 @@ function JourneyMap({ centerCoords, centerName, places = [], selectedPlaceIds = 
           return (
             <Marker key={place.externalPlaceId || idx} position={[place.latitude, place.longitude]} icon={iconToUse}>
               <Popup>
-                <div style={{ maxWidth: "220px", padding: "4px" }}>
-                  <h4 style={{ margin: "0 0 4px 0", fontSize: "14px", color: "#0f172a" }}>{place.name}</h4>
-                  <p style={{ margin: "0 0 6px 0", fontSize: "12px", color: "#475569" }}>
-                    📍 {place.distanceKm} km away • {place.address}
+                <div style={{ maxWidth: "230px", padding: "4px" }}>
+                  <h4 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h4>
+                  <div style={{ fontSize: "12px", color: "#475569", marginBottom: "6px" }}>
+                    {place.rating && <span style={{ color: "#b45309", fontWeight: "bold", marginRight: "6px" }}>⭐ {place.rating}</span>}
+                    <span>📍 {place.distanceKm} km away</span>
+                  </div>
+                  <p style={{ margin: "0 0 8px 0", fontSize: "11.5px", color: "#64748b", lineHeight: "1.3" }}>
+                    {place.address}
                   </p>
-                  {onSelectPlace && (
-                    <button
-                      type="button"
-                      onClick={() => onSelectPlace(place)}
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${place.latitude},${place.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       style={{
-                        background: isSelected ? "#10b981" : "#2563eb",
-                        color: "#ffffff",
-                        border: "none",
-                        padding: "6px 12px",
+                        flex: 1,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        border: "1px solid #bfdbfe",
+                        padding: "5px 8px",
                         borderRadius: "6px",
-                        fontSize: "12px",
+                        fontSize: "11px",
                         fontWeight: "bold",
-                        cursor: "pointer",
-                        width: "100%",
+                        textDecoration: "none",
                       }}
                     >
-                      {isSelected ? "✓ Selected" : "Select Place"}
-                    </button>
-                  )}
+                      🗺️ Directions
+                    </a>
+                    {onSelectPlace && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectPlace(place)}
+                        style={{
+                          flex: 1,
+                          background: isSelected ? "#10b981" : "#2563eb",
+                          color: "#ffffff",
+                          border: "none",
+                          padding: "5px 8px",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isSelected ? "✓ Selected" : "Select"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Popup>
             </Marker>

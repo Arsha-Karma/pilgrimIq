@@ -398,9 +398,6 @@ function MedicalAnalysis() {
         ) : physicianRev.status === "approved" || finalStatus === "PHYSICIAN_APPROVED" ? (
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <span style={{ color: "#34d399", fontWeight: "700", fontSize: "14px" }}>✓ Doctor Approved</span>
-            <button className="btn-continue" onClick={() => setShowRespModal(true)}>
-              Travel in Your Own Responsibility →
-            </button>
           </div>
         ) : physicianRev.status === "not_approved" || finalStatus === "PHYSICIAN_NOT_APPROVED" ? (
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -409,11 +406,7 @@ function MedicalAnalysis() {
               Travel in Your Own Responsibility →
             </button>
           </div>
-        ) : (
-          <button className="btn-continue" onClick={() => navigate("/centers")}>
-            Continue to Journey Planner →
-          </button>
-        )}
+        ) : null}
       </div>
 
       {/* Responsibility Confirmation Modal */}

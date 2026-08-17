@@ -240,6 +240,32 @@ export const apiMarkNotificationRead = async (id, token) => {
   });
 };
 
+// Weather API
+export const apiGetWeatherByCenterId = async (centerId, token = null) => {
+  return fetchAPI(`/weather/${centerId}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Medical Reports API
+export const apiGetAllMedicalReports = async (token = null) => {
+  return fetchAPI("/medical-reports/all", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+export {
+  apiGetBaseCamps,
+  apiGetBaseCampById,
+  apiCreateBaseCamp,
+  apiUpdateBaseCamp,
+  apiUpdateBaseCampStatus,
+  apiDeleteBaseCamp,
+} from "./baseCampService";
+
+
 
 
 

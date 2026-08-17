@@ -5,19 +5,29 @@ const Notification = require("../models/Notification");
 // @access  Private (Authenticated User)
 const getMyNotifications = async (req, res, next) => {
   try {
-    const notifications = await Notification.find({ userId: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(30);
+    const rawNotifications = await Notification.find({ userId: req.user._id })
+      .sort({ createdAt: -1 });
 
-    const unreadCount = await Notification.countDocuments({
-      userId: req.user._id,
-      read: false,
-    });
+    // Deduplicate notifications by type + personName or title so only 1 notification appears
+    const seen = new Set();
+    const notifications = [];
+    let unreadCount = 0;
+
+    for (const notif of rawNotifications) {
+      const key = `${notif.type || ""}_${notif.personName || notif.title || ""}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        notifications.push(notif);
+        if (!notif.read) {
+          unreadCount++;
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
       unreadCount,
-      notifications,
+      notifications: notifications.slice(0, 30),
     });
   } catch (error) {
     next(error);

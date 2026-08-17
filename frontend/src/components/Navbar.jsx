@@ -76,13 +76,15 @@ function Navbar() {
                 </div>
 
                 <div className="navbar-dropdown-links">
-                  <Link
-                    to="/profile"
-                    className="navbar-dropdown-item"
-                    onClick={() => setShowProfileMenu(false)}
-                  >
-                    My Profile
-                  </Link>
+                  {user.role !== "admin" && (
+                    <Link
+                      to="/profile"
+                      className="navbar-dropdown-item"
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      My Profile
+                    </Link>
+                  )}
 
                   {user.role === "admin" && (
                     <Link

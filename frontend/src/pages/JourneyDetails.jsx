@@ -76,7 +76,6 @@ function JourneyDetails() {
         <Navbar />
         <div className="details-loading-card">
           <div className="spinner"></div>
-          <p>Fetching saved journey plan from MongoDB Atlas...</p>
         </div>
       </div>
     );

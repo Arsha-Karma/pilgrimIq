@@ -2,8 +2,18 @@
  * Medical OCR Service - Text extraction for medical reports (PDF, JPG, JPEG, PNG)
  * Uses pdf-parse for PDF documents and Tesseract.js for scanned images.
  */
+const path = require("path");
 const pdfModule = require("pdf-parse");
 const Tesseract = require("tesseract.js");
+
+// Resolve standardFontDataUrl for pdfjs engine
+let standardFontDataUrl;
+try {
+  const pdfjsPkg = require.resolve("pdfjs-dist/package.json");
+  standardFontDataUrl = path.join(path.dirname(pdfjsPkg), "standard_fonts") + path.sep;
+} catch (e) {
+  standardFontDataUrl = "https://unpkg.com/pdfjs-dist/standard_fonts/";
+}
 
 const extractTextFromReport = async (fileBufferOrBase64, mimeType = "application/pdf") => {
   if (!fileBufferOrBase64) {
@@ -31,13 +41,14 @@ const extractTextFromReport = async (fileBufferOrBase64, mimeType = "application
     const isPdf = mimeType.includes("pdf") || (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
 
     if (isPdf) {
-      // 1. Try pdf-parse module
+      // 1. Try pdf-parse module with standardFontDataUrl
       try {
+        const pdfOptions = { standardFontDataUrl };
         if (typeof pdfModule === "function") {
-          const data = await pdfModule(buffer);
+          const data = await pdfModule(buffer, pdfOptions);
           text = data && data.text ? data.text.trim() : "";
         } else if (pdfModule && pdfModule.PDFParse) {
-          const parser = new pdfModule.PDFParse(new Uint8Array(buffer));
+          const parser = new pdfModule.PDFParse(new Uint8Array(buffer), pdfOptions);
           await parser.load();
           const extracted = await parser.getText();
           if (typeof extracted === "string") {

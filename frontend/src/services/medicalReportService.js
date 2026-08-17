@@ -46,6 +46,25 @@ export const apiGetMedicalReportById = async (reportId, token) => {
   return handleResponse(res);
 };
 
+// Delete Report by ID
+export const apiDeleteMedicalReport = async (reportId, token) => {
+  const res = await fetch(`${API_BASE_URL}/medical-reports/${reportId}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  return handleResponse(res);
+};
+
+// Update Report Details by ID
+export const apiUpdateMedicalReport = async (reportId, updatePayload, token) => {
+  const res = await fetch(`${API_BASE_URL}/medical-reports/${reportId}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(updatePayload),
+  });
+  return handleResponse(res);
+};
+
 // Get Family Member Reports
 export const apiGetFamilyMemberReports = async (familyMemberId, token) => {
   const res = await fetch(`${API_BASE_URL}/medical-reports/family/${familyMemberId}`, {
@@ -88,6 +107,15 @@ export const apiSubmitPhysicianReview = async (reportId, decisionData, token) =>
     method: "PUT",
     headers: getHeaders(token),
     body: JSON.stringify(decisionData),
+  });
+  return handleResponse(res);
+};
+
+// Physician / Admin: Get All Uploaded Medical Reports
+export const apiGetAllMedicalReports = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/medical-reports/all`, {
+    method: "GET",
+    headers: getHeaders(token),
   });
   return handleResponse(res);
 };

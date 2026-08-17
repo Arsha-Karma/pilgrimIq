@@ -60,7 +60,6 @@ function CenterDetails() {
         {loading ? (
           <div className="loading-state-card">
             <div className="spinner"></div>
-            <p>Fetching pilgrimage center details from database...</p>
           </div>
         ) : error ? (
           <div className="error-state-card">

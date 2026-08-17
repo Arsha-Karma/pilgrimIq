@@ -369,10 +369,189 @@ const sendReportForReview = async (req, res, next) => {
 
     await report.save();
 
+    // Update target patient status (User or Family Member)
+    let targetPatientName = req.user.name || "Main User";
+    let targetAge = req.user.age || 30;
+    let relationshipLabel = "Self";
+
+    if (report.ownerType === "family_member" && report.familyMemberId) {
+      const fm = await FamilyMember.findById(report.familyMemberId);
+      if (fm) {
+        targetPatientName = fm.name || "Family Member";
+        targetAge = fm.age || 30;
+        relationshipLabel = fm.relationship || "Family Member";
+        await FamilyMember.findByIdAndUpdate(report.familyMemberId, {
+          doctorApprovalStatus: "pending",
+        });
+      }
+    } else {
+      await User.findByIdAndUpdate(req.user._id, {
+        doctorApprovalStatus: "pending",
+      });
+    }
+
+    // Create or update DoctorReview record so it appears in physician queue
+    let docReview = await DoctorReview.findOne({ medicalReportId: report._id });
+    if (!docReview) {
+      await DoctorReview.create({
+        userId: req.user._id,
+        personType: report.ownerType || "main_user",
+        familyMemberId: report.familyMemberId,
+        personName: targetPatientName,
+        relationship: relationshipLabel,
+        age: targetAge,
+        gender: req.user.gender || "",
+        medicalReportId: report._id,
+        healthSummary: {
+          vitals: report.extractedMedicalData?.vitals || {},
+          chronicConditions: report.extractedMedicalData?.conditions?.join(", ") || "",
+          labValues: report.extractedMedicalData?.laboratoryValues || [],
+          extractedText: report.extractedText || "",
+          abnormalFindings: report.extractedMedicalData?.abnormalFindings || [],
+        },
+        aiRiskLevel: report.aiRiskAssessment?.overallStatus === "MEDICAL_REVIEW_REQUIRED" ? "HIGH_RISK" : "MODERATE_RISK",
+        psiScore: calculatePsiScore(report.aiRiskAssessment || {}, report.extractedMedicalData || {}),
+        riskFactors: report.aiRiskAssessment?.explanation || ["User requested physician review"],
+        aiRecommendations: [
+          "Consult physician for clinical clearance.",
+          "Ensure continuous hydration and medication availability.",
+        ],
+        status: "pending",
+        doctorDecision: "none",
+      });
+    } else {
+      docReview.status = "pending";
+      docReview.doctorDecision = "none";
+      await docReview.save();
+    }
+
     res.status(200).json({
       success: true,
       message: "Medical report has been submitted to on-duty physician for review.",
       report,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a medical report by ID
+// @route   DELETE /api/medical-reports/:id
+// @access  Private (Authenticated User)
+const deleteMedicalReport = async (req, res, next) => {
+  try {
+    const reportId = req.params.id;
+
+    // Find report owned by user
+    const report = await MedicalReport.findOne({ _id: reportId, userId: req.user._id });
+    if (!report) {
+      res.status(404);
+      throw new Error("Medical report not found or unauthorized.");
+    }
+
+    // Delete associated DoctorReview records if any
+    await DoctorReview.deleteMany({ medicalReportId: reportId });
+
+    // Remove from User's medicalReports array if embedded
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { medicalReports: { _id: reportId } },
+    });
+
+    // Remove from FamilyMember's reports array if family member report
+    if (report.familyMemberId) {
+      await FamilyMember.findByIdAndUpdate(report.familyMemberId, {
+        $pull: { reports: { _id: reportId } },
+      });
+    }
+
+    // Delete the report document itself
+    await report.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "Medical report deleted successfully.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update a medical report details
+// @route   PUT /api/medical-reports/:id
+// @access  Private (Authenticated User)
+const updateMedicalReport = async (req, res, next) => {
+  try {
+    const reportId = req.params.id;
+    const { fileName, fileData, fileType } = req.body;
+
+    const report = await MedicalReport.findOne({ _id: reportId, userId: req.user._id });
+    if (!report) {
+      res.status(404);
+      throw new Error("Medical report not found or unauthorized.");
+    }
+
+    if (fileName && fileName.trim()) {
+      report.fileName = fileName.trim();
+    }
+    if (fileData) {
+      report.url = fileData;
+    }
+    if (fileType) {
+      report.fileType = fileType;
+    }
+
+    await report.save();
+
+    // Update embedded report in User
+    await User.updateOne(
+      { _id: req.user._id, "medicalReports._id": reportId },
+      {
+        $set: {
+          "medicalReports.$.fileName": report.fileName,
+          ...(fileData ? { "medicalReports.$.url": fileData } : {}),
+          ...(fileType ? { "medicalReports.$.fileType": fileType } : {}),
+        },
+      }
+    );
+
+    // Update embedded report in FamilyMember
+    if (report.familyMemberId) {
+      await FamilyMember.updateOne(
+        { _id: report.familyMemberId, "reports._id": reportId },
+        {
+          $set: {
+            "reports.$.fileName": report.fileName,
+            ...(fileData ? { "reports.$.url": fileData } : {}),
+            ...(fileType ? { "reports.$.fileType": fileType } : {}),
+          },
+        }
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Medical report updated successfully.",
+      report,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all medical reports across all users (Admin / Physician)
+// @route   GET /api/medical-reports/all
+// @access  Private (Admin / Physician)
+const getAllReports = async (req, res, next) => {
+  try {
+    const reports = await MedicalReport.find({})
+      .populate("userId", "name email phone")
+      .populate("familyMemberId", "name relationship age gender bloodGroup")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: reports.length,
+      reports,
     });
   } catch (error) {
     next(error);
@@ -386,4 +565,7 @@ module.exports = {
   getFamilyMemberReports,
   analyzeReport,
   sendReportForReview,
+  deleteMedicalReport,
+  updateMedicalReport,
+  getAllReports,
 };

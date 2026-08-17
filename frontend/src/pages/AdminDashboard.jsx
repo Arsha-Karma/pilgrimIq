@@ -2,20 +2,18 @@ import React, { useState, useEffect, useCallback } from "react";
 import "../styles/AdminDashboard.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiGetAllUsers, apiRegisterDoctor, apiGetEnquiries, apiUpdateEnquiryStatus, apiReplyEnquiry } from "../services/api";
+import { apiGetAllUsers, apiRegisterDoctor, apiGetEnquiries, apiUpdateEnquiryStatus, apiReplyEnquiry, apiGetPilgrimageCenters, apiGetAllMedicalReports, apiGetBaseCamps } from "../services/api";
 import logo from "../assets/pilgrim-logo.png";
 import {
   FiGrid,
   FiUsers,
   FiActivity,
-  FiShield,
   FiAlertTriangle,
   FiLogOut,
   FiTrendingUp,
   FiMapPin,
   FiSearch,
   FiCheckCircle,
-  FiClock,
   FiFileText,
   FiSettings,
   FiUserCheck,
@@ -32,6 +30,7 @@ import {
   FiSend
 } from "react-icons/fi";
 import AdminPilgrimageCenters from "./AdminPilgrimageCenters";
+import AdminBaseCamps from "./AdminBaseCamps";
 
 function AdminDashboard() {
   const { user, token, logout } = useAuth();
@@ -43,6 +42,7 @@ function AdminDashboard() {
   const [notificationMsg, setNotificationMsg] = useState("");
   const [dbUsers, setDbUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [dbCenters, setDbCenters] = useState([]);
 
   // Expandable family member rows state & Pilgrim Modal state
   const [expandedUserIds, setExpandedUserIds] = useState(new Set());
@@ -63,6 +63,13 @@ function AdminDashboard() {
   const [replySubjectText, setReplySubjectText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
 
+  // AI Health Reports State
+  const [dbReports, setDbReports] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportSearchTerm, setReportSearchTerm] = useState("");
+  const [reportRiskFilter, setReportRiskFilter] = useState("all");
+  const [viewingReportModal, setViewingReportModal] = useState(null);
+
   const fetchEnquiries = useCallback(async () => {
     try {
       setLoadingEnquiries(true);
@@ -77,9 +84,39 @@ function AdminDashboard() {
     }
   }, [token]);
 
+  const fetchReports = useCallback(async () => {
+    try {
+      setLoadingReports(true);
+      const data = await apiGetAllMedicalReports(token);
+      if (data && data.reports) {
+        setDbReports(data.reports);
+      }
+    } catch (err) {
+      console.error("Failed to load medical reports:", err);
+    } finally {
+      setLoadingReports(false);
+    }
+  }, [token]);
+
+  // Base Camps State
+  const [dbBaseCamps, setDbBaseCamps] = useState([]);
+
+  const fetchBaseCampsData = useCallback(async () => {
+    try {
+      const data = await apiGetBaseCamps({}, token);
+      if (Array.isArray(data)) {
+        setDbBaseCamps(data);
+      }
+    } catch (err) {
+      console.error("Failed to load base camps:", err);
+    }
+  }, [token]);
+
   useEffect(() => {
     fetchEnquiries();
-  }, [fetchEnquiries]);
+    fetchReports();
+    fetchBaseCampsData();
+  }, [fetchEnquiries, fetchReports, fetchBaseCampsData]);
 
   const handleUpdateEnquiryStatus = async (id, status) => {
     try {
@@ -177,6 +214,28 @@ function AdminDashboard() {
       (enq.adminReply || "").toLowerCase().includes(term);
 
     return enq.status === "Replied" && matchesSearch;
+  });
+
+  const filteredReports = dbReports.filter((report) => {
+    const term = reportSearchTerm.toLowerCase().trim();
+    const isFamily = report.ownerType === "family_member" && report.familyMemberId;
+    const patientName = (isFamily ? report.familyMemberId.name : report.userId?.name || "Pilgrim").toLowerCase();
+    const patientEmail = (report.userId?.email || "").toLowerCase();
+    const fileName = (report.fileName || "").toLowerCase();
+
+    const matchesSearch =
+      !term ||
+      patientName.includes(term) ||
+      patientEmail.includes(term) ||
+      fileName.includes(term);
+
+    const overallStatus = report.aiRiskAssessment?.overallStatus || report.finalStatus || "LOW_RISK";
+
+    if (reportRiskFilter === "all") return matchesSearch;
+    if (reportRiskFilter === "high") return matchesSearch && (overallStatus === "MEDICAL_REVIEW_REQUIRED" || overallStatus === "HIGH_RISK");
+    if (reportRiskFilter === "caution") return matchesSearch && overallStatus === "CAUTION";
+    if (reportRiskFilter === "low") return matchesSearch && overallStatus === "LOW_RISK";
+    return matchesSearch;
   });
 
   const toggleExpandUser = (userId) => {
@@ -310,6 +369,18 @@ function AdminDashboard() {
       }
     };
     loadUsers();
+
+    const loadCenters = async () => {
+      try {
+        const data = await apiGetPilgrimageCenters();
+        if (data && data.centers) {
+          setDbCenters(data.centers);
+        }
+      } catch (err) {
+        console.error("Failed to load centers:", err.message);
+      }
+    };
+    loadCenters();
   }, [token]);
 
   const handleLogout = () => {
@@ -506,7 +577,7 @@ function AdminDashboard() {
           >
             <FiMapPin className="nav-icon" />
             <span>Base Camp Operations</span>
-            <span className="nav-tag green">48 Camps</span>
+            <span className="nav-tag green">{dbBaseCamps.length || dbCenters.length} Camps</span>
           </button>
 
           <button
@@ -653,14 +724,6 @@ function AdminDashboard() {
                   <h1>Welcome back, {user?.name || "Administrator"} 👋</h1>
                   <p>Real-time Pilgrimage Health Surveillance, Safety Monitoring & Medical Control</p>
                 </div>
-                <div className="admin-quick-actions-bar">
-                  <button className="btn-alert" onClick={() => triggerAction("Broadcast Emergency Alert")}>
-                    <FiAlertTriangle /> Broadcast Alert
-                  </button>
-                  <button className="btn-primary" onClick={() => triggerAction("Generate Daily Operations Report")}>
-                    <FiFileText /> Daily Report
-                  </button>
-                </div>
               </div>
 
               {/* Key Metrics Cards */}
@@ -681,7 +744,7 @@ function AdminDashboard() {
                     <span>MEDICAL BASE CAMPS</span>
                     <FiMapPin className="kpi-icon" />
                   </div>
-                  <div className="kpi-value">48 Camps</div>
+                  <div className="kpi-value">{dbBaseCamps.length || dbCenters.length} Base Camps</div>
                   <div className="kpi-trend positive">
                     <FiCheckCircle /> 100% Operational
                   </div>
@@ -692,20 +755,9 @@ function AdminDashboard() {
                     <span>ACTIVE HEALTH ALERTS</span>
                     <FiAlertTriangle className="kpi-icon" />
                   </div>
-                  <div className="kpi-value">0 Patients</div>
+                  <div className="kpi-value">{registeredUserAccounts.length + totalFamilyMembersCount} Patients</div>
                   <div className="kpi-trend positive">
                     <FiActivity /> All registered pilgrims monitored
-                  </div>
-                </div>
-
-                <div className="kpi-card purple">
-                  <div className="kpi-header">
-                    <span>EMERGENCY DISPATCH UNITS</span>
-                    <FiShield className="kpi-icon" />
-                  </div>
-                  <div className="kpi-value">64 Units</div>
-                  <div className="kpi-trend neutral">
-                    <FiClock /> Avg Response: 4.2 mins
                   </div>
                 </div>
               </div>
@@ -713,7 +765,9 @@ function AdminDashboard() {
           )}
 
           {/* Content Panels Grid */}
-          {activeTab === "centers" ? (
+          {activeTab === "camps" ? (
+            <AdminBaseCamps token={token} showAlert={(type, msg) => triggerAction(msg)} />
+          ) : activeTab === "centers" ? (
             <AdminPilgrimageCenters token={token} showAlert={(type, msg) => triggerAction(msg)} />
           ) : (
             <div className="admin-content-grid" style={activeTab === "enquiries" ? { display: "block" } : {}}>
@@ -833,7 +887,7 @@ function AdminDashboard() {
                               <td colSpan="5" className="text-center" style={{ padding: "40px 20px" }}>
                                 <FiMail size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
                                 <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>
-                                  {loadingEnquiries ? "Loading user enquiries from database..." : "No user enquiries found."}
+                                  {loadingEnquiries ? "Loading user enquiries..." : "No user enquiries found."}
                                 </p>
                               </td>
                             </tr>
@@ -1021,8 +1075,172 @@ function AdminDashboard() {
                           <tr>
                             <td colSpan="5" className="text-center" style={{ padding: "40px 20px" }}>
                               <FiUserCheck size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
-                              <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>No registered doctors found in database.</p>
+                              <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>No registered doctors found.</p>
                               <p style={{ color: "#94a3b8", fontSize: "13px" }}>Click "+ Register New Doctor" to add a physician and email them credentials.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : activeTab === "reports" ? (
+                /* AI Health Reports Table Panel */
+                <div className="admin-panel main-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>AI Health Audit & Medical Reports Directory</h3>
+                      <p>
+                        All uploaded pilgrim medical reports, OCR extracted vitals, AI risk level assessments & physician authorizations ({filteredReports.length} total report{filteredReports.length === 1 ? "" : "s"})
+                      </p>
+                    </div>
+
+                    <div className="table-controls">
+                      <div className="search-box">
+                        <FiSearch className="search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search patient name, email, report, or condition..."
+                          value={reportSearchTerm}
+                          onChange={(e) => setReportSearchTerm(e.target.value)}
+                        />
+                      </div>
+
+                      <select
+                        className="filter-dropdown"
+                        value={reportRiskFilter}
+                        onChange={(e) => setReportRiskFilter(e.target.value)}
+                      >
+                        <option value="all">All Risk Levels</option>
+                        <option value="high">High Risk / Medical Review Required</option>
+                        <option value="caution">Caution / Moderate Risk</option>
+                        <option value="low">Low Risk / Cleared</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>REPORT & FILE</th>
+                          <th>PATIENT / APPLICANT</th>
+                          <th>OCR EXTRACTED VITALS</th>
+                          <th>PSI & AI RISK</th>
+                          <th>PHYSICIAN REVIEW</th>
+                          <th>ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredReports.length > 0 ? (
+                          filteredReports.map((report) => {
+                            const isFamily = report.ownerType === "family_member" && report.familyMemberId;
+                            const patientName = isFamily ? report.familyMemberId.name : report.userId?.name || "Patient";
+                            const relationship = isFamily ? report.familyMemberId.relationship || "Family Member" : "Main User";
+                            const email = report.userId?.email || "N/A";
+                            const overallStatus = report.aiRiskAssessment?.overallStatus || report.finalStatus || "LOW_RISK";
+                            const psi = report.psiScore || (overallStatus === "MEDICAL_REVIEW_REQUIRED" ? 45 : overallStatus === "CAUTION" ? 70 : 95);
+                            const doctorStatus = report.physicianReview?.status || report.doctorDecision || "Not Required";
+
+                            const vitals = report.extractedEntities?.vitals || {};
+                            const hemoglobin = vitals.hemoglobin ? `Hb: ${vitals.hemoglobin} g/dL` : null;
+                            const bloodSugar = vitals.bloodSugar ? `Glucose: ${vitals.bloodSugar} mg/dL` : null;
+                            const spo2 = vitals.spo2 ? `SpO2: ${vitals.spo2}%` : null;
+
+                            return (
+                              <tr key={report._id}>
+                                <td>
+                                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#60a5fa" }}>
+                                    📄 {report.fileName || "Medical Report"}
+                                  </div>
+                                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+                                    {new Date(report.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#f8fafc" }}>{patientName}</div>
+                                  <div style={{ fontSize: "12px", color: "#38bdf8", fontWeight: "600" }}>{relationship}</div>
+                                  <div style={{ fontSize: "11.5px", color: "#94a3b8" }}>{email}</div>
+                                </td>
+                                <td style={{ fontSize: "12.5px" }}>
+                                  {spo2 || hemoglobin || bloodSugar ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                      {spo2 && <span style={{ color: "#34d399", fontWeight: "700" }}>🫁 {spo2}</span>}
+                                      {hemoglobin && <span style={{ color: "#f43f5e", fontWeight: "600" }}>🩸 {hemoglobin}</span>}
+                                      {bloodSugar && <span style={{ color: "#fbbf24", fontWeight: "600" }}>🧪 {bloodSugar}</span>}
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: "#94a3b8", fontStyle: "italic" }}>
+                                      {report.extractedEntities?.conditions?.length > 0
+                                        ? `Detected: ${report.extractedEntities.conditions.join(", ")}`
+                                        : "Report processed by AI"}
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div style={{ marginBottom: "4px" }}>
+                                    <span
+                                      style={{
+                                        background: psi >= 80 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                                        color: psi >= 80 ? "#34d399" : "#f87171",
+                                        padding: "3px 8px",
+                                        borderRadius: "6px",
+                                        fontWeight: "800",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      PSI: {psi} / 100
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`status-pill ${
+                                      overallStatus === "MEDICAL_REVIEW_REQUIRED" || overallStatus === "HIGH_RISK"
+                                        ? "danger"
+                                        : overallStatus === "CAUTION"
+                                        ? "warning"
+                                        : "success"
+                                    }`}
+                                  >
+                                    {overallStatus}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span
+                                    style={{
+                                      fontSize: "12px",
+                                      fontWeight: "800",
+                                      color:
+                                        doctorStatus === "approved"
+                                          ? "#34d399"
+                                          : doctorStatus === "rejected"
+                                          ? "#f87171"
+                                          : doctorStatus === "pending"
+                                          ? "#fbbf24"
+                                          : "#94a3b8",
+                                    }}
+                                  >
+                                    {doctorStatus.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td>
+                                  <button
+                                    className="btn-table-action"
+                                    onClick={() => setViewingReportModal(report)}
+                                    style={{ background: "#2563eb", color: "#fff", border: "none", display: "flex", alignItems: "center", gap: "4px" }}
+                                  >
+                                    <FiEye size={14} /> View Report
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="text-center" style={{ padding: "40px 20px" }}>
+                              <FiFileText size={32} style={{ color: "#64748b", marginBottom: "10px" }} />
+                              <p style={{ color: "#cbd5e1", fontSize: "15px", margin: 0 }}>
+                                {loadingReports ? "Loading AI medical reports..." : "No medical reports match the selected criteria."}
+                              </p>
                             </td>
                           </tr>
                         )}
@@ -1198,7 +1416,7 @@ function AdminDashboard() {
                         ) : (
                           <tr>
                             <td colSpan="8" className="text-center">
-                              {loadingUsers ? "Loading registered users from database..." : "No registered user accounts found."}
+                              {loadingUsers ? "Loading registered users..." : "No registered user accounts found."}
                             </td>
                           </tr>
                         )}
@@ -1217,34 +1435,35 @@ function AdminDashboard() {
                       <FiMapPin /> <h4>Base Camp Operations</h4>
                     </div>
                     <ul className="station-list">
-                      <li>
-                        <div className="station-info">
-                          <span className="station-name">Pamba Central Medical Unit</span>
-                          <span className="station-meta">Capacity: 84% • 12 Doctors</span>
-                        </div>
-                        <span className="badge-online">Active</span>
-                      </li>
-                      <li>
-                        <div className="station-info">
-                          <span className="station-name">Neelimala Oxygen Station</span>
-                          <span className="station-meta">Capacity: 62% • 6 Medics</span>
-                        </div>
-                        <span className="badge-online">Active</span>
-                      </li>
-                      <li>
-                        <div className="station-info">
-                          <span className="station-name">Appachimedu Cardiac Response</span>
-                          <span className="station-meta">Capacity: 91% • High Priority</span>
-                        </div>
-                        <span className="badge-busy">Busy</span>
-                      </li>
-                      <li>
-                        <div className="station-info">
-                          <span className="station-name">Sannidhanam Multi-Specialty</span>
-                          <span className="station-meta">Capacity: 45% • 18 Doctors</span>
-                        </div>
-                        <span className="badge-online">Active</span>
-                      </li>
+                      {dbBaseCamps.length > 0 ? (
+                        dbBaseCamps.slice(0, 5).map((camp) => (
+                          <li key={camp._id}>
+                            <div className="station-info">
+                              <span className="station-name">{camp.name}</span>
+                              <span className="station-meta">{camp.locality}, {camp.district} • Cap: {camp.maximumCapacity?.toLocaleString()}</span>
+                            </div>
+                            <span className={camp.status === "Operational" ? "badge-online" : "badge-offline"}>
+                              {camp.status}
+                            </span>
+                          </li>
+                        ))
+                      ) : dbCenters.length > 0 ? (
+                        dbCenters.slice(0, 5).map((center) => (
+                          <li key={center._id}>
+                            <div className="station-info">
+                              <span className="station-name">{center.name}</span>
+                              <span className="station-meta">{center.location?.city || "Base Camp"}, {center.location?.state || "India"}</span>
+                            </div>
+                            <span className="badge-online">Active</span>
+                          </li>
+                        ))
+                      ) : (
+                        <li>
+                          <div className="station-info">
+                            <span className="station-name">No Pilgrimage Base Camps registered</span>
+                          </div>
+                        </li>
+                      )}
                     </ul>
                   </div>
 
@@ -1260,19 +1479,10 @@ function AdminDashboard() {
                           setDoctorAlert({ type: "", message: "" });
                           setShowDoctorModal(true);
                         }}
-                        style={{ border: "1px solid #2563eb", background: "rgba(37, 99, 235, 0.15)" }}
+                        style={{ border: "1px solid #2563eb", background: "rgba(37, 99, 235, 0.15)", width: "100%" }}
                       >
                         <FiUserCheck style={{ color: "#60a5fa" }} />
                         <span style={{ color: "#ffffff", fontWeight: 700 }}>+ Register Doctor</span>
-                      </button>
-                      <button className="tool-btn" onClick={() => triggerAction("Ran AI Risk Assessment Sync")}>
-                        <FiActivity /> Sync AI Model
-                      </button>
-                      <button className="tool-btn" onClick={() => triggerAction("Downloaded System Logs")}>
-                        <FiFileText /> System Logs
-                      </button>
-                      <button className="tool-btn" onClick={() => triggerAction("Refreshed Emergency Grid")}>
-                        <FiShield /> Reset Grid
                       </button>
                     </div>
                   </div>
@@ -1790,6 +2000,92 @@ function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Admin AI Medical Report Detail Modal */}
+        {viewingReportModal && (
+          <div className="modal-overlay">
+            <div className="modal-card" style={{ maxWidth: "700px", width: "90%" }}>
+              <div className="modal-header">
+                <h3 style={{ color: "#38bdf8", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <FiFileText /> AI Medical Report Analysis Audit
+                </h3>
+                <button className="btn-close-modal" onClick={() => setViewingReportModal(null)}>
+                  <FiX />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+                <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#f8fafc" }}>
+                    {viewingReportModal.ownerType === "family_member" && viewingReportModal.familyMemberId
+                      ? viewingReportModal.familyMemberId.name
+                      : viewingReportModal.userId?.name || "Pilgrim Patient"}
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#60a5fa", marginTop: "2px" }}>
+                    {viewingReportModal.ownerType === "family_member" && viewingReportModal.familyMemberId
+                      ? `Family Member (${viewingReportModal.familyMemberId.relationship || "Relative"})`
+                      : "Main Registered User"} • User Account: {viewingReportModal.userId?.email || "N/A"}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                    File: <strong>{viewingReportModal.fileName}</strong> • Uploaded: {new Date(viewingReportModal.createdAt).toLocaleString()}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                  <div style={{ background: "rgba(30, 58, 138, 0.2)", border: "1px solid #1e40af", padding: "12px", borderRadius: "10px" }}>
+                    <div style={{ fontSize: "11px", color: "#93c5fd", textTransform: "uppercase", fontWeight: "700" }}>PSI Score & Risk Assessment</div>
+                    <div style={{ fontSize: "20px", fontWeight: "900", color: "#38bdf8", marginTop: "4px" }}>
+                      PSI: {viewingReportModal.psiScore || 75} / 100
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#cbd5e1", marginTop: "4px", fontWeight: "700" }}>
+                      Status: {viewingReportModal.aiRiskAssessment?.overallStatus || viewingReportModal.finalStatus || "LOW_RISK"}
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid #334155", padding: "12px", borderRadius: "10px" }}>
+                    <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "700" }}>Doctor Clearance Status</div>
+                    <div style={{ fontSize: "16px", fontWeight: "800", color: viewingReportModal.physicianReview?.status === "approved" ? "#34d399" : viewingReportModal.physicianReview?.status === "rejected" ? "#f87171" : "#fbbf24", marginTop: "6px" }}>
+                      {(viewingReportModal.physicianReview?.status || viewingReportModal.doctorDecision || "Not Required").toUpperCase()}
+                    </div>
+                    {viewingReportModal.physicianReview?.comments && (
+                      <div style={{ fontSize: "11.5px", color: "#cbd5e1", marginTop: "4px" }}>
+                        Note: "{viewingReportModal.physicianReview.comments}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {viewingReportModal.aiSummary && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <h4 style={{ color: "#f8fafc", fontSize: "14px", marginBottom: "6px" }}>AI Report Executive Summary</h4>
+                    <div style={{ background: "#0f172a", padding: "12px", borderRadius: "8px", border: "1px solid #1e293b", fontSize: "13px", color: "#cbd5e1" }}>
+                      {viewingReportModal.aiSummary}
+                    </div>
+                  </div>
+                )}
+
+                {viewingReportModal.extractedEntities?.conditions?.length > 0 && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <h4 style={{ color: "#f8fafc", fontSize: "14px", marginBottom: "6px" }}>Detected Clinical Conditions (OCR Extracted)</h4>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {viewingReportModal.extractedEntities.conditions.map((c, i) => (
+                        <span key={i} style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", border: "1px solid #dc2626", padding: "3px 10px", borderRadius: "15px", fontSize: "12px", fontWeight: "700" }}>
+                          ⚠️ {c}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => setViewingReportModal(null)}>
+                  Close Audit View
+                </button>
+              </div>
             </div>
           </div>
         )}
