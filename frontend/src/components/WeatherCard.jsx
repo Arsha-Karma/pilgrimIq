@@ -8,8 +8,6 @@ import {
   FiSunrise,
   FiSunset,
   FiAlertTriangle,
-  FiCheckCircle,
-  FiInfo,
   FiLoader,
   FiCalendar,
   FiCloud,
@@ -64,8 +62,6 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
     rainProbability: currentRainProb,
     sunrise: currentSunrise,
     sunset: currentSunset,
-    weatherRisk: currentRisk = "LOW",
-    riskReasons: currentReasons = [],
     forecast = [],
   } = weatherData;
 
@@ -82,47 +78,6 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
   const displayRainProb = isForecastSelected ? selectedDay.rainProbability : currentRainProb;
   const displaySunrise = isForecastSelected ? (selectedDay.sunrise ?? currentSunrise) : currentSunrise;
   const displaySunset = isForecastSelected ? (selectedDay.sunset ?? currentSunset) : currentSunset;
-  const displayRisk = isForecastSelected ? (selectedDay.weatherRisk ?? "LOW") : currentRisk;
-  const displayReasons = isForecastSelected ? (selectedDay.riskReasons ?? []) : currentReasons;
-
-  // Determine badge styling based on Weather Risk
-  const getRiskBadge = (risk) => {
-    switch (risk?.toUpperCase()) {
-      case "HIGH":
-        return {
-          label: "HIGH",
-          className: "risk-badge-high",
-          icon: <FiAlertTriangle />,
-          color: "#dc2626",
-          bgColor: "#fef2f2",
-          borderColor: "#fca5a5",
-          recommendation: "Severe weather conditions expected. Heavy rain, storm, or extreme temperature possible. Carry proper gear and check local weather alerts before proceeding."
-        };
-      case "MODERATE":
-        return {
-          label: "MODERATE",
-          className: "risk-badge-moderate",
-          icon: <FiInfo />,
-          color: "#d97706",
-          bgColor: "#fffbeb",
-          borderColor: "#fcd34d",
-          recommendation: "Moderate weather conditions expected. Carry rain protection, stay hydrated, and plan rest breaks."
-        };
-      case "LOW":
-      default:
-        return {
-          label: "LOW",
-          className: "risk-badge-low",
-          icon: <FiCheckCircle />,
-          color: "#059669",
-          bgColor: "#ecfdf5",
-          borderColor: "#6ee7b7",
-          recommendation: "Favorable weather conditions expected. Temperature and wind levels are comfortable for outdoor pilgrimage."
-        };
-    }
-  };
-
-  const riskInfo = getRiskBadge(displayRisk);
 
   return (
     <div className="weather-card-container">
@@ -137,8 +92,8 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
             {isForecastSelected && <span className="selected-day-tag"> — {selectedDay.day}, {selectedDay.date}</span>}
           </h3>
         </div>
-        <div className="header-action-group">
-          {isForecastSelected && (
+        {isForecastSelected && (
+          <div className="header-action-group">
             <button
               type="button"
               className="reset-live-btn"
@@ -147,18 +102,8 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
             >
               <FiRefreshCw className="btn-icon" /> Reset to Current Live
             </button>
-          )}
-          <div
-            className={`weather-risk-chip ${riskInfo.className}`}
-            style={{
-              backgroundColor: riskInfo.bgColor,
-              color: riskInfo.color,
-              borderColor: riskInfo.borderColor,
-            }}
-          >
-            {riskInfo.icon} Weather Risk: <strong>{riskInfo.label}</strong>
           </div>
-        </div>
+        )}
       </div>
 
       {/* CURRENT / SELECTED DAY WEATHER HERO */}
@@ -230,35 +175,6 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
           <FiSunset className="sun-icon set" />
           <span>Sunset: <strong>{displaySunset}</strong></span>
         </div>
-      </div>
-
-      {/* WEATHER RISK ASSESSMENT BOX */}
-      <div
-        className="weather-risk-card"
-        style={{
-          borderLeftColor: riskInfo.color,
-          backgroundColor: riskInfo.bgColor,
-        }}
-      >
-        <div className="risk-card-header">
-          <div className="risk-title" style={{ color: riskInfo.color }}>
-            {riskInfo.icon} Weather Risk Level ({isForecastSelected ? `${selectedDay.day}` : "Today"}): <strong>{riskInfo.label}</strong>
-          </div>
-          <span className="risk-disclaimer-tag">Met-Assessment</span>
-        </div>
-
-        <p className="risk-recommendation">"{riskInfo.recommendation}"</p>
-
-        {displayReasons.length > 0 && (
-          <div className="risk-reasons-wrapper">
-            <span className="reasons-label">Key Environmental Factors:</span>
-            <ul className="reasons-list">
-              {displayReasons.map((reason, idx) => (
-                <li key={idx}>• {reason}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
 
       {/* 7-DAY FORECAST SECTION WITH DAY SELECTION */}

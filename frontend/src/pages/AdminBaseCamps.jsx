@@ -40,6 +40,99 @@ const INDIAN_STATES = [
   "Other",
 ];
 
+const DISTRICTS_BY_STATE = {
+  Kerala: [
+    "Alappuzha", "Ernakulam", "Idukki", "Kannur", "Kasaragod", "Kollam", "Kottayam",
+    "Kozhikode", "Malappuram", "Palakkad", "Pathanamthitta", "Thiruvananthapuram", "Thrissur", "Wayanad"
+  ],
+  "Tamil Nadu": [
+    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri", "Dindigul",
+    "Erode", "Kanchipuram", "Kanyakumari", "Karur", "Krishnagiri", "Madurai", "Mayiladuthurai",
+    "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai", "Ramanathapuram",
+    "Ranipet", "Salem", "Sivaganga", "Tenkasi", "Thanjavur", "Theni", "Thoothukudi",
+    "Tiruchirappalli", "Tirunelveli", "Tirupathur", "Tiruppur", "Tiruvallur", "Tiruvannamalai",
+    "Tiruvarur", "Vellore", "Viluppuram", "Virudhunagar"
+  ],
+  Karnataka: [
+    "Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural", "Bengaluru Urban", "Bidar",
+    "Chamarajanagar", "Chikkaballapur", "Chikkamagaluru", "Chitradurga", "Dakshina Kannada",
+    "Davanagere", "Dharwad", "Gadag", "Hassan", "Haveri", "Kalaburagi", "Kodagu", "Kolar",
+    "Koppal", "Mandya", "Mysuru", "Raichur", "Ramanagara", "Shivamogga", "Tumakuru", "Udupi",
+    "Uttara Kannada", "Vijayanagara", "Yadgir"
+  ],
+  "Andhra Pradesh": [
+    "Anantapur", "Annamayya", "Anakapalli", "Bapatla", "Chittoor", "East Godavari", "Eluru",
+    "Guntur", "Kakinada", "Kurnool", "Nandyal", "NTR", "Palnadu", "Prakasam",
+    "Sri Potti Sriramulu Nellore", "Sri Sathya Sai", "Srikakulam", "Tirupati", "Visakhapatnam",
+    "Vizianagaram", "West Godavari", "YSR Kadapa"
+  ],
+  Telangana: [
+    "Adilabad", "Bhadradri Kothagudem", "Hyderabad", "Jagtial", "Jangaon", "Jayashankar Bhupalpally",
+    "Jogulamba Gadwal", "Kamareddy", "Karimnagar", "Khammam", "Kumuram Bheem Asifabad",
+    "Mahabubabad", "Mahabubnagar", "Mancherial", "Medak", "Medchal-Malkajgiri", "Mulugu",
+    "Nagarkurnool", "Nalgonda", "Narayanpet", "Nirmal", "Nizamabad", "Peddapalli",
+    "Rajanna Sircilla", "Rangareddy", "Sangareddy", "Siddipet", "Suryapet", "Vikarabad",
+    "Wanaparthy", "Warangal", "Hanamkonda", "Yadadri Bhuvanagiri"
+  ],
+  Maharashtra: [
+    "Ahmednagar", "Akola", "Amravati", "Chhatrapati Sambhajinagar", "Beed", "Bhandara", "Buldhana",
+    "Chandrapur", "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna", "Kolhapur",
+    "Latur", "Mumbai City", "Mumbai Suburban", "Nagpur", "Nanded", "Nandurbar", "Nashik",
+    "Dharashiv", "Palghar", "Parbhani", "Pune", "Raigad", "Ratnagiri", "Sangli", "Satara",
+    "Sindhudurg", "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"
+  ],
+  Goa: [
+    "North Goa", "South Goa"
+  ],
+  Gujarat: [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch", "Bhavnagar", "Botad",
+    "Chhota Udaipur", "Dahod", "Dang", "Devbhoomi Dwarka", "Gandhinagar", "Gir Somnath",
+    "Jamnagar", "Junagadh", "Kheda", "Kutch", "Mahisagar", "Mehsana", "Morbi", "Narmada",
+    "Navsari", "Panchmahal", "Patan", "Porbandar", "Rajkot", "Sabarkantha", "Surat",
+    "Surendranagar", "Tapi", "Vadodara", "Valsad"
+  ],
+  Delhi: [
+    "Central Delhi", "East Delhi", "New Delhi", "North Delhi", "North East Delhi",
+    "North West Delhi", "Shahdara", "South Delhi", "South East Delhi", "South West Delhi", "West Delhi"
+  ],
+  "Uttar Pradesh": [
+    "Agra", "Aligarh", "Ambedkar Nagar", "Amethi", "Amroha", "Auraiya", "Ayodhya", "Azamgarh",
+    "Baghpat", "Bahraich", "Ballia", "Balrampur", "Banda", "Barabanki", "Bareilly", "Basti",
+    "Bhadohi", "Bijnor", "Budaun", "Bulandshahr", "Chandauli", "Chitrakoot", "Deoria", "Etah",
+    "Etawah", "Farrukhabad", "Fatehpur", "Firozabad", "Gautam Buddha Nagar", "Ghaziabad",
+    "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur", "Hapur", "Hardoi", "Hathras", "Jalaun",
+    "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat", "Kanpur Nagar", "Kasganj", "Kaushambi",
+    "Kheri", "Kushinagar", "Lalitpur", "Lucknow", "Maharajganj", "Mahoba", "Mainpuri", "Mathura",
+    "Mau", "Meerut", "Mirzapur", "Moradabad", "Muzaffarnagar", "Pilibhit", "Pratapgarh",
+    "Prayagraj", "Raebareli", "Rampur", "Saharanpur", "Sambhal", "Sant Kabir Nagar",
+    "Shahjahanpur", "Shamli", "Shravasti", "Siddharthnagar", "Sitapur", "Sonbhadra", "Sultanpur",
+    "Unnao", "Varanasi"
+  ],
+  Uttarakhand: [
+    "Almora", "Bageshwar", "Chamoli", "Champawat", "Dehradun", "Haridwar", "Nainital",
+    "Pauri Garhwal", "Pithoragarh", "Rudraprayag", "Tehri Garhwal", "Udham Singh Nagar", "Uttarkashi"
+  ],
+  "Himachal Pradesh": [
+    "Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Lahaul and Spiti",
+    "Mandi", "Shimla", "Sirmaur", "Solan", "Una"
+  ],
+  "West Bengal": [
+    "Alipurduar", "Bankura", "Paschim Bardhaman", "Purba Bardhaman", "Birbhum", "Cooch Behar",
+    "Dakshin Dinajpur", "Darjeeling", "Hooghly", "Howrah", "Jalpaiguri", "Jhargram", "Kalimpong",
+    "Kolkata", "Malda", "Murshidabad", "Nadia", "North 24 Parganas", "Paschim Medinipur",
+    "Purba Medinipur", "Purulia", "South 24 Parganas", "Uttar Dinajpur"
+  ],
+  Odisha: [
+    "Angul", "Balangir", "Balasore", "Bargarh", "Bhadrak", "Boudh", "Cuttack", "Deogarh",
+    "Dhenkanal", "Gajapati", "Ganjam", "Jagatsinghpur", "Jajpur", "Jharsuguda", "Kalahandi",
+    "Kandhamal", "Kendrapara", "Kendujhar", "Khordha", "Koraput", "Malkangiri", "Mayurbhanj",
+    "Nabarangpur", "Nayagarh", "Nuapada", "Puri", "Rayagada", "Sambalpur", "Subarnapur", "Sundergarh"
+  ],
+  Other: [
+    "Central District", "North District", "South District", "East District", "West District", "Other"
+  ]
+};
+
 const INITIAL_FORM_STATE = {
   name: "",
   campType: "Pilgrimage Base Camp",
@@ -161,7 +254,6 @@ function AdminBaseCamps({ token, showAlert }) {
 
       case "district":
         if (!strVal) error = "District is required.";
-        else if (!/^[A-Za-z\s]+$/.test(strVal)) error = "Only letters and spaces are allowed.";
         break;
 
       case "state":
@@ -276,12 +368,26 @@ function AdminBaseCamps({ token, showAlert }) {
     const { name, value, type, checked } = e.target;
     const val = type === "checkbox" ? checked : value;
 
-    const newFormData = { ...formData, [name]: val };
+    let newFormData = { ...formData, [name]: val };
+
+    if (name === "state") {
+      const allowedDistricts = DISTRICTS_BY_STATE[val] || [];
+      if (!allowedDistricts.includes(formData.district)) {
+        newFormData.district = "";
+      }
+    }
+
     setFormData(newFormData);
 
     // Validate on input change
     const error = validateField(name, val, newFormData);
-    setFieldErrors((prev) => ({ ...prev, [name]: error }));
+    setFieldErrors((prev) => {
+      const updated = { ...prev, [name]: error };
+      if (name === "state" && newFormData.district !== formData.district) {
+        updated.district = validateField("district", newFormData.district, newFormData);
+      }
+      return updated;
+    });
   };
 
   const handleFacilityToggle = (facilityName) => {
@@ -526,10 +632,10 @@ function AdminBaseCamps({ token, showAlert }) {
               boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
             }}
           >
-            <FiPlus size={18} /> + Add New Base Camp
+            <FiPlus size={18} />  Add New Base Camp
           </button>
         </div>
-      </div>
+      </div>a
 
       {/* KPI Dynamic Summary Cards */}
       <div className="kpi-grid" style={{ marginBottom: "24px" }}>
@@ -876,6 +982,56 @@ function AdminBaseCamps({ token, showAlert }) {
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
                     <div className="form-group">
+                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>State *</label>
+                      <select
+                        name="state"
+                        className={`filter-dropdown ${touchedFields.state && fieldErrors.state ? "input-error" : ""}`}
+                        style={{ width: "100%", background: "#0f172a", color: "#ffffff", padding: "10px 14px" }}
+                        value={formData.state}
+                        onFocus={() => handleFieldFocus("state")}
+                        onChange={handleFieldChange}
+                        onBlur={() => handleFieldBlur("state")}
+                      >
+                        <option value="">Select State</option>
+                        {INDIAN_STATES.map((st) => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </select>
+                      {touchedFields.state && fieldErrors.state && (
+                        <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>
+                          ⚠️ {fieldErrors.state}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>District *</label>
+                      <select
+                        name="district"
+                        className={`filter-dropdown ${touchedFields.district && fieldErrors.district ? "input-error" : ""}`}
+                        style={{ width: "100%", background: "#0f172a", color: "#ffffff", padding: "10px 14px" }}
+                        value={formData.district}
+                        onFocus={() => handleFieldFocus("district")}
+                        onChange={handleFieldChange}
+                        onBlur={() => handleFieldBlur("district")}
+                      >
+                        <option value="">Select District</option>
+                        {((DISTRICTS_BY_STATE[formData.state] || []).concat(
+                          formData.district && !(DISTRICTS_BY_STATE[formData.state] || []).includes(formData.district)
+                            ? [formData.district]
+                            : []
+                        )).map((dist) => (
+                          <option key={dist} value={dist}>{dist}</option>
+                        ))}
+                      </select>
+                      {touchedFields.district && fieldErrors.district && (
+                        <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>
+                          ⚠️ {fieldErrors.district}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
                       <label style={{ color: "#f8fafc", fontWeight: "700" }}>Village / Locality *</label>
                       <input
                         type="text"
@@ -892,40 +1048,6 @@ function AdminBaseCamps({ token, showAlert }) {
                           ⚠️ {fieldErrors.locality}
                         </span>
                       )}
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>District *</label>
-                      <input
-                        type="text"
-                        name="district"
-                        className={`form-input ${touchedFields.district && fieldErrors.district ? "input-error" : ""}`}
-                        placeholder="e.g. Pathanamthitta"
-                        value={formData.district}
-                        onFocus={() => handleFieldFocus("district")}
-                        onChange={handleFieldChange}
-                        onBlur={() => handleFieldBlur("district")}
-                      />
-                      {touchedFields.district && fieldErrors.district && (
-                        <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>
-                          ⚠️ {fieldErrors.district}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>State *</label>
-                      <select
-                        name="state"
-                        className="filter-dropdown"
-                        style={{ width: "100%", background: "#0f172a", color: "#ffffff", padding: "10px 14px" }}
-                        value={formData.state}
-                        onChange={handleFieldChange}
-                      >
-                        {INDIAN_STATES.map((st) => (
-                          <option key={st} value={st}>{st}</option>
-                        ))}
-                      </select>
                     </div>
 
                     <div className="form-group">
