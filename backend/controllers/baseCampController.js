@@ -100,6 +100,7 @@ const createBaseCamp = async (req, res, next) => {
       emergencySupport = false,
       description = "",
       specialInstructions = "",
+      googleMapLink = "",
       image = "",
     } = req.body;
 
@@ -204,6 +205,7 @@ const createBaseCamp = async (req, res, next) => {
       emergencySupport: Boolean(emergencySupport),
       description: description ? description.trim() : "",
       specialInstructions: specialInstructions ? specialInstructions.trim() : "",
+      googleMapLink: googleMapLink ? googleMapLink.trim() : "",
       image: image ? image.trim() : "",
       createdBy: req.user?._id,
     });
@@ -255,6 +257,7 @@ const updateBaseCamp = async (req, res, next) => {
       emergencySupport,
       description,
       specialInstructions,
+      googleMapLink,
       image,
     } = req.body;
 
@@ -283,6 +286,7 @@ const updateBaseCamp = async (req, res, next) => {
     if (emergencySupport !== undefined) baseCamp.emergencySupport = Boolean(emergencySupport);
     if (description !== undefined) baseCamp.description = description.trim();
     if (specialInstructions !== undefined) baseCamp.specialInstructions = specialInstructions.trim();
+    if (googleMapLink !== undefined) baseCamp.googleMapLink = googleMapLink.trim();
     if (image !== undefined) baseCamp.image = image.trim();
 
     // Re-check capacity vs occupancy constraint

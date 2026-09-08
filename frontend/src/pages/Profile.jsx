@@ -9,6 +9,7 @@ import {
   apiDeleteFamilyMember,
   apiGetNotifications,
   apiMarkNotificationRead,
+  apiGetBaseCamps,
 } from "../services/api";
 import {
   apiUploadMedicalReport,
@@ -51,7 +52,11 @@ import {
   FiCamera,
   FiExternalLink,
   FiHeart,
-  FiHelpCircle
+  FiHelpCircle,
+  FiRefreshCw,
+  FiSearch,
+  FiFilter,
+  FiClock
 } from "react-icons/fi";
 
 const RELATIONSHIPS = [
@@ -581,10 +586,20 @@ function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Tab State: 'profile' or 'family'
+  // Tab State: 'profile', 'family', or 'emergency'
   const queryParams = new URLSearchParams(location.search);
   const isFamilyRoute = location.pathname.includes("family") || queryParams.get("tab") === "family";
-  const [activeTab, setActiveTab] = useState(isFamilyRoute ? "family" : "profile");
+  const isEmergencyRoute = location.pathname.includes("emergency") || queryParams.get("tab") === "emergency" || queryParams.get("tab") === "emergency-services";
+  const [activeTab, setActiveTab] = useState(
+    isFamilyRoute ? "family" : isEmergencyRoute ? "emergency" : "profile"
+  );
+
+  // Emergency Base Camps State
+  const [emergencyCamps, setEmergencyCamps] = useState([]);
+  const [loadingCamps, setLoadingCamps] = useState(false);
+  const [campSearch, setCampSearch] = useState("");
+  const [campTypeFilter, setCampTypeFilter] = useState("all");
+  const [selectedCampModal, setSelectedCampModal] = useState(null);
 
   // Profile Data & Family Members (Instant initial state from authUser to eliminate page load lag)
   const [profileData, setProfileData] = useState(authUser || null);
@@ -594,6 +609,26 @@ function Profile() {
   const [sidebarOpen] = useState(true);
   const [familyHealthTab, setFamilyHealthTab] = useState("info");
   const [dbMedicalReports, setDbMedicalReports] = useState([]);
+
+  // Fetch Emergency Base Camps from Admin Registry
+  const fetchEmergencyBaseCamps = async () => {
+    try {
+      setLoadingCamps(true);
+      const data = await apiGetBaseCamps({}, token);
+      setEmergencyCamps(data || []);
+    } catch (err) {
+      console.error("Failed to load emergency base camps:", err);
+    } finally {
+      setLoadingCamps(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "emergency") {
+      fetchEmergencyBaseCamps();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Alert State
   const [alert, setAlert] = useState({ type: "", message: "" });
@@ -1596,6 +1631,21 @@ function Profile() {
         }
         break;
 
+      case "otherCondition":
+      case "previousSurgeries":
+      case "currentMedications":
+      case "drugAllergies":
+      case "foodAllergies":
+      case "mobilityLimitations":
+      case "visionProblems":
+      case "hearingProblems":
+        if (strVal && !/^[a-zA-Z\s,.\-()]+$/.test(strVal)) {
+          error = "Only letters allowed (no numbers or special characters)";
+        } else if (strVal && strVal.length > 200) {
+          error = "Text cannot exceed 200 characters";
+        }
+        break;
+
       default:
         break;
     }
@@ -2482,7 +2532,15 @@ function Profile() {
               <span>Bookings</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Journey Assistance feature")}>
+            <button
+              className={`sidebar-link ${activeTab === "emergency" ? "active" : ""}`}
+              onClick={() => setActiveTab("emergency")}
+            >
+              <FiShield className="nav-icon" style={{ color: activeTab === "emergency" ? "#ef4444" : "inherit" }} />
+              <span>Emergency Services</span>
+            </button>
+
+            <button className="sidebar-link" onClick={() => navigate("/journey-assistance")}>
               <FiShield className="nav-icon" />
               <span>Journey Assistance</span>
             </button>
@@ -3464,6 +3522,279 @@ function Profile() {
               )}
             </div>
           )}
+
+          {/* ========================================= */}
+          {/* VIEW 3: EMERGENCY SERVICES & BASE CAMPS */}
+          {/* ========================================= */}
+          {activeTab === "emergency" && (() => {
+            const filteredEmergencyCamps = emergencyCamps.filter((camp) => {
+              const matchesSearch =
+                !campSearch ||
+                camp.name?.toLowerCase().includes(campSearch.toLowerCase()) ||
+                camp.locality?.toLowerCase().includes(campSearch.toLowerCase()) ||
+                camp.district?.toLowerCase().includes(campSearch.toLowerCase()) ||
+                camp.state?.toLowerCase().includes(campSearch.toLowerCase()) ||
+                camp.contactPerson?.toLowerCase().includes(campSearch.toLowerCase()) ||
+                camp.contactNumber?.includes(campSearch);
+
+              const matchesType = campTypeFilter === "all" || camp.campType === campTypeFilter;
+
+              return matchesSearch && matchesType;
+            });
+
+            return (
+              <div className="view-container emergency-view">
+                {/* Header */}
+                <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+                  <div className="header-titles">
+                    <h1 style={{ display: "flex", alignItems: "center", gap: "10px", color: "#0f172a" }}>
+                      <FiShield style={{ color: "#dc2626" }} /> Emergency Base Camps & Services
+                    </h1>
+                    <p className="breadcrumb-text">Dashboard / Emergency Services</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn-refresh-camps"
+                      onClick={fetchEmergencyBaseCamps}
+                      disabled={loadingCamps}
+                    >
+                      <FiRefreshCw className={loadingCamps ? "spin" : ""} size={15} /> Refresh Live Camps
+                    </button>
+                    <span className="live-sos-badge">
+                      <span className="pulse-dot"></span>
+                      24x7 Emergency Network Active
+                    </span>
+                  </div>
+                </div>
+
+                {/* Emergency Helpline Banner */}
+                <div className="emergency-hotline-banner">
+                  <div className="hotline-icon-box">
+                    <FiPhoneCall size={28} />
+                  </div>
+                  <div className="hotline-text">
+                    <h3>Pilgrim Emergency Helpline & Rapid Response</h3>
+                    <p>Immediate 24/7 assistance and emergency medical base camp support for all registered pilgrims.</p>
+                  </div>
+                  <div className="hotline-actions">
+                    <a href="tel:108" className="btn-hotline-call medical">
+                      <FiPhone size={15} /> Call 108 (Ambulance)
+                    </a>
+                    <a href="tel:112" className="btn-hotline-call sos">
+                      <FiShield size={15} /> Call 112 (Emergency SOS)
+                    </a>
+                  </div>
+                </div>
+
+                {/* Filter and Search Controls */}
+                <div className="camp-filter-bar">
+                  <div className="camp-search-input-box">
+                    <FiSearch className="search-icon" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search emergency base camps by name, locality, district..."
+                      value={campSearch}
+                      onChange={(e) => setCampSearch(e.target.value)}
+                    />
+                    {campSearch && (
+                      <button type="button" className="clear-search-btn" onClick={() => setCampSearch("")}>
+                        <FiX size={16} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="camp-filter-dropdown-box">
+                    <FiFilter size={16} className="filter-icon" />
+                    <select value={campTypeFilter} onChange={(e) => setCampTypeFilter(e.target.value)}>
+                      <option value="all">All Base Camp Types</option>
+                      <option value="Medical Base Camp">Medical Base Camps</option>
+                      <option value="Pilgrimage Base Camp">Pilgrimage Base Camps</option>
+                      <option value="Accommodation Base Camp">Accommodation Base Camps</option>
+                      <option value="Transit Base Camp">Transit Base Camps</option>
+                      <option value="Multi-Purpose Base Camp">Multi-Purpose Base Camps</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Metrics Row */}
+                <div className="emergency-stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-icon blue"><FiMapPin size={20} /></div>
+                    <div className="stat-info">
+                      <span className="stat-label">Active Base Camps</span>
+                      <strong className="stat-value">{filteredEmergencyCamps.length}</strong>
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon green"><FiActivity size={20} /></div>
+                    <div className="stat-info">
+                      <span className="stat-label">Medical Units</span>
+                      <strong className="stat-value">
+                        {filteredEmergencyCamps.filter((c) => c.facilities?.medicalFacility || c.medicalFacility).length}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon red"><FiShield size={20} /></div>
+                    <div className="stat-info">
+                      <span className="stat-label">24/7 SOS Support</span>
+                      <strong className="stat-value">
+                        {filteredEmergencyCamps.filter((c) => c.facilities?.emergencySupport || c.emergencySupport).length}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon purple"><FiUsers size={20} /></div>
+                    <div className="stat-info">
+                      <span className="stat-label">Total Pilgrim Capacity</span>
+                      <strong className="stat-value">
+                        {filteredEmergencyCamps.reduce((sum, c) => sum + (c.maximumCapacity || 0), 0).toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Emergency Base Camps List */}
+                {loadingCamps ? (
+                  <div className="camps-loading-box">
+                    <div className="spinner"></div>
+                    <p>Loading emergency base camps from admin registry...</p>
+                  </div>
+                ) : filteredEmergencyCamps.length === 0 ? (
+                  <div className="camps-empty-state">
+                    <FiShield size={48} style={{ color: "#94a3b8" }} />
+                    <h3>No Emergency Base Camps Found</h3>
+                    <p>
+                      {campSearch || campTypeFilter !== "all"
+                        ? "No base camps match your search criteria."
+                        : "No emergency base camps have been registered by the admin yet."}
+                    </p>
+                    {(campSearch || campTypeFilter !== "all") && (
+                      <button
+                        type="button"
+                        className="btn-reset-filter"
+                        onClick={() => {
+                          setCampSearch("");
+                          setCampTypeFilter("all");
+                        }}
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="emergency-camps-grid">
+                    {filteredEmergencyCamps.map((camp) => {
+                      const occupancy = camp.currentOccupancy || 0;
+                      const maxCap = camp.maximumCapacity || 100;
+                      const pct = Math.min(100, Math.round((occupancy / maxCap) * 100));
+                      const isMedical = camp.facilities?.medicalFacility || camp.medicalFacility;
+                      const isSos = camp.facilities?.emergencySupport || camp.emergencySupport;
+
+                      return (
+                        <div key={camp._id || camp.baseCampId} className="emergency-camp-card">
+                          <div className="camp-card-header">
+                            <div className="camp-title-group">
+                              <h3>{camp.name}</h3>
+                              <span className="camp-id-badge">{camp.baseCampId}</span>
+                            </div>
+                            <div className="camp-badge-row">
+                              <span className={`status-pill ${camp.status ? camp.status.toLowerCase().replace(/\s+/g, "-") : "operational"}`}>
+                                ● {camp.status || "Operational"}
+                              </span>
+                              <span className="type-pill">{camp.campType || "Pilgrimage Base Camp"}</span>
+                            </div>
+                          </div>
+
+                          <div className="camp-card-body">
+                            <div className="camp-info-row">
+                              <FiMapPin className="row-icon text-blue" />
+                              <span>
+                                {camp.address || `${camp.locality}, ${camp.district}, ${camp.state}`}
+                                {camp.pinCode ? ` - ${camp.pinCode}` : ""}
+                              </span>
+                            </div>
+
+                            <div className="camp-info-row">
+                              <FiPhoneCall className="row-icon text-green" />
+                              <div>
+                                <strong>Contact: {camp.contactPerson || "Emergency In-Charge"}</strong>
+                                <a href={`tel:${camp.contactNumber}`} className="tel-link">
+                                  {camp.contactNumber}
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className="camp-info-row">
+                              <FiClock className="row-icon text-orange" />
+                              <span>Hours: {camp.openingTime || "06:00 AM"} - {camp.closingTime || "10:00 PM"}</span>
+                            </div>
+
+                            {/* Capacity Occupancy */}
+                            <div className="camp-capacity-box">
+                              <div className="capacity-labels">
+                                <span>Capacity Occupancy</span>
+                                <strong>{occupancy} / {maxCap} Pilgrims ({pct}%)</strong>
+                              </div>
+                              <div className="capacity-track">
+                                <div
+                                  className="capacity-fill"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: pct > 85 ? "#ef4444" : pct > 65 ? "#f59e0b" : "#10b981"
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+
+                            {/* Facility Badges */}
+                            <div className="camp-facility-tags">
+                              {isMedical && <span className="facility-tag medical">🩺 Medical Center</span>}
+                              {camp.facilities?.doctorAvailable && <span className="facility-tag doctor">👨‍⚕️ Doctor On-site</span>}
+                              {camp.facilities?.ambulanceAccess && <span className="facility-tag ambulance">🚑 Ambulance</span>}
+                              {isSos && <span className="facility-tag sos">🆘 24/7 SOS</span>}
+                              {camp.facilities?.pharmacy && <span className="facility-tag pharmacy">💊 Pharmacy</span>}
+                              {camp.facilities?.drinkingWater && <span className="facility-tag water">🚰 Water</span>}
+                            </div>
+
+                            {camp.description && (
+                              <p className="camp-desc-snippet">{camp.description}</p>
+                            )}
+                          </div>
+
+                          <div className="camp-card-footer">
+                            <button
+                              type="button"
+                              className="btn-view-camp-details"
+                              onClick={() => setSelectedCampModal(camp)}
+                            >
+                              <FiEye size={14} /> Full Details
+                            </button>
+                            <a
+                              href={
+                                camp.googleMapLink && camp.googleMapLink.trim()
+                                  ? camp.googleMapLink.trim()
+                                  : `https://maps.google.com/?q=${camp.latitude || 0},${camp.longitude || 0}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-get-directions"
+                            >
+                              <FiExternalLink size={14} /> Get Directions
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </main>
       </div>
 
@@ -3772,8 +4103,11 @@ function Profile() {
                     type="text"
                     placeholder="e.g. Diabetes, Hypertension (or None)"
                     value={healthForm.chronicDiseases}
-                    onChange={(e) => setHealthForm({ ...healthForm, chronicDiseases: e.target.value })}
+                    onFocus={() => setFocusedField("health_chronic")}
+                    onBlur={() => setFocusedField("")}
+                    onChange={(e) => setHealthForm({ ...healthForm, chronicDiseases: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                   />
+                  {renderOnFocusValidation(focusedField === "health_chronic", healthForm.chronicDiseases, "", "letters")}
                 </div>
 
                 <div className="form-group">
@@ -3782,8 +4116,11 @@ function Profile() {
                     type="text"
                     placeholder="e.g. Dust, Pollen, Peanuts (or None)"
                     value={healthForm.allergies}
-                    onChange={(e) => setHealthForm({ ...healthForm, allergies: e.target.value })}
+                    onFocus={() => setFocusedField("health_allergies")}
+                    onBlur={() => setFocusedField("")}
+                    onChange={(e) => setHealthForm({ ...healthForm, allergies: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                   />
+                  {renderOnFocusValidation(focusedField === "health_allergies", healthForm.allergies, "", "letters")}
                 </div>
 
                 <div className="form-group">
@@ -3792,8 +4129,11 @@ function Profile() {
                     type="text"
                     placeholder="e.g. Amlodipine, Metformin (or None)"
                     value={healthForm.currentMedicines}
-                    onChange={(e) => setHealthForm({ ...healthForm, currentMedicines: e.target.value })}
+                    onFocus={() => setFocusedField("health_medicines")}
+                    onBlur={() => setFocusedField("")}
+                    onChange={(e) => setHealthForm({ ...healthForm, currentMedicines: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
                   />
+                  {renderOnFocusValidation(focusedField === "health_medicines", healthForm.currentMedicines, "", "letters")}
                 </div>
 
                 <div className="form-group">
@@ -4518,7 +4858,7 @@ function Profile() {
                     <h4 className="wizard-section-title">Medical Information</h4>
                     <br></br>
                     <div className="form-group">
-                      <label>Existing Medical Conditions <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                      <label>Existing Medical Conditions</label>
                       <input
                         type="text"
                         placeholder="e.g. Diabetes, Asthma, Hypertension, None"
@@ -4528,14 +4868,12 @@ function Profile() {
                         onChange={(e) => handleMemberFieldChange("chronicConditions", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                         className={memberErrors.chronicConditions && (touchedMemberFields.chronicConditions || focusedMemberField === "chronicConditions") ? "invalid" : ""}
                       />
-                      {memberErrors.chronicConditions && (touchedMemberFields.chronicConditions || focusedMemberField === "chronicConditions") && (
-                        <span className="field-error-msg">⚠️ {memberErrors.chronicConditions}</span>
-                      )}
+                      {renderOnFocusValidation(focusedMemberField === "chronicConditions", memberForm.chronicConditions, memberErrors.chronicConditions, "letters")}
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Current Medications <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Current Medications</label>
                         <input
                           type="text"
                           placeholder="e.g. Metformin, Inhaler, None"
@@ -4545,13 +4883,11 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("currentMedicines", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.currentMedicines && (touchedMemberFields.currentMedicines || focusedMemberField === "currentMedicines") ? "invalid" : ""}
                         />
-                        {memberErrors.currentMedicines && (touchedMemberFields.currentMedicines || focusedMemberField === "currentMedicines") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.currentMedicines}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "currentMedicines", memberForm.currentMedicines, memberErrors.currentMedicines, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Drug Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Drug Allergies</label>
                         <input
                           type="text"
                           placeholder="e.g. Penicillin, Sulfa, None"
@@ -4561,15 +4897,13 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("drugAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.drugAllergies && (touchedMemberFields.drugAllergies || focusedMemberField === "drugAllergies") ? "invalid" : ""}
                         />
-                        {memberErrors.drugAllergies && (touchedMemberFields.drugAllergies || focusedMemberField === "drugAllergies") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.drugAllergies}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "drugAllergies", memberForm.drugAllergies, memberErrors.drugAllergies, "letters")}
                       </div>
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Food Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Food Allergies</label>
                         <input
                           type="text"
                           placeholder="e.g. Peanuts, Gluten, None"
@@ -4579,13 +4913,11 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("foodAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.foodAllergies && (touchedMemberFields.foodAllergies || focusedMemberField === "foodAllergies") ? "invalid" : ""}
                         />
-                        {memberErrors.foodAllergies && (touchedMemberFields.foodAllergies || focusedMemberField === "foodAllergies") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.foodAllergies}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "foodAllergies", memberForm.foodAllergies, memberErrors.foodAllergies, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Previous Surgeries <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Previous Surgeries</label>
                         <input
                           type="text"
                           placeholder="e.g. Appendectomy, Bypass, None"
@@ -4595,14 +4927,12 @@ function Profile() {
                           onChange={(e) => handleMemberFieldChange("previousSurgeries", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                           className={memberErrors.previousSurgeries && (touchedMemberFields.previousSurgeries || focusedMemberField === "previousSurgeries") ? "invalid" : ""}
                         />
-                        {memberErrors.previousSurgeries && (touchedMemberFields.previousSurgeries || focusedMemberField === "previousSurgeries") && (
-                          <span className="field-error-msg">⚠️ {memberErrors.previousSurgeries}</span>
-                        )}
+                        {renderOnFocusValidation(focusedMemberField === "previousSurgeries", memberForm.previousSurgeries, memberErrors.previousSurgeries, "letters")}
                       </div>
                     </div>
 
                     <div className="form-group">
-                      <label>Mobility Limitations <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                      <label>Mobility Limitations</label>
                       <input
                         type="text"
                         placeholder="e.g. Knee Pain, Cannot Walk Long Distances, None"
@@ -4612,9 +4942,7 @@ function Profile() {
                         onChange={(e) => handleMemberFieldChange("mobilityLimitations", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
                         className={memberErrors.mobilityLimitations && (touchedMemberFields.mobilityLimitations || focusedMemberField === "mobilityLimitations") ? "invalid" : ""}
                       />
-                      {memberErrors.mobilityLimitations && (touchedMemberFields.mobilityLimitations || focusedMemberField === "mobilityLimitations") && (
-                        <span className="field-error-msg">⚠️ {memberErrors.mobilityLimitations}</span>
-                      )}
+                      {renderOnFocusValidation(focusedMemberField === "mobilityLimitations", memberForm.mobilityLimitations, memberErrors.mobilityLimitations, "letters")}
                     </div>
 
                     <div className="form-row two-col">
@@ -5184,88 +5512,120 @@ function Profile() {
                     </div>
 
                     <div className="form-group" style={{ marginTop: "14px" }}>
-                      <label>Other Medical Condition (Specify if any) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                      <label>Other Medical Condition (Specify if any)</label>
                       <input
                         type="text"
                         placeholder="Specify other condition"
                         value={fullProfileForm.otherCondition}
-                        onChange={(e) => setFullProfileForm({ ...fullProfileForm, otherCondition: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                        onFocus={() => handleWizardFieldFocus("otherCondition", fullProfileForm.otherCondition)}
+                        onBlur={() => handleWizardFieldBlur("otherCondition", fullProfileForm.otherCondition)}
+                        onChange={(e) => handleWizardFieldChange("otherCondition", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                        className={wizardErrors.otherCondition && (touchedFields.otherCondition || focusedField === "otherCondition") ? "invalid" : ""}
                       />
+                      {renderOnFocusValidation(focusedField === "otherCondition", fullProfileForm.otherCondition, wizardErrors.otherCondition, "letters")}
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Previous Major Surgeries <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Previous Major Surgeries</label>
                         <input
                           type="text"
                           placeholder="e.g. Cardiac Bypass (or None)"
                           value={fullProfileForm.previousSurgeries}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, previousSurgeries: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("previousSurgeries", fullProfileForm.previousSurgeries)}
+                          onBlur={() => handleWizardFieldBlur("previousSurgeries", fullProfileForm.previousSurgeries)}
+                          onChange={(e) => handleWizardFieldChange("previousSurgeries", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.previousSurgeries && (touchedFields.previousSurgeries || focusedField === "previousSurgeries") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "previousSurgeries", fullProfileForm.previousSurgeries, wizardErrors.previousSurgeries, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Current Medications <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Current Medications</label>
                         <input
                           type="text"
                           placeholder="e.g. Amlodipine, Metformin"
                           value={fullProfileForm.currentMedications}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, currentMedications: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("currentMedications", fullProfileForm.currentMedications)}
+                          onBlur={() => handleWizardFieldBlur("currentMedications", fullProfileForm.currentMedications)}
+                          onChange={(e) => handleWizardFieldChange("currentMedications", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.currentMedications && (touchedFields.currentMedications || focusedField === "currentMedications") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "currentMedications", fullProfileForm.currentMedications, wizardErrors.currentMedications, "letters")}
                       </div>
                     </div>
 
                     <div className="form-row two-col">
                       <div className="form-group">
-                        <label>Drug Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Drug Allergies</label>
                         <input
                           type="text"
                           placeholder="e.g. Penicillin, Aspirin (or None)"
                           value={fullProfileForm.drugAllergies}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, drugAllergies: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("drugAllergies", fullProfileForm.drugAllergies)}
+                          onBlur={() => handleWizardFieldBlur("drugAllergies", fullProfileForm.drugAllergies)}
+                          onChange={(e) => handleWizardFieldChange("drugAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.drugAllergies && (touchedFields.drugAllergies || focusedField === "drugAllergies") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "drugAllergies", fullProfileForm.drugAllergies, wizardErrors.drugAllergies, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Food Allergies <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Food Allergies</label>
                         <input
                           type="text"
                           placeholder="e.g. Peanuts, Lactose (or None)"
                           value={fullProfileForm.foodAllergies}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, foodAllergies: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("foodAllergies", fullProfileForm.foodAllergies)}
+                          onBlur={() => handleWizardFieldBlur("foodAllergies", fullProfileForm.foodAllergies)}
+                          onChange={(e) => handleWizardFieldChange("foodAllergies", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.foodAllergies && (touchedFields.foodAllergies || focusedField === "foodAllergies") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "foodAllergies", fullProfileForm.foodAllergies, wizardErrors.foodAllergies, "letters")}
                       </div>
                     </div>
 
                     <div className="form-row three-col">
                       <div className="form-group">
-                        <label>Mobility Limitations <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Mobility Limitations</label>
                         <input
                           type="text"
                           placeholder="e.g. Knee pain (or None)"
                           value={fullProfileForm.mobilityLimitations}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, mobilityLimitations: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("mobilityLimitations", fullProfileForm.mobilityLimitations)}
+                          onBlur={() => handleWizardFieldBlur("mobilityLimitations", fullProfileForm.mobilityLimitations)}
+                          onChange={(e) => handleWizardFieldChange("mobilityLimitations", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.mobilityLimitations && (touchedFields.mobilityLimitations || focusedField === "mobilityLimitations") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "mobilityLimitations", fullProfileForm.mobilityLimitations, wizardErrors.mobilityLimitations, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Vision Problems (Optional) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Vision Problems (Optional)</label>
                         <input
                           type="text"
                           placeholder="e.g. Spectacles, Cataract"
                           value={fullProfileForm.visionProblems}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, visionProblems: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("visionProblems", fullProfileForm.visionProblems)}
+                          onBlur={() => handleWizardFieldBlur("visionProblems", fullProfileForm.visionProblems)}
+                          onChange={(e) => handleWizardFieldChange("visionProblems", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.visionProblems && (touchedFields.visionProblems || focusedField === "visionProblems") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "visionProblems", fullProfileForm.visionProblems, wizardErrors.visionProblems, "letters")}
                       </div>
 
                       <div className="form-group">
-                        <label>Hearing Problems (Optional) <span style={{ fontSize: "11px", color: "#64748b" }}>(Letters only)</span></label>
+                        <label>Hearing Problems (Optional)</label>
                         <input
                           type="text"
                           placeholder="e.g. Hearing aid"
                           value={fullProfileForm.hearingProblems}
-                          onChange={(e) => setFullProfileForm({ ...fullProfileForm, hearingProblems: e.target.value.replace(/[^a-zA-Z\s,.-]/g, "") })}
+                          onFocus={() => handleWizardFieldFocus("hearingProblems", fullProfileForm.hearingProblems)}
+                          onBlur={() => handleWizardFieldBlur("hearingProblems", fullProfileForm.hearingProblems)}
+                          onChange={(e) => handleWizardFieldChange("hearingProblems", e.target.value.replace(/[^a-zA-Z\s,.-]/g, ""))}
+                          className={wizardErrors.hearingProblems && (touchedFields.hearingProblems || focusedField === "hearingProblems") ? "invalid" : ""}
                         />
+                        {renderOnFocusValidation(focusedField === "hearingProblems", fullProfileForm.hearingProblems, wizardErrors.hearingProblems, "letters")}
                       </div>
                     </div>
 
@@ -5597,6 +5957,158 @@ function Profile() {
                 style={{ padding: "8px 20px", borderRadius: "8px" }}
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BASE CAMP DETAILS MODAL */}
+      {selectedCampModal && (
+        <div className="modal-backdrop" style={{ zIndex: 99999 }}>
+          <div className="modal-box" style={{ maxWidth: "680px", borderRadius: "16px", overflow: "hidden" }}>
+            <div className="modal-header red-header" style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", color: "#ffffff", padding: "18px 24px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <FiShield style={{ color: "#ef4444" }} /> {selectedCampModal.name}
+                </h3>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>ID: {selectedCampModal.baseCampId} • {selectedCampModal.campType}</span>
+              </div>
+              <button
+                type="button"
+                className="close-modal-btn"
+                onClick={() => setSelectedCampModal(null)}
+                style={{ color: "#ffffff", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <FiX size={22} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: "24px", maxHeight: "75vh", overflowY: "auto" }}>
+              {/* Status & Location Section */}
+              <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "12px", border: "1px solid #e2e8f0", marginBottom: "18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: "700", color: "#475569" }}>OPERATIONAL STATUS</span>
+                  <span className={`status-pill ${selectedCampModal.status ? selectedCampModal.status.toLowerCase().replace(/\s+/g, "-") : "operational"}`}>
+                    ● {selectedCampModal.status || "Operational"}
+                  </span>
+                </div>
+                <div style={{ fontSize: "14px", color: "#0f172a", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                  <FiMapPin style={{ color: "#2563eb", marginTop: "3px", flexShrink: 0 }} />
+                  <div>
+                    <strong>Location:</strong> {selectedCampModal.address || `${selectedCampModal.locality}, ${selectedCampModal.district}, ${selectedCampModal.state}`}
+                    <br />
+                    <span style={{ fontSize: "12.5px", color: "#64748b" }}>Locality: {selectedCampModal.locality} | District: {selectedCampModal.district} | State: {selectedCampModal.state} (PIN: {selectedCampModal.pinCode})</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div style={{ background: "#eff6ff", padding: "16px", borderRadius: "12px", border: "1px solid #bfdbfe", marginBottom: "18px" }}>
+                <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#1e40af", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <FiPhoneCall /> Emergency Contacts & Officers
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", fontSize: "13.5px" }}>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "12px" }}>Contact Officer</span>
+                    <strong style={{ color: "#0f172a" }}>{selectedCampModal.contactPerson || "N/A"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "12px" }}>Primary Helpline</span>
+                    <a href={`tel:${selectedCampModal.contactNumber}`} style={{ color: "#2563eb", fontWeight: "700" }}>{selectedCampModal.contactNumber || "N/A"}</a>
+                  </div>
+                  {selectedCampModal.alternateContact && (
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "12px" }}>Alternate Number</span>
+                      <a href={`tel:${selectedCampModal.alternateContact}`} style={{ color: "#2563eb", fontWeight: "700" }}>{selectedCampModal.alternateContact}</a>
+                    </div>
+                  )}
+                  {selectedCampModal.email && (
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "12px" }}>Official Email</span>
+                      <span style={{ color: "#0f172a" }}>{selectedCampModal.email}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Medical Capabilities */}
+              {selectedCampModal.medicalDetails && (
+                <div style={{ background: "#f0fdf4", padding: "16px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "18px" }}>
+                  <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <FiActivity /> Medical Unit Facilities
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", fontSize: "13px" }}>
+                    <div><strong>Facility Name:</strong> {selectedCampModal.medicalDetails.medicalFacilityName || "On-site Field Clinic"}</div>
+                    <div><strong>Doctors:</strong> {selectedCampModal.medicalDetails.numberOfDoctors || 0}</div>
+                    <div><strong>Nurses:</strong> {selectedCampModal.medicalDetails.numberOfNurses || 0}</div>
+                    <div><strong>Emergency Beds:</strong> {selectedCampModal.medicalDetails.numberOfBeds || 0}</div>
+                    <div><strong>24/7 Medical Care:</strong> {selectedCampModal.medicalDetails.emergencyMedicalSupport || "Available"}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* All Facilities Checklist */}
+              <div style={{ marginBottom: "18px" }}>
+                <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#0f172a" }}>Base Camp Amenities & Facilities</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "8px" }}>
+                  {[
+                    { label: "Medical Facility", val: selectedCampModal.facilities?.medicalFacility || selectedCampModal.medicalFacility },
+                    { label: "Doctor Available", val: selectedCampModal.facilities?.doctorAvailable },
+                    { label: "Pharmacy", val: selectedCampModal.facilities?.pharmacy },
+                    { label: "Ambulance Access", val: selectedCampModal.facilities?.ambulanceAccess },
+                    { label: "24/7 Emergency Support", val: selectedCampModal.facilities?.emergencySupport || selectedCampModal.emergencySupport },
+                    { label: "Drinking Water", val: selectedCampModal.facilities?.drinkingWater },
+                    { label: "Toilets & Restrooms", val: selectedCampModal.facilities?.toilets },
+                    { label: "Food Facility", val: selectedCampModal.facilities?.foodFacility },
+                    { label: "Rest Area", val: selectedCampModal.facilities?.restArea },
+                    { label: "Parking", val: selectedCampModal.facilities?.parking },
+                    { label: "24/7 Security", val: selectedCampModal.facilities?.security247 },
+                    { label: "Accessibility Access", val: selectedCampModal.facilities?.accessibilityFacility }
+                  ].map((fac, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: fac.val ? "#16a34a" : "#94a3b8", background: fac.val ? "#f0fdf4" : "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: fac.val ? "1px solid #dcfce7" : "1px solid #f1f5f9" }}>
+                      {fac.val ? <FiCheckCircle size={14} /> : <FiX size={14} />}
+                      <span>{fac.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description & Special Instructions */}
+              {selectedCampModal.description && (
+                <div style={{ marginBottom: "14px" }}>
+                  <h4 style={{ margin: "0 0 6px 0", fontSize: "13.5px", color: "#334155" }}>Description</h4>
+                  <p style={{ margin: 0, fontSize: "13.5px", color: "#64748b", lineHeight: "1.5" }}>{selectedCampModal.description}</p>
+                </div>
+              )}
+
+              {selectedCampModal.specialInstructions && (
+                <div style={{ background: "#fffbeb", padding: "12px 16px", borderRadius: "8px", border: "1px solid #fef3c7", color: "#92400e", fontSize: "13px" }}>
+                  <strong>Special Advisory / Notice:</strong> {selectedCampModal.specialInstructions}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ padding: "14px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <a
+                href={
+                  selectedCampModal.googleMapLink && selectedCampModal.googleMapLink.trim()
+                    ? selectedCampModal.googleMapLink.trim()
+                    : `https://maps.google.com/?q=${selectedCampModal.latitude || 0},${selectedCampModal.longitude || 0}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#2563eb", fontWeight: "700", textDecoration: "none", fontSize: "13.5px" }}
+              >
+                <FiExternalLink /> Open in Google Maps
+              </a>
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setSelectedCampModal(null)}
+                style={{ padding: "8px 18px", borderRadius: "8px" }}
+              >
+                Close
               </button>
             </div>
           </div>

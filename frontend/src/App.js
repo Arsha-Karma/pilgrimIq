@@ -19,6 +19,7 @@ import JourneyPlanner from "./pages/JourneyPlanner";
 import JourneyDetails from "./pages/JourneyDetails";
 import MyJourneys from "./pages/MyJourneys";
 import MedicalAnalysis from "./pages/MedicalAnalysis";
+import JourneyAssistance from "./pages/JourneyAssistance";
 
 function App() {
   return (
@@ -28,10 +29,13 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/family" element={<Profile />} />
         <Route path="/my-family" element={<Profile />} />
+        <Route path="/emergency-services" element={<Profile />} />
         <Route path="/medical-analysis/:reportId" element={<MedicalAnalysis />} />
         <Route path="/journey-planner" element={<Navigate to="/centers" replace />} />
         <Route path="/journey-planner/:pilgrimageCenterId" element={<JourneyPlanner />} />
         <Route path="/journey/:journeyId" element={<JourneyDetails />} />
+        <Route path="/journey-assistance" element={<JourneyAssistance />} />
+        <Route path="/journey-assistance/:journeyId" element={<JourneyAssistance />} />
         <Route path="/my-journeys" element={<MyJourneys />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />

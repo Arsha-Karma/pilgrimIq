@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
-import { apiGetJourneyById, apiDeleteJourney } from "../services/journeyService";
+import { apiGetJourneyById, apiDeleteJourney, apiStartJourney } from "../services/journeyService";
 import "../styles/JourneyDetails.css";
 import {
   FiMapPin,
@@ -14,7 +14,8 @@ import {
   FiArrowLeft,
   FiTrash2,
   FiCpu,
-  FiAlertCircle
+  FiAlertCircle,
+  FiPlay
 } from "react-icons/fi";
 
 function JourneyDetails() {
@@ -49,6 +50,18 @@ function JourneyDetails() {
       fetchJourney();
     }
   }, [journeyId, token]);
+
+  const handleStartJourney = async () => {
+    try {
+      if (journeyId && token) {
+        await apiStartJourney(journeyId, token);
+      }
+      navigate("/journey-assistance");
+    } catch (err) {
+      console.error("Error starting journey:", err);
+      navigate("/journey-assistance");
+    }
+  };
 
   const handleDeleteJourney = async () => {
     if (!window.confirm("Are you sure you want to cancel and delete this journey plan?")) {
@@ -136,7 +149,28 @@ function JourneyDetails() {
               </p>
             </div>
 
-            <div className="hero-actions">
+            <div className="hero-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn-primary-blue"
+                onClick={handleStartJourney}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: "10px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: "800",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                }}
+              >
+                <FiPlay /> Start Journey
+              </button>
+
               <button
                 type="button"
                 className="btn-delete-journey"

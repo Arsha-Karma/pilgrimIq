@@ -159,6 +159,11 @@ const baseCampSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    googleMapLink: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     image: {
       type: String,
       default: "",

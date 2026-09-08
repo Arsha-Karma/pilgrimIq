@@ -18,6 +18,57 @@ export const apiAcceptResponsibility = async (payload, token) => {
   });
 };
 
+// Start or activate a journey
+export const apiStartJourney = async (journeyId, token) => {
+  return fetchAPI("/journeys/start", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ journeyId }),
+  });
+};
+
+// Get currently active journey for user
+export const apiGetActiveJourney = async (token) => {
+  return fetchAPI("/journeys/active", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Update active journey location
+export const apiUpdateJourneyLocation = async (id, locationData, token) => {
+  return fetchAPI(`/journeys/${id}/location`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify(locationData),
+  });
+};
+
+// Update active journey status
+export const apiUpdateJourneyStatus = async (id, status, token) => {
+  return fetchAPI(`/journeys/${id}/status`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+};
+
+// Get progress details for single journey
+export const apiGetJourneyProgress = async (id, token) => {
+  return fetchAPI(`/journeys/${id}/progress`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Complete journey
+export const apiCompleteJourney = async (id, token) => {
+  return fetchAPI(`/journeys/${id}/complete`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+};
+
 // Get current user's journeys
 export const apiGetMyJourneys = async (token) => {
   return fetchAPI("/journeys/user/my-journeys", {

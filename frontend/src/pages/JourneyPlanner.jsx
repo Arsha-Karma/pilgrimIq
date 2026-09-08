@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import UserSidebar from "../components/UserSidebar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetPilgrimageCenterById, apiGetProfile } from "../services/api";
-import { apiCreateJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
+import { apiCreateJourney, apiStartJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
 import { apiGetWeatherByCenterId } from "../services/weatherService";
 import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyPlanner.css";
@@ -579,7 +580,7 @@ function JourneyPlanner() {
     }
   };
 
-  // Submit Journey to MongoDB
+  // Submit & Start Journey
   const handleConfirmSaveJourney = async () => {
     try {
       setSubmitting(true);
@@ -615,7 +616,9 @@ function JourneyPlanner() {
 
       const result = await apiCreateJourney(payload, token);
       if (result && result.journey) {
-        navigate(`/journey/${result.journey._id}`);
+        // Start the journey record and navigate directly to Journey Assistance
+        await apiStartJourney(result.journey._id, token);
+        navigate("/journey-assistance");
       } else {
         throw new Error("Failed to create journey record");
       }
@@ -659,10 +662,14 @@ function JourneyPlanner() {
   );
 
   return (
-    <div className="journey-planner-page">
+    <div className="journey-planner-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="planner-hero-banner">
+      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+        <UserSidebar activeTab="journey-planner" />
+
+        <div className="pilgrim-main-content" style={{ padding: 0 }}>
+          <div className="planner-hero-banner">
         <div className="banner-content">
           <div className="breadcrumb-nav">
             <Link to="/centers">
@@ -1621,7 +1628,7 @@ function JourneyPlanner() {
                 onClick={handleConfirmSaveJourney}
                 disabled={submitting}
               >
-                {submitting ? "Saving..." : "Confirm & Save Journey"}
+                {submitting ? "Starting Journey..." : "Confirm & Start Journey 🚀"}
               </button>
             </div>
           </div>
@@ -1712,6 +1719,8 @@ function JourneyPlanner() {
           onViewDetails={(place) => setSelectedDetailPlace(place)}
         />
       )}
+        </div>
+      </div>
     </div>
   );
 }

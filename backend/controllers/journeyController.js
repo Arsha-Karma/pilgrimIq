@@ -392,6 +392,315 @@ const acceptResponsibility = async (req, res, next) => {
   }
 };
 
+// @desc    Start / Activate a journey (or fetch existing active journey)
+// @route   POST /api/journeys/start
+// @access  Private (Authenticated User)
+const startJourney = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { journeyId } = req.body;
+
+    // Check if an active/in-progress journey already exists for this user
+    let activeJourney = await Journey.findOne({
+      userId,
+      status: { $in: ["IN_PROGRESS", "PAUSED", "active"] },
+    })
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    // If active journey exists and matches requested or no specific ID requested, return it
+    if (activeJourney && (!journeyId || activeJourney._id.toString() === journeyId)) {
+      return res.status(200).json({
+        success: true,
+        message: "Active journey retrieved.",
+        journey: activeJourney,
+      });
+    }
+
+    let targetJourney;
+    if (journeyId) {
+      targetJourney = await Journey.findById(journeyId);
+      if (!targetJourney || targetJourney.userId.toString() !== userId.toString()) {
+        res.status(404);
+        throw new Error("Journey plan not found or unauthorized.");
+      }
+    } else {
+      // Find latest planned journey
+      targetJourney = await Journey.findOne({ userId, status: { $in: ["planned", "ready", "NOT_STARTED"] } })
+        .sort({ createdAt: -1 });
+    }
+
+    if (!targetJourney) {
+      res.status(404);
+      throw new Error("No planned journey found to start. Please plan a journey first.");
+    }
+
+    // Load center details for destination coordinates
+    const center = await PilgrimageCenter.findById(targetJourney.pilgrimageCenterId);
+    if (!center) {
+      res.status(404);
+      throw new Error("Pilgrimage center details not found.");
+    }
+
+    const startLat = targetJourney.startLocation?.latitude || 8.5241;
+    const startLng = targetJourney.startLocation?.longitude || 76.9366;
+    const destLat = center.location?.latitude || 9.4344;
+    const destLng = center.location?.longitude || 77.0811;
+
+    // Calculate approximate initial distance
+    const rad = (x) => (x * Math.PI) / 180;
+    const R = 6371;
+    const dLat = rad(destLat - startLat);
+    const dLon = rad(destLng - startLng);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(rad(startLat)) * Math.cos(rad(destLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = Math.round(R * c * 10) / 10 || 10.0;
+
+    targetJourney.status = "IN_PROGRESS";
+    targetJourney.startedAt = targetJourney.startedAt || new Date();
+    targetJourney.startCoordinates = { latitude: startLat, longitude: startLng };
+    targetJourney.destinationCoordinates = { latitude: destLat, longitude: destLng };
+    targetJourney.currentLocation = {
+      address: targetJourney.startLocation?.address || `${startLat.toFixed(4)}, ${startLng.toFixed(4)}`,
+      city: targetJourney.startLocation?.city || center.location?.city || "",
+      state: targetJourney.startLocation?.state || center.location?.state || "",
+      latitude: startLat,
+      longitude: startLng,
+      updatedAt: new Date(),
+    };
+    targetJourney.totalDistance = distanceKm;
+    targetJourney.distanceTravelled = 0;
+    targetJourney.distanceRemaining = distanceKm;
+    targetJourney.progressPercentage = 0;
+    targetJourney.estimatedArrivalTime = `${Math.round(distanceKm * 2)} minutes`;
+
+    await targetJourney.save();
+
+    const populated = await Journey.findById(targetJourney._id)
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    res.status(200).json({
+      success: true,
+      message: "Journey started successfully!",
+      journey: populated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get currently active journey for authenticated user
+// @route   GET /api/journeys/active
+// @access  Private
+const getActiveJourney = async (req, res, next) => {
+  try {
+    const activeJourney = await Journey.findOne({
+      userId: req.user._id,
+      status: { $in: ["IN_PROGRESS", "PAUSED", "active"] },
+    })
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    if (!activeJourney) {
+      return res.status(200).json({
+        success: true,
+        active: false,
+        journey: null,
+        message: "No active journey found.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      active: true,
+      journey: activeJourney,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update journey live location & calculate progress
+// @route   PATCH /api/journeys/:id/location
+// @access  Private
+const updateJourneyLocation = async (req, res, next) => {
+  try {
+    const { latitude, longitude, address, city, state, distanceTravelled, distanceRemaining, progressPercentage, estimatedArrivalTime } = req.body;
+
+    const journey = await Journey.findById(req.params.id);
+    if (!journey) {
+      res.status(404);
+      throw new Error("Journey not found.");
+    }
+
+    if (journey.userId.toString() !== req.user._id.toString()) {
+      res.status(403);
+      throw new Error("Unauthorized access to this journey.");
+    }
+
+    const now = new Date();
+    journey.currentLocation = {
+      address: address || journey.currentLocation?.address || `${latitude?.toFixed(4)}, ${longitude?.toFixed(4)}`,
+      city: city || journey.currentLocation?.city || "",
+      state: state || journey.currentLocation?.state || "",
+      latitude: latitude !== undefined ? latitude : journey.currentLocation?.latitude,
+      longitude: longitude !== undefined ? longitude : journey.currentLocation?.longitude,
+      updatedAt: now,
+    };
+
+    if (distanceTravelled !== undefined) {
+      journey.distanceTravelled = Math.max(0, Math.round(distanceTravelled * 10) / 10);
+    }
+    if (distanceRemaining !== undefined) {
+      journey.distanceRemaining = Math.max(0, Math.round(distanceRemaining * 10) / 10);
+    }
+    if (progressPercentage !== undefined) {
+      journey.progressPercentage = Math.min(100, Math.max(0, Math.round(progressPercentage)));
+    }
+    if (estimatedArrivalTime) {
+      journey.estimatedArrivalTime = estimatedArrivalTime;
+    }
+
+    journey.locationUpdateCount = (journey.locationUpdateCount || 0) + 1;
+    await journey.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Location and progress updated.",
+      journey,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update journey status (PAUSED, IN_PROGRESS, CANCELLED)
+// @route   PATCH /api/journeys/:id/status
+// @access  Private
+const updateJourneyStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    const allowed = ["IN_PROGRESS", "PAUSED", "CANCELLED", "COMPLETED"];
+    if (!status || !allowed.includes(status)) {
+      res.status(400);
+      throw new Error("Invalid status update.");
+    }
+
+    const journey = await Journey.findById(req.params.id);
+    if (!journey) {
+      res.status(404);
+      throw new Error("Journey record not found.");
+    }
+
+    if (journey.userId.toString() !== req.user._id.toString()) {
+      res.status(403);
+      throw new Error("Unauthorized.");
+    }
+
+    journey.status = status;
+    if (status === "PAUSED") {
+      journey.pausedAt = new Date();
+    } else if (status === "COMPLETED") {
+      journey.completedAt = new Date();
+      journey.progressPercentage = 100;
+      journey.distanceRemaining = 0;
+    }
+    await journey.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Journey status updated to ${status}.`,
+      journey,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get journey live progress summary
+// @route   GET /api/journeys/:id/progress
+// @access  Private
+const getJourneyProgress = async (req, res, next) => {
+  try {
+    const journey = await Journey.findById(req.params.id)
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    if (!journey) {
+      res.status(404);
+      throw new Error("Journey not found.");
+    }
+
+    if (journey.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+      res.status(403);
+      throw new Error("Unauthorized.");
+    }
+
+    res.status(200).json({
+      success: true,
+      progress: {
+        journeyId: journey._id,
+        status: journey.status,
+        currentLocation: journey.currentLocation,
+        startCoordinates: journey.startCoordinates,
+        destinationCoordinates: journey.destinationCoordinates,
+        totalDistance: journey.totalDistance,
+        distanceTravelled: journey.distanceTravelled,
+        distanceRemaining: journey.distanceRemaining,
+        progressPercentage: journey.progressPercentage,
+        estimatedArrivalTime: journey.estimatedArrivalTime,
+        locationUpdateCount: journey.locationUpdateCount,
+        startedAt: journey.startedAt,
+        completedAt: journey.completedAt,
+      },
+      journey,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Mark active journey as completed
+// @route   POST /api/journeys/:id/complete
+// @access  Private
+const completeJourney = async (req, res, next) => {
+  try {
+    const journey = await Journey.findById(req.params.id);
+    if (!journey) {
+      res.status(404);
+      throw new Error("Journey record not found.");
+    }
+
+    if (journey.userId.toString() !== req.user._id.toString()) {
+      res.status(403);
+      throw new Error("Unauthorized.");
+    }
+
+    journey.status = "COMPLETED";
+    journey.completedAt = new Date();
+    journey.progressPercentage = 100;
+    journey.distanceRemaining = 0;
+    journey.distanceTravelled = journey.totalDistance || journey.distanceTravelled;
+
+    await journey.save();
+
+    const populated = await Journey.findById(journey._id)
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    res.status(200).json({
+      success: true,
+      message: "🎉 Pilgrimage journey completed successfully!",
+      journey: populated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createJourney,
   getJourneys,
@@ -400,4 +709,10 @@ module.exports = {
   updateJourney,
   deleteJourney,
   acceptResponsibility,
+  startJourney,
+  getActiveJourney,
+  updateJourneyLocation,
+  updateJourneyStatus,
+  getJourneyProgress,
+  completeJourney,
 };

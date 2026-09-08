@@ -8,6 +8,12 @@ const {
   updateJourney,
   deleteJourney,
   acceptResponsibility,
+  startJourney,
+  getActiveJourney,
+  updateJourneyLocation,
+  updateJourneyStatus,
+  getJourneyProgress,
+  completeJourney,
 } = require("../controllers/journeyController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -15,7 +21,14 @@ const { protect } = require("../middleware/authMiddleware");
 router.use(protect);
 
 router.post("/accept-responsibility", acceptResponsibility);
+router.post("/start", startJourney);
+router.get("/active", getActiveJourney);
 router.route("/user/my-journeys").get(getMyJourneys);
+
+router.patch("/:id/location", updateJourneyLocation);
+router.patch("/:id/status", updateJourneyStatus);
+router.get("/:id/progress", getJourneyProgress);
+router.post("/:id/complete", completeJourney);
 
 router.route("/")
   .post(createJourney)

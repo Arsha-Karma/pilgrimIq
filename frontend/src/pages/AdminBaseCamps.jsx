@@ -162,6 +162,7 @@ const INITIAL_FORM_STATE = {
   emergencySupport: true,
   description: "",
   specialInstructions: "",
+  googleMapLink: "",
   facilities: {
     doctorAvailable: false,
     pharmacy: false,
@@ -493,6 +494,7 @@ function AdminBaseCamps({ token, showAlert }) {
       emergencySupport: camp.emergencySupport !== undefined ? camp.emergencySupport : true,
       description: camp.description || "",
       specialInstructions: camp.specialInstructions || "",
+      googleMapLink: camp.googleMapLink || "",
       facilities: {
         doctorAvailable: camp.facilities?.doctorAvailable || false,
         pharmacy: camp.facilities?.pharmacy || false,
@@ -558,6 +560,7 @@ function AdminBaseCamps({ token, showAlert }) {
         emergencySupport: formData.emergencySupport,
         description: formData.description,
         specialInstructions: formData.specialInstructions,
+        googleMapLink: formData.googleMapLink,
       };
 
       if (editingCamp) {
@@ -1109,6 +1112,23 @@ function AdminBaseCamps({ token, showAlert }) {
                         </span>
                       )}
                     </div>
+
+                    <div className="form-group" style={{ gridColumn: "span 3", marginTop: "10px" }}>
+                      <label style={{ color: "#ffffff", fontWeight: "700" }}>Google Maps Direction Link (Optional)</label>
+                      <input
+                        type="text"
+                        name="googleMapLink"
+                        className="form-input"
+                        placeholder="e.g. https://maps.google.com/?q=9.4124,77.0694 or https://goo.gl/maps/..."
+                        value={formData.googleMapLink}
+                        onFocus={() => handleFieldFocus("googleMapLink")}
+                        onChange={handleFieldChange}
+                        onBlur={() => handleFieldBlur("googleMapLink")}
+                      />
+                      <span style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", display: "block" }}>
+                        Direct Google Maps location URL for pilgrims in Emergency Services tab.
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -1566,11 +1586,11 @@ function AdminBaseCamps({ token, showAlert }) {
               </button>
             </div>
 
-            <div className="modal-body">
-              <p style={{ fontSize: "14px", color: "#cbd5e1", margin: 0 }}>
-                Are you sure you want to deactivate base camp <strong>"{deleteModal.campName}"</strong>?
+            <div className="modal-body deactivate-modal-body" style={{ background: "#ffffff", padding: "24px" }}>
+              <p style={{ fontSize: "15px", color: "#000000", fontWeight: "700", margin: 0, lineHeight: "1.5" }}>
+                Are you sure you want to deactivate base camp <strong style={{ color: "#000000", fontWeight: "800" }}>"{deleteModal.campName}"</strong>?
               </p>
-              <p style={{ fontSize: "12.5px", color: "#94a3b8", marginTop: "8px" }}>
+              <p style={{ fontSize: "13.5px", color: "#000000", marginTop: "10px", lineHeight: "1.5", fontWeight: "600" }}>
                 Deactivating this base camp will mark its operational status as Inactive without deleting historical pilgrim logs or emergency records.
               </p>
             </div>

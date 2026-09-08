@@ -175,9 +175,38 @@ const journeySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["planned", "ready", "active", "completed", "cancelled"],
+      enum: ["planned", "ready", "active", "completed", "cancelled", "NOT_STARTED", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"],
       default: "planned",
     },
+    startedAt: { type: Date },
+    pausedAt: { type: Date },
+    completedAt: { type: Date },
+    currentLocation: {
+      address: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+      latitude: { type: Number },
+      longitude: { type: Number },
+      updatedAt: { type: Date },
+    },
+    startCoordinates: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+    },
+    destinationCoordinates: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+    },
+    routeGeometry: {
+      type: { type: String, default: "LineString" },
+      coordinates: { type: Array, default: [] },
+    },
+    totalDistance: { type: Number, default: 0 },
+    distanceTravelled: { type: Number, default: 0 },
+    distanceRemaining: { type: Number, default: 0 },
+    progressPercentage: { type: Number, default: 0 },
+    estimatedArrivalTime: { type: String, default: "ETA unavailable" },
+    locationUpdateCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

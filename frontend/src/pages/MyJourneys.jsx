@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import UserSidebar from "../components/UserSidebar";
 import { useAuth } from "../context/AuthContext";
-import { apiGetMyJourneys, apiDeleteJourney } from "../services/journeyService";
+import { apiGetMyJourneys, apiDeleteJourney, apiStartJourney } from "../services/journeyService";
 import "../styles/MyJourneys.css";
 import {
   FiCalendar,
@@ -11,7 +12,8 @@ import {
   FiPlus,
   FiTrash2,
   FiEye,
-  FiAlertCircle
+  FiAlertCircle,
+  FiPlay
 } from "react-icons/fi";
 
 function MyJourneys() {
@@ -43,6 +45,17 @@ function MyJourneys() {
     }
   }, [token, fetchJourneys]);
 
+  const handleStart = async (id, e) => {
+    e.stopPropagation();
+    try {
+      await apiStartJourney(id, token);
+      navigate("/journey-assistance");
+    } catch (err) {
+      console.error("Failed to start journey:", err);
+      navigate("/journey-assistance");
+    }
+  };
+
   const handleDelete = async (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to cancel and delete this journey plan?")) {
@@ -57,23 +70,27 @@ function MyJourneys() {
   };
 
   return (
-    <div className="my-journeys-page">
+    <div className="my-journeys-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="my-journeys-header">
-        <div className="header-container">
-          <div>
-            <h1>My Planned Pilgrimage Journeys</h1>
-            <p>Manage your saved trip itineraries, registered pilgrims, and nearby support preferences.</p>
+      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+        <UserSidebar activeTab="journey-planner" />
+
+        <div className="pilgrim-main-content" style={{ padding: 0 }}>
+          <div className="my-journeys-header">
+            <div className="header-container">
+              <div>
+                <h1>My Planned Pilgrimage Journeys</h1>
+                <p>Manage your saved trip itineraries, registered pilgrims, and nearby support preferences.</p>
+              </div>
+
+              <Link to="/centers" className="btn-plan-new">
+                <FiPlus /> Plan New Journey
+              </Link>
+            </div>
           </div>
 
-          <Link to="/centers" className="btn-plan-new">
-            <FiPlus /> Plan New Journey
-          </Link>
-        </div>
-      </div>
-
-      <div className="my-journeys-container">
+          <div className="my-journeys-container">
         {loading ? (
           <div className="loading-card" style={{ padding: "40px", textAlign: "center" }}>
             <div className="spinner" style={{ margin: "0 auto" }}></div>
@@ -150,13 +167,33 @@ function MyJourneys() {
                     <div className="card-footer-actions">
                       <button
                         type="button"
+                        style={{
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          border: "none",
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          fontSize: "12.5px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        onClick={(e) => handleStart(j._id, e)}
+                      >
+                        <FiPlay /> Start Journey
+                      </button>
+
+                      <button
+                        type="button"
                         className="btn-view-details"
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/journey/${j._id}`);
                         }}
                       >
-                        <FiEye /> View Details
+                        <FiEye /> Details
                       </button>
 
                       <button
@@ -176,6 +213,8 @@ function MyJourneys() {
         )}
       </div>
     </div>
+  </div>
+</div>
   );
 }
 

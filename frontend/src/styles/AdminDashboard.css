@@ -1202,4 +1202,12 @@ input::-webkit-credentials-auto-fill-button {
   color: #34d399;
 }
 
+/* Deactivation Modal High Contrast Black Text */
+.deactivate-modal-body,
+.deactivate-modal-body p,
+.deactivate-modal-body p strong {
+  color: #000000 !important;
+}
+
+
 
