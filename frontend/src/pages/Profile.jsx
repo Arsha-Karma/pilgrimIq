@@ -23,12 +23,11 @@ import Navbar from "../components/Navbar";
 import {
   FiUser,
   FiUsers,
-  FiGrid,
   FiPlusSquare,
   FiCompass,
-  FiStar,
   FiCalendar,
   FiShield,
+  FiCpu,
   FiWifi,
   FiMessageSquare,
   FiSettings,
@@ -2486,14 +2485,6 @@ function Profile() {
         <aside className={`pilgrim-sidebar ${sidebarOpen ? "open" : "collapsed"}`}>
           <nav className="sidebar-nav">
             <button
-              className={`sidebar-link ${activeTab === "dashboard" ? "active" : ""}`}
-              onClick={() => navigate("/")}
-            >
-              <FiGrid className="nav-icon" />
-              <span>Dashboard</span>
-            </button>
-
-            <button
               className={`sidebar-link ${activeTab === "profile" ? "active" : ""}`}
               onClick={() => setActiveTab("profile")}
             >
@@ -2522,12 +2513,10 @@ function Profile() {
               <span>Journey Planner</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Recommendations feature")}>
-              <FiStar className="nav-icon" />
-              <span>Recommendations</span>
-            </button>
-
-            <button className="sidebar-link" onClick={() => showAlert("info", "Bookings feature")}>
+            <button
+              className={`sidebar-link ${activeTab === "bookings" ? "active" : ""}`}
+              onClick={() => navigate("/bookings")}
+            >
               <FiCalendar className="nav-icon" />
               <span>Bookings</span>
             </button>
@@ -2545,6 +2534,14 @@ function Profile() {
               <span>Journey Assistance</span>
             </button>
 
+            <button
+              className={`sidebar-link ${activeTab === "journey-assistant" || activeTab === "ai-journey-assistant" ? "active" : ""}`}
+              onClick={() => navigate("/journey-assistant")}
+            >
+              <FiCpu className="nav-icon" style={{ color: activeTab === "journey-assistant" || activeTab === "ai-journey-assistant" ? "#38bdf8" : "inherit" }} />
+              <span>AI Journey Assistant</span>
+            </button>
+
             <button className="sidebar-link" onClick={() => showAlert("info", "Family Tracking active")}>
               <FiWifi className="nav-icon" />
               <span>Family Tracking</span>
@@ -2560,7 +2557,7 @@ function Profile() {
               <span>My Feedback</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Settings section")}>
+            <button className="sidebar-link" onClick={() => navigate("/settings")}>
               <FiSettings className="nav-icon" />
               <span>Settings</span>
             </button>

@@ -6,9 +6,9 @@ import {
   FiUsers,
   FiPlusSquare,
   FiCompass,
-  FiStar,
   FiCalendar,
   FiShield,
+  FiCpu,
   FiWifi,
   FiMessageSquare,
   FiSettings,
@@ -61,17 +61,8 @@ function UserSidebar({ activeTab = "" }) {
 
         <button
           type="button"
-          className={`sidebar-link ${activeTab === "recommendations" ? "active" : ""}`}
-          onClick={() => navigate("/centers")}
-        >
-          <FiStar className="nav-icon" />
-          <span>Recommendations</span>
-        </button>
-
-        <button
-          type="button"
           className={`sidebar-link ${activeTab === "bookings" ? "active" : ""}`}
-          onClick={() => navigate("/my-journeys")}
+          onClick={() => navigate("/bookings")}
         >
           <FiCalendar className="nav-icon" />
           <span>Bookings</span>
@@ -93,6 +84,15 @@ function UserSidebar({ activeTab = "" }) {
         >
           <FiShield className="nav-icon" />
           <span>Journey Assistance</span>
+        </button>
+
+        <button
+          type="button"
+          className={`sidebar-link ${activeTab === "journey-assistant" || activeTab === "ai-journey-assistant" ? "active" : ""}`}
+          onClick={() => navigate("/journey-assistant")}
+        >
+          <FiCpu className="nav-icon" style={{ color: activeTab === "journey-assistant" || activeTab === "ai-journey-assistant" ? "#38bdf8" : "inherit" }} />
+          <span>AI Journey Assistant</span>
         </button>
 
         <button
@@ -125,7 +125,7 @@ function UserSidebar({ activeTab = "" }) {
         <button
           type="button"
           className={`sidebar-link ${activeTab === "settings" ? "active" : ""}`}
-          onClick={() => navigate("/profile")}
+          onClick={() => navigate("/settings")}
         >
           <FiSettings className="nav-icon" />
           <span>Settings</span>

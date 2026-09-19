@@ -1,4 +1,6 @@
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { getStoredSettings, applyThemePreference } from "./services/settingsService";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -20,13 +22,22 @@ import JourneyDetails from "./pages/JourneyDetails";
 import MyJourneys from "./pages/MyJourneys";
 import MedicalAnalysis from "./pages/MedicalAnalysis";
 import JourneyAssistance from "./pages/JourneyAssistance";
+import AIJourneyAssistant from "./pages/AIJourneyAssistant";
+import Settings from "./pages/Settings";
+import Bookings from "./pages/Bookings";
 
 function App() {
+  useEffect(() => {
+    const userSettings = getStoredSettings();
+    applyThemePreference(userSettings.appearanceSettings?.theme || "light");
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/family" element={<Profile />} />
         <Route path="/my-family" element={<Profile />} />
         <Route path="/emergency-services" element={<Profile />} />
@@ -36,7 +47,11 @@ function App() {
         <Route path="/journey/:journeyId" element={<JourneyDetails />} />
         <Route path="/journey-assistance" element={<JourneyAssistance />} />
         <Route path="/journey-assistance/:journeyId" element={<JourneyAssistance />} />
+        <Route path="/journey-assistant" element={<AIJourneyAssistant />} />
+        <Route path="/ai-journey-assistant" element={<AIJourneyAssistant />} />
         <Route path="/my-journeys" element={<MyJourneys />} />
+        <Route path="/bookings" element={<Bookings />} />
+        <Route path="/bookings/:journeyId" element={<Bookings />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/doctor" element={<DoctorDashboard />} />

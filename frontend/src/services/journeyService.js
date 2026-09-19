@@ -85,6 +85,14 @@ export const apiGetJourneyById = async (id, token) => {
   });
 };
 
+// Get bookings and selected services for a specific journey ID
+export const apiGetJourneyBookings = async (journeyId, token) => {
+  return fetchAPI(`/journeys/${journeyId}/bookings`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
 // Update journey by ID
 export const apiUpdateJourney = async (id, journeyData, token) => {
   return fetchAPI(`/journeys/${id}`, {

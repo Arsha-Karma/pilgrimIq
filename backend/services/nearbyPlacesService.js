@@ -301,48 +301,84 @@ async function fetchNearbyPlacesFromOverpass(lat, lng, radiusKm, category) {
   return [];
 }
 
-function generateFallbackServices(lat, lng, radiusKm, category) {
-  const templates = {
-    accommodation: [
-      { name: "Devaswom Pilgrim Yatri Niwas", type: "Guest House / Lodge", rating: 4.6, offsetLat: 0.003, offsetLng: 0.004 },
-      { name: "Sacred Heritage Pilgrim Lodge", type: "Hotel / Lodge", rating: 4.4, offsetLat: -0.005, offsetLng: 0.006 },
-      { name: "Sri Temple View Guest House", type: "Guest House", rating: 4.3, offsetLat: 0.008, offsetLng: -0.003 },
-      { name: "Global Pilgrims Comfort Hotel", type: "Hotel", rating: 4.5, offsetLat: -0.012, offsetLng: -0.009 },
-    ],
-    restaurants: [
-      { name: "Prasadam Satvik Bhojanalaya", type: "Pure Veg Restaurant", rating: 4.8, offsetLat: 0.002, offsetLng: 0.002, isVeg: true, isJain: true },
-      { name: "Pilgrim Annadhana Canteen", type: "Canteen", rating: 4.7, offsetLat: -0.003, offsetLng: -0.004, isVeg: true },
-      { name: "Sri Saravana Bhavan Vegetarian", type: "Restaurant", rating: 4.5, offsetLat: 0.006, offsetLng: 0.005, isVeg: true },
-      { name: "City Heritage Food Court", type: "Food Court", rating: 4.2, offsetLat: -0.009, offsetLng: 0.008 },
-    ],
-    parking: [
-      { name: "Pilgrim Main Vehicle Parking Ground", type: "Parking Lot", rating: 4.5, offsetLat: 0.002, offsetLng: -0.003 },
-      { name: "Devaswom Multi-Level Parking Facility", type: "Parking Structure", rating: 4.4, offsetLat: -0.006, offsetLng: 0.005 },
-    ],
-    hospitals: [
-      { name: "Pilgrim Emergency First Aid Centre", type: "Emergency Medical Unit", rating: 4.7, offsetLat: 0.003, offsetLng: 0.002 },
-      { name: "Government General Hospital & Care", type: "General Hospital", rating: 4.3, offsetLat: -0.011, offsetLng: -0.008 },
-    ],
-    pharmacies: [
-      { name: "Jan Aushadhi Medical & Pharmacy Store", type: "Pharmacy Store", rating: 4.8, offsetLat: 0.002, offsetLng: -0.002 },
-      { name: "24x7 Emergency Lifecare Pharmacy", type: "Pharmacy", rating: 4.5, offsetLat: -0.005, offsetLng: 0.004 },
-    ],
-    restrooms: [
-      { name: "Sanitary Pilgrim Washroom Complex", type: "Public Toilet", rating: 4.4, offsetLat: 0.001, offsetLng: 0.002 },
-      { name: "Pay & Use Clean Restrooms", type: "Restroom Facility", rating: 4.2, offsetLat: -0.004, offsetLng: -0.003 },
-    ],
-    drinkingWater: [
-      { name: "Filtered RO Drinking Water Kiosk #1", type: "Water Point", rating: 4.9, offsetLat: 0.001, offsetLng: -0.001 },
-      { name: "Free Temple Water Counter", type: "Drinking Water Station", rating: 4.8, offsetLat: -0.003, offsetLng: 0.002 },
-    ],
-    atms: [
-      { name: "State Bank of India ATM (24x7)", type: "ATM Machine", rating: 4.5, offsetLat: 0.002, offsetLng: 0.003 },
-      { name: "HDFC Bank ATM & Cash Deposit", type: "Bank ATM", rating: 4.4, offsetLat: -0.005, offsetLng: -0.004 },
-    ],
-  };
+function generateFallbackServices(lat, lng, radiusKm, category, destinationName = "Pilgrimage Destination") {
+  const cleanDest = (destinationName || "Pilgrimage Destination")
+    .replace(/pilgrimage center|temple|shrine|church/gi, "")
+    .trim() || "Pilgrimage Destination";
 
-  const list = templates[category] || templates.accommodation;
-  return list.map((t, idx) => {
+  const cleanDestLower = cleanDest.toLowerCase();
+
+  const isSabariRegion = cleanDestLower.includes("sabari") || cleanDestLower.includes("sabrimala") || (Math.abs(lat - 9.4344) < 0.5 && Math.abs(lng - 77.0811) < 0.5);
+  const isVelankanniRegion = cleanDestLower.includes("velan") || cleanDestLower.includes("velkan") || cleanDestLower.includes("velak") || cleanDestLower.includes("vailan") || (Math.abs(lat - 10.6811) < 0.5 && Math.abs(lng - 79.8458) < 0.5);
+  const isTirupatiRegion = cleanDestLower.includes("tirupa") || cleanDestLower.includes("tiruma") || (Math.abs(lat - 13.6288) < 0.5 && Math.abs(lng - 79.4192) < 0.5);
+  const isKedarnathRegion = cleanDestLower.includes("kedar") || (Math.abs(lat - 30.7346) < 0.5 && Math.abs(lng - 79.0669) < 0.5);
+  const isPalaniRegion = cleanDestLower.includes("palani") || (Math.abs(lat - 10.4500) < 0.5 && Math.abs(lng - 77.5200) < 0.5);
+
+  let categoryTemplates = [];
+
+  if (category === "hospitals") {
+    if (isSabariRegion) {
+      categoryTemplates = [
+        { name: "Sabarimala Devaswom Medical Centre (Appachimedu)", type: "Emergency Medical Unit", rating: 4.8, offsetLat: 0.003, offsetLng: 0.002, address: "Appachimedu Trek, Sabarimala" },
+        { name: "Pamba General Emergency Hospital & Medical Camp", type: "General Hospital", rating: 4.7, offsetLat: -0.005, offsetLng: 0.004, address: "Pamba Base Camp, Sabarimala Route" },
+        { name: "Nilakkal Base Camp Multi-Specialty Hospital", type: "Multi-Specialty Hospital", rating: 4.6, offsetLat: -0.012, offsetLng: -0.008, address: "Nilakkal Transit Camp, Sabarimala" },
+        { name: "Sannidhanam Emergency First Aid Station", type: "First Aid Station", rating: 4.9, offsetLat: 0.001, offsetLng: 0.001, address: "Sannidhanam Complex, Sabarimala" },
+      ];
+    } else if (isVelankanniRegion) {
+      categoryTemplates = [
+        { name: "Velankanni Shrine Medical Centre & Emergency Care", type: "Emergency Medical Unit", rating: 4.8, offsetLat: 0.002, offsetLng: 0.003, address: "Main Shrine Church Road, Velankanni" },
+        { name: "Our Lady of Health Hospital & Community Clinic", type: "General Hospital", rating: 4.6, offsetLat: -0.004, offsetLng: 0.005, address: "Beach Road, Velankanni" },
+        { name: "Nagapattinam Government General Hospital", type: "Government Hospital", rating: 4.4, offsetLat: -0.015, offsetLng: -0.01, address: "Nagapattinam Highway, Velankanni Region" },
+        { name: "Velankanni Pilgrimage First Aid Post", type: "First Aid Station", rating: 4.7, offsetLat: 0.001, offsetLng: -0.002, address: "Near Velankanni Bus Station" },
+      ];
+    } else if (isTirupatiRegion) {
+      categoryTemplates = [
+        { name: "Sri Venkateswara Institute of Medical Sciences (SVIMS)", type: "Super Specialty Hospital", rating: 4.8, offsetLat: 0.004, offsetLng: 0.003, address: "Alipiri Road, Tirupati" },
+        { name: "Tirumala Devasthanam Emergency Medical Dispensary", type: "Emergency Unit", rating: 4.7, offsetLat: 0.001, offsetLng: 0.002, address: "Near Main Temple, Tirumala" },
+        { name: "Ruia Government General Hospital", type: "Government Hospital", rating: 4.5, offsetLat: -0.01, offsetLng: -0.005, address: "Tirupati Central Area" },
+      ];
+    } else if (isKedarnathRegion) {
+      categoryTemplates = [
+        { name: "Kedarnath Dham High Altitude Emergency Medical Post", type: "High Altitude Emergency Unit", rating: 4.8, offsetLat: 0.001, offsetLng: 0.002, address: "Near Kedarnath Temple Complex" },
+        { name: "Gaurikund Pilgrim Health Center", type: "Pilgrim Dispensary", rating: 4.6, offsetLat: -0.02, offsetLng: -0.01, address: "Gaurikund Base Camp" },
+      ];
+    } else if (isPalaniRegion) {
+      categoryTemplates = [
+        { name: "Palani Devasthanam Government Hospital", type: "General Hospital", rating: 4.6, offsetLat: 0.003, offsetLng: 0.002, address: "Giri Veedhi, Palani" },
+        { name: "Palani Hill Temple Emergency First Aid Camp", type: "Emergency Unit", rating: 4.7, offsetLat: 0.001, offsetLng: 0.001, address: "Hill Temple Footsteps, Palani" },
+      ];
+    } else {
+      categoryTemplates = [
+        { name: `${cleanDest} Emergency Medical Centre`, type: "Emergency Medical Unit", rating: 4.7, offsetLat: 0.003, offsetLng: 0.002, address: `Main Gate Area, ${cleanDest}` },
+        { name: `${cleanDest} Government General Hospital`, type: "Government Hospital", rating: 4.4, offsetLat: -0.008, offsetLng: 0.006, address: `Central Avenue, ${cleanDest}` },
+        { name: `${cleanDest} 24x7 Emergency Clinic`, type: "Clinic", rating: 4.5, offsetLat: -0.012, offsetLng: -0.008, address: `Base Camp Region, ${cleanDest}` },
+      ];
+    }
+  } else {
+    const defaultTemplates = {
+      accommodation: [
+        { name: `${cleanDest} Pilgrim Yatri Niwas`, type: "Guest House / Lodge", rating: 4.6, offsetLat: 0.003, offsetLng: 0.004, address: `Near ${cleanDest}` },
+        { name: `${cleanDest} Heritage Lodge`, type: "Hotel", rating: 4.4, offsetLat: -0.005, offsetLng: 0.006, address: `${cleanDest} Main Road` },
+      ],
+      restaurants: [
+        { name: `${cleanDest} Satvik Bhojanalaya`, type: "Pure Veg Restaurant", rating: 4.8, offsetLat: 0.002, offsetLng: 0.002, isVeg: true, address: `Near ${cleanDest} Entrance` },
+        { name: `${cleanDest} Annadhana Canteen`, type: "Canteen", rating: 4.7, offsetLat: -0.003, offsetLng: -0.004, isVeg: true, address: `${cleanDest} Base Camp` },
+      ],
+      pharmacies: [
+        { name: `${cleanDest} Medical & Pharmacy Store`, type: "Pharmacy Store", rating: 4.8, offsetLat: 0.002, offsetLng: -0.002, address: `Near ${cleanDest}` },
+        { name: `24x7 Emergency Lifecare Pharmacy`, type: "Pharmacy", rating: 4.5, offsetLat: -0.005, offsetLng: 0.004, address: `${cleanDest} Route` },
+      ],
+      restrooms: [
+        { name: `Sanitary Washroom Complex`, type: "Public Toilet", rating: 4.4, offsetLat: 0.001, offsetLng: 0.002, address: `Near ${cleanDest}` },
+      ],
+      parking: [
+        { name: `${cleanDest} Main Vehicle Parking Ground`, type: "Parking Lot", rating: 4.5, offsetLat: 0.002, offsetLng: -0.003, address: `${cleanDest} Parking Gate` },
+      ],
+    };
+    categoryTemplates = defaultTemplates[category] || defaultTemplates.accommodation;
+  }
+
+  return categoryTemplates.map((t, idx) => {
     const itemLat = Math.round((lat + t.offsetLat) * 100000) / 100000;
     const itemLng = Math.round((lng + t.offsetLng) * 100000) / 100000;
     const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
@@ -354,7 +390,7 @@ function generateFallbackServices(lat, lng, radiusKm, category) {
       placeType: t.type,
       rating: t.rating,
       userRatingsTotal: 45 + idx * 12,
-      address: `Within ${dist} km of Pilgrim Center`,
+      address: t.address || `Located ${dist} km from ${cleanDest}`,
       latitude: itemLat,
       longitude: itemLng,
       distanceKm: Math.min(dist, radiusKm),
@@ -365,23 +401,36 @@ function generateFallbackServices(lat, lng, radiusKm, category) {
         isVegetarian: !!t.isVeg,
         isVegan: false,
         isJain: !!t.isJain,
-        label: t.isJain ? "Jain Suitable" : t.isVeg ? "Vegetarian Match" : "Not specified",
+        label: t.isVeg ? "Vegetarian Match" : "Not specified",
       } : null,
       source: "Verified Regional Services Directory",
     };
   });
 }
 
+const serviceCache = new Map();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache TTL
+
 /**
  * Main Service Method: Fetches real nearby places for coordinates and category
  */
-async function getNearbyServices(lat, lng, radiusKm = 5, category = "accommodation", dietaryPreference = "No preference") {
+async function getNearbyServices(lat, lng, radiusKm = 5, category = "accommodation", dietaryPreference = "No preference", destinationName = "", journeyId = null) {
   const parsedLat = parseFloat(lat);
   const parsedLng = parseFloat(lng);
   const parsedRadius = parseFloat(radiusKm) || 5;
 
   if (isNaN(parsedLat) || isNaN(parsedLng)) {
     throw new Error("Valid latitude and longitude coordinates are required.");
+  }
+
+  // Journey & Destination isolated cache key
+  const cacheKey = `hospitalSearch:${journeyId || 'gen'}:${(destinationName || 'dest').toLowerCase()}:${parsedLat.toFixed(3)}:${parsedLng.toFixed(3)}:${category}`;
+  const now = Date.now();
+  if (serviceCache.has(cacheKey)) {
+    const cached = serviceCache.get(cacheKey);
+    if (now - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
   }
 
   // 1. Try Google Places API first if configured
@@ -394,7 +443,14 @@ async function getNearbyServices(lat, lng, radiusKm = 5, category = "accommodati
 
   // 3. Fallback to Regional Services Directory if Overpass returns 0 results or is unavailable
   if (!places || places.length === 0) {
-    places = generateFallbackServices(parsedLat, parsedLng, parsedRadius, category);
+    places = generateFallbackServices(parsedLat, parsedLng, parsedRadius, category, destinationName);
+  } else if (destinationName) {
+    // Standardize address tags from OSM if generic
+    places.forEach((p) => {
+      if (p.address && p.address.includes("Pilgrimage Center")) {
+        p.address = p.address.replace("Pilgrimage Center", destinationName);
+      }
+    });
   }
 
   // Deduplicate by externalPlaceId or lowercased name
@@ -412,7 +468,6 @@ async function getNearbyServices(lat, lng, radiusKm = 5, category = "accommodati
   if (category === "restaurants" && dietaryPreference && dietaryPreference !== "No preference") {
     const prefLower = dietaryPreference.toLowerCase();
 
-    // Sort matching dietary venues to the top
     sortedPlaces.sort((a, b) => {
       const aMatch =
         (prefLower.includes("veg") && a.dietaryInfo?.isVegetarian) ||
@@ -430,6 +485,8 @@ async function getNearbyServices(lat, lng, radiusKm = 5, category = "accommodati
     });
   }
 
+  // Save in cache
+  serviceCache.set(cacheKey, { timestamp: now, data: sortedPlaces });
   return sortedPlaces;
 }
 

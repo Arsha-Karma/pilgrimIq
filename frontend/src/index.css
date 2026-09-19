@@ -29,3 +29,89 @@ select option:checked {
   background-color: #2563eb !important;
   color: #ffffff !important;
 }
+
+/* ========================================== */
+/* DARK MODE SCOPED TO USER DASHBOARDS ONLY   */
+/* ========================================== */
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper,
+html.pilgrim-dark-theme .my-journeys-container,
+html.pilgrim-dark-theme .journey-assistance-container,
+html.pilgrim-dark-theme .medical-analysis-container,
+html.pilgrim-dark-theme .user-dashboard-wrapper {
+  background-color: #070e20 !important;
+  color: #f1f5f9 !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper select,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper select,
+html.pilgrim-dark-theme .my-journeys-container select,
+html.pilgrim-dark-theme .user-dashboard-wrapper select {
+  color: #ffffff !important;
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper select option,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper select option,
+html.pilgrim-dark-theme .my-journeys-container select option,
+html.pilgrim-dark-theme .user-dashboard-wrapper select option {
+  background-color: #071129 !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper select option:checked,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper select option:checked,
+html.pilgrim-dark-theme .my-journeys-container select option:checked,
+html.pilgrim-dark-theme .user-dashboard-wrapper select option:checked {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper h1,
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper h2,
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper h3,
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper h4,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper h1,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper h2,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper h3,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper h4 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper input[type="text"],
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper input[type="password"],
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper input[type="email"],
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper input[type="tel"],
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper input[type="number"],
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper textarea,
+html.pilgrim-dark-theme .pilgrim-settings-wrapper input[type="text"],
+html.pilgrim-dark-theme .pilgrim-settings-wrapper input[type="password"],
+html.pilgrim-dark-theme .pilgrim-settings-wrapper input[type="email"],
+html.pilgrim-dark-theme .pilgrim-settings-wrapper input[type="tel"],
+html.pilgrim-dark-theme .pilgrim-settings-wrapper input[type="number"],
+html.pilgrim-dark-theme .pilgrim-settings-wrapper textarea {
+  background-color: #071129 !important;
+  color: #ffffff !important;
+  border-color: #27375f !important;
+}
+
+/* ========================================== */
+/* PUBLIC MARKETING PAGES (STRICT LIGHT MODE) */
+/* ========================================== */
+.home-page,
+.about-page,
+.features-page,
+.services-container,
+.services-page,
+.how-it-works-page,
+.contact-container,
+.contact-page,
+.centers-container,
+.centers-page,
+.center-details-page {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+

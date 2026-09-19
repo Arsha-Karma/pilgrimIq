@@ -20,6 +20,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-top: 76px;
 }
 
 .pilgrim-dashboard-wrapper * {
@@ -2776,6 +2777,531 @@ input.invalid, select.invalid, textarea.invalid {
   opacity: 0.7;
   cursor: not-allowed;
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR SIDEBAR & PROFILE */
+/* ========================================== */
+html.pilgrim-dark-theme .pilgrim-dashboard-wrapper,
+body.pilgrim-dark-mode .pilgrim-dashboard-wrapper {
+  --bg-page: #070e20;
+  --card-bg: #0d1938;
+  --text-dark: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #27375f;
+  --navy-primary: #ffffff;
+  background-color: #070e20 !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-sidebar,
+body.pilgrim-dark-mode .pilgrim-sidebar {
+  background-color: #0d1938 !important;
+  border-right-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .sidebar-link,
+body.pilgrim-dark-mode .sidebar-link {
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .sidebar-link:hover,
+body.pilgrim-dark-mode .sidebar-link:hover {
+  background-color: #1a294d !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .sidebar-link.active,
+body.pilgrim-dark-mode .sidebar-link.active {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .sidebar-link.active .nav-icon,
+body.pilgrim-dark-mode .sidebar-link.active .nav-icon {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .sidebar-help-card,
+body.pilgrim-dark-mode .sidebar-help-card {
+  background: linear-gradient(180deg, #122247 0%, #1a2d59 100%) !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .sidebar-help-card h4,
+body.pilgrim-dark-mode .sidebar-help-card h4 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .sidebar-help-card p,
+body.pilgrim-dark-mode .sidebar-help-card p {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .help-icon-circle,
+body.pilgrim-dark-mode .help-icon-circle {
+  background-color: #071129 !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .pilgrim-main-content,
+body.pilgrim-dark-mode .pilgrim-main-content,
+html.pilgrim-dark-theme .profile-card,
+body.pilgrim-dark-mode .profile-card,
+html.pilgrim-dark-theme .info-card,
+body.pilgrim-dark-mode .info-card,
+html.pilgrim-dark-theme .stat-card,
+body.pilgrim-dark-mode .stat-card,
+html.pilgrim-dark-theme .user-profile-hero-card,
+body.pilgrim-dark-mode .user-profile-hero-card,
+html.pilgrim-dark-theme .info-section-card,
+body.pilgrim-dark-mode .info-section-card,
+html.pilgrim-dark-theme .medical-card,
+body.pilgrim-dark-mode .medical-card,
+html.pilgrim-dark-theme .journey-card,
+body.pilgrim-dark-mode .journey-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* User Identity Hero Col */
+html.pilgrim-dark-theme .name-verified-row h2,
+body.pilgrim-dark-mode .name-verified-row h2 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .contact-info-list,
+body.pilgrim-dark-mode .contact-info-list,
+html.pilgrim-dark-theme .contact-item,
+body.pilgrim-dark-mode .contact-item,
+html.pilgrim-dark-theme .contact-item svg,
+body.pilgrim-dark-mode .contact-item svg {
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .badge-verified,
+body.pilgrim-dark-mode .badge-verified {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  color: #4ade80 !important;
+}
+
+/* Profile Metrics Column */
+html.pilgrim-dark-theme .profile-metrics-col,
+body.pilgrim-dark-mode .profile-metrics-col {
+  border-left-color: #27375f !important;
+  border-right-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .profile-metrics-col .metric-box,
+body.pilgrim-dark-mode .profile-metrics-col .metric-box {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .profile-metrics-col .metric-label,
+body.pilgrim-dark-mode .profile-metrics-col .metric-label {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .profile-metrics-col .metric-value,
+body.pilgrim-dark-mode .profile-metrics-col .metric-value {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .profile-metrics-col .metric-value.blood,
+body.pilgrim-dark-mode .profile-metrics-col .metric-value.blood {
+  color: #f87171 !important;
+}
+
+/* PSI Dial Widget in Dark Mode */
+html.pilgrim-dark-theme .psi-card-widget,
+body.pilgrim-dark-mode .psi-card-widget {
+  background: linear-gradient(180deg, #101e42 0%, #162854 100%) !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .psi-card-widget h3,
+body.pilgrim-dark-mode .psi-card-widget h3 {
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .psi-score,
+body.pilgrim-dark-mode .psi-score {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .psi-max,
+body.pilgrim-dark-mode .psi-max {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .psi-risk-tag,
+body.pilgrim-dark-mode .psi-risk-tag {
+  color: #4ade80 !important;
+}
+
+html.pilgrim-dark-theme .psi-bg-ring,
+body.pilgrim-dark-mode .psi-bg-ring {
+  stroke: #1e2d54 !important;
+}
+
+html.pilgrim-dark-theme .psi-view-link,
+body.pilgrim-dark-mode .psi-view-link {
+  color: #38bdf8 !important;
+}
+
+/* 2x2 Grid Labels & Values */
+html.pilgrim-dark-theme .card-header-styled,
+body.pilgrim-dark-mode .card-header-styled {
+  border-bottom-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .card-title-group h3,
+body.pilgrim-dark-mode .card-title-group h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .item-label,
+body.pilgrim-dark-mode .item-label,
+html.pilgrim-dark-theme .detail-label,
+body.pilgrim-dark-mode .detail-label {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .item-value,
+body.pilgrim-dark-mode .item-value,
+html.pilgrim-dark-theme .detail-value,
+body.pilgrim-dark-mode .detail-value {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .item-value.highlight,
+body.pilgrim-dark-mode .item-value.highlight,
+html.pilgrim-dark-theme .item-value.phone-highlight,
+body.pilgrim-dark-mode .item-value.phone-highlight {
+  color: #38bdf8 !important;
+}
+
+/* Soft Action Buttons in Dark Mode */
+html.pilgrim-dark-theme .btn-soft-blue,
+body.pilgrim-dark-mode .btn-soft-blue {
+  background-color: #1a294e !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .btn-soft-blue:hover,
+body.pilgrim-dark-mode .btn-soft-blue:hover {
+  background-color: #253b6e !important;
+}
+
+html.pilgrim-dark-theme .btn-soft-red,
+body.pilgrim-dark-mode .btn-soft-red {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .btn-soft-red:hover,
+body.pilgrim-dark-mode .btn-soft-red:hover {
+  background-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .btn-soft-purple,
+body.pilgrim-dark-mode .btn-soft-purple {
+  background-color: rgba(124, 58, 237, 0.15) !important;
+  color: #c084fc !important;
+}
+
+html.pilgrim-dark-theme .btn-soft-purple:hover,
+body.pilgrim-dark-mode .btn-soft-purple:hover {
+  background-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+/* Icon Circles in Dark Mode */
+html.pilgrim-dark-theme .card-icon-circle.blue,
+body.pilgrim-dark-mode .card-icon-circle.blue {
+  background-color: #1a294e !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .card-icon-circle.red,
+body.pilgrim-dark-mode .card-icon-circle.red {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .card-icon-circle.purple,
+body.pilgrim-dark-mode .card-icon-circle.purple {
+  background-color: rgba(124, 58, 237, 0.15) !important;
+  color: #c084fc !important;
+}
+
+html.pilgrim-dark-theme .card-icon-circle.green,
+body.pilgrim-dark-mode .card-icon-circle.green {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+}
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR EMERGENCY SERVICES & BASE CAMPS */
+/* ========================================== */
+
+/* Filter & Search Bar in Dark Mode */
+html.pilgrim-dark-theme .camp-search-input-box input,
+body.pilgrim-dark-mode .camp-search-input-box input {
+  background-color: #071129 !important;
+  color: #ffffff !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .camp-search-input-box input::placeholder,
+body.pilgrim-dark-mode .camp-search-input-box input::placeholder {
+  color: #64748b !important;
+}
+
+html.pilgrim-dark-theme .camp-search-input-box .search-icon,
+body.pilgrim-dark-mode .camp-search-input-box .search-icon {
+  color: #64748b !important;
+}
+
+html.pilgrim-dark-theme .clear-search-btn,
+body.pilgrim-dark-mode .clear-search-btn {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .camp-filter-dropdown-box select,
+body.pilgrim-dark-mode .camp-filter-dropdown-box select {
+  background-color: #071129 !important;
+  color: #ffffff !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .camp-filter-dropdown-box select option,
+body.pilgrim-dark-mode .camp-filter-dropdown-box select option {
+  background-color: #071129 !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .camp-filter-dropdown-box .filter-icon,
+body.pilgrim-dark-mode .camp-filter-dropdown-box .filter-icon {
+  color: #64748b !important;
+}
+
+/* Stat Cards in Dark Mode */
+html.pilgrim-dark-theme .emergency-stats-grid .stat-card,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-label,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-label {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-value,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-value {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-icon.blue,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-icon.blue {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+  color: #60a5fa !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-icon.green,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-icon.green {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  color: #4ade80 !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-icon.red,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-icon.red {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .emergency-stats-grid .stat-icon.purple,
+body.pilgrim-dark-mode .emergency-stats-grid .stat-icon.purple {
+  background-color: rgba(147, 51, 234, 0.2) !important;
+  color: #c084fc !important;
+}
+
+/* Emergency Camp Cards in Dark Mode */
+html.pilgrim-dark-theme .emergency-camp-card,
+body.pilgrim-dark-mode .emergency-camp-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .camp-card-header,
+body.pilgrim-dark-mode .camp-card-header {
+  background-color: #071129 !important;
+  border-bottom-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .camp-title-group h3,
+body.pilgrim-dark-mode .camp-title-group h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .camp-id-badge,
+body.pilgrim-dark-mode .camp-id-badge {
+  background-color: #1e2d54 !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .type-pill,
+body.pilgrim-dark-mode .type-pill {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+  color: #60a5fa !important;
+}
+
+html.pilgrim-dark-theme .status-pill.operational,
+body.pilgrim-dark-mode .status-pill.operational {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  color: #4ade80 !important;
+}
+
+html.pilgrim-dark-theme .status-pill.temporarily-closed,
+body.pilgrim-dark-mode .status-pill.temporarily-closed {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .status-pill.under-maintenance,
+body.pilgrim-dark-mode .status-pill.under-maintenance {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+}
+
+html.pilgrim-dark-theme .camp-info-row,
+body.pilgrim-dark-mode .camp-info-row {
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .camp-info-row strong,
+body.pilgrim-dark-mode .camp-info-row strong {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .tel-link,
+body.pilgrim-dark-mode .tel-link {
+  color: #60a5fa !important;
+}
+
+html.pilgrim-dark-theme .camp-capacity-box,
+body.pilgrim-dark-mode .camp-capacity-box {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .capacity-labels,
+body.pilgrim-dark-mode .capacity-labels {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .capacity-labels strong,
+body.pilgrim-dark-mode .capacity-labels strong {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .capacity-track,
+body.pilgrim-dark-mode .capacity-track {
+  background-color: #1e2d54 !important;
+}
+
+html.pilgrim-dark-theme .camp-desc-snippet,
+body.pilgrim-dark-mode .camp-desc-snippet {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.medical,
+body.pilgrim-dark-mode .facility-tag.medical {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.doctor,
+body.pilgrim-dark-mode .facility-tag.doctor {
+  background-color: rgba(37, 99, 235, 0.15) !important;
+  color: #60a5fa !important;
+  border-color: rgba(37, 99, 235, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.ambulance,
+body.pilgrim-dark-mode .facility-tag.ambulance {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.sos,
+body.pilgrim-dark-mode .facility-tag.sos {
+  background-color: rgba(147, 51, 234, 0.15) !important;
+  color: #c084fc !important;
+  border-color: rgba(147, 51, 234, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.pharmacy,
+body.pilgrim-dark-mode .facility-tag.pharmacy {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .facility-tag.water,
+body.pilgrim-dark-mode .facility-tag.water {
+  background-color: rgba(6, 182, 212, 0.15) !important;
+  color: #22d3ee !important;
+  border-color: rgba(6, 182, 212, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .camp-card-footer,
+body.pilgrim-dark-mode .camp-card-footer {
+  background-color: #071129 !important;
+  border-top-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .btn-view-camp-details,
+body.pilgrim-dark-mode .btn-view-camp-details {
+  background-color: #1a294e !important;
+  border-color: #27375f !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .btn-view-camp-details:hover,
+body.pilgrim-dark-mode .btn-view-camp-details:hover {
+  background-color: #253b6e !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .camps-loading-box,
+body.pilgrim-dark-mode .camps-loading-box,
+html.pilgrim-dark-theme .camps-empty-state,
+body.pilgrim-dark-mode .camps-empty-state {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .camps-empty-state h3,
+body.pilgrim-dark-mode .camps-empty-state h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .camps-empty-state p,
+body.pilgrim-dark-mode .camps-empty-state p {
+  color: #94a3b8 !important;
+}
+
+
+
 
 
 

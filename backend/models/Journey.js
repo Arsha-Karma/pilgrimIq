@@ -1,5 +1,47 @@
 const mongoose = require("mongoose");
 
+const serviceItemSchema = new mongoose.Schema(
+  {
+    name: { type: String },
+    category: { type: String },
+    address: { type: String, default: "" },
+    latitude: { type: Number },
+    longitude: { type: Number },
+    distanceKm: { type: Number },
+    externalPlaceId: { type: String },
+    serviceId: { type: String },
+    phone: { type: String, default: "" },
+    email: { type: String, default: "" },
+    contactNumber: { type: String, default: "" },
+    website: { type: String, default: "" },
+    checkIn: { type: Date },
+    checkOut: { type: Date },
+    roomsCount: { type: Number },
+    peopleCount: { type: Number },
+    roomType: { type: String },
+    facilities: [{ type: String }],
+    price: { type: Number },
+    status: { type: String, default: "Confirmed" },
+    bookingRef: { type: String },
+    mealType: { type: String },
+    mealPackage: { type: String },
+    date: { type: Date },
+    time: { type: String },
+    quantity: { type: Number },
+    pickupLocation: { type: String },
+    dropLocation: { type: String },
+    pickupTime: { type: String },
+    vehicleType: { type: String },
+    vehicleInfo: { type: String },
+    passengersCount: { type: Number },
+    parkingName: { type: String },
+    entryTime: { type: String },
+    exitTime: { type: String },
+    description: { type: String },
+  },
+  { _id: true, timestamps: true, strict: false }
+);
+
 const journeySchema = new mongoose.Schema(
   {
     userId: {
@@ -84,94 +126,17 @@ const journeySchema = new mongoose.Schema(
       default: 5, // Radius in kilometers (1, 2, 5, 10)
     },
     selectedServices: {
-      accommodation: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      restaurants: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      parking: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      hospitals: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      pharmacies: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      restrooms: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      drinkingWater: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
-      atms: [
-        {
-          name: String,
-          category: String,
-          address: String,
-          latitude: Number,
-          longitude: Number,
-          distanceKm: Number,
-          externalPlaceId: String,
-        },
-      ],
+      accommodation: [serviceItemSchema],
+      restaurants: [serviceItemSchema],
+      parking: [serviceItemSchema],
+      transport: [serviceItemSchema],
+      hospitals: [serviceItemSchema],
+      pharmacies: [serviceItemSchema],
+      restrooms: [serviceItemSchema],
+      drinkingWater: [serviceItemSchema],
+      atms: [serviceItemSchema],
+      baseCamps: [serviceItemSchema],
+      otherServices: [serviceItemSchema],
     },
     status: {
       type: String,

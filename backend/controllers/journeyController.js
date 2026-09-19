@@ -701,6 +701,283 @@ const completeJourney = async (req, res, next) => {
   }
 };
 
+// @desc    Get selected Google Maps recommendations for a specific journey ID (No booking/price concepts & Transport excluded)
+// @route   GET /api/journeys/:id/bookings
+// @access  Private (Authenticated User)
+const getJourneyBookings = async (req, res, next) => {
+  try {
+    const journey = await Journey.findById(req.params.id)
+      .populate("pilgrimageCenterId")
+      .populate("travelingFamilyMembers");
+
+    if (!journey) {
+      res.status(404);
+      throw new Error("Journey record not found");
+    }
+
+    // Authorization Check: Must belong to authenticated user (or admin)
+    if (journey.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+      res.status(403);
+      throw new Error("Unauthorized access: You do not have permission to view recommendations for this journey.");
+    }
+
+    const center = journey.pilgrimageCenterId || {};
+    const services = journey.selectedServices || {};
+
+    // Helper function to sanitize contact phone
+    const formatPhone = (p1, p2, p3) => {
+      const raw = p1 || p2 || p3;
+      if (!raw || typeof raw !== "string") return "Not available";
+      const trimmed = raw.trim();
+      if (!trimmed || trimmed.toLowerCase().includes("not available") || trimmed.toLowerCase().includes("not specified")) {
+        return "Not available";
+      }
+      return trimmed;
+    };
+
+    // Helper function to build full address
+    const formatAddress = (placeName, rawAddr, distKm) => {
+      const centerName = center.name || "Pilgrimage Center";
+      const city = center.location?.city || "";
+      const state = center.location?.state || "";
+
+      if (!rawAddr || typeof rawAddr !== "string" || rawAddr.startsWith("Located ") || rawAddr.toLowerCase().includes("not available")) {
+        const distStr = distKm ? `${distKm} km from ${centerName}` : `Near ${centerName}`;
+        return [placeName, distStr, city, state].filter(Boolean).join(", ");
+      }
+
+      // If address is short without city/state, append center city/state if missing
+      let full = rawAddr.trim();
+      if (city && !full.toLowerCase().includes(city.toLowerCase())) {
+        full += `, ${city}`;
+      }
+      if (state && !full.toLowerCase().includes(state.toLowerCase())) {
+        full += `, ${state}`;
+      }
+      return full;
+    };
+
+    // Helper function to build Google Maps Link
+    const formatGoogleMapUrl = (place) => {
+      if (place.googleMapLink && place.googleMapLink.startsWith("http")) {
+        return place.googleMapLink;
+      }
+      if (place.externalPlaceId && place.externalPlaceId.startsWith("google-")) {
+        const pId = place.externalPlaceId.replace("google-", "");
+        return `https://www.google.com/maps/place/?q=place_id:${pId}`;
+      }
+      if (place.latitude && place.longitude) {
+        return `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`;
+      }
+      const q = encodeURIComponent(`${place.name || ""} ${center.name || ""} ${center.location?.city || ""}`);
+      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+    };
+
+    // 1. SELECTED ACCOMMODATION (Google Maps places)
+    const rawAccommodation = services.accommodation || [];
+    const accommodation = rawAccommodation.map((acc, idx) => {
+      const pName = acc.name || "Selected Accommodation";
+      const phone = formatPhone(acc.phone, acc.contactNumber, acc.contact?.phone);
+      const address = formatAddress(pName, acc.address, acc.distanceKm);
+      const gLink = formatGoogleMapUrl(acc);
+      const website = acc.website || acc.contact?.website || (acc.externalPlaceId?.startsWith("google-") ? gLink : "");
+      const hours = (acc.openingHours && !acc.openingHours.toLowerCase().includes("not specified"))
+        ? acc.openingHours
+        : "Open 24 Hours";
+
+      return {
+        _id: acc._id || `acc_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: acc.externalPlaceId || acc.serviceId || `place_acc_${idx}`,
+        name: pName,
+        category: acc.category || acc.placeType || "Lodging / Hotel",
+        address,
+        phone,
+        website,
+        rating: acc.rating || 4.5,
+        openingHours: hours,
+        facilities: acc.facilities?.length ? acc.facilities : ["Free Wi-Fi", "Clean Drinking Water", "Hot Water Bath", "Mandir Access"],
+        latitude: acc.latitude || center.location?.latitude || null,
+        longitude: acc.longitude || center.location?.longitude || null,
+        description: acc.description || `Selected accommodation recommendation near ${center.name || "Pilgrimage Center"}.`,
+        googleMapLink: gLink,
+      };
+    });
+
+    // 2. SELECTED FOOD RECOMMENDATIONS (Google Maps places)
+    const rawFood = services.restaurants || [];
+    const food = rawFood.map((f, idx) => {
+      const pName = f.name || "Pilgrim Satvik Dining";
+      const phone = formatPhone(f.phone, f.contactNumber, f.contact?.phone);
+      const address = formatAddress(pName, f.address, f.distanceKm);
+      const gLink = formatGoogleMapUrl(f);
+      const website = f.website || f.contact?.website || (f.externalPlaceId?.startsWith("google-") ? gLink : "");
+      const hours = (f.openingHours && !f.openingHours.toLowerCase().includes("not specified"))
+        ? f.openingHours
+        : (f.time || "06:30 AM - 10:00 PM");
+
+      return {
+        _id: f._id || `food_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: f.externalPlaceId || f.serviceId || `place_food_${idx}`,
+        name: pName,
+        category: f.category || f.placeType || "Restaurant / Annadhanam",
+        foodType: f.mealType || "Satvik Vegetarian Dining",
+        address,
+        phone,
+        website,
+        rating: f.rating || 4.6,
+        openingHours: hours,
+        facilities: f.facilities?.length ? f.facilities : ["100% Pure Satvik Vegetarian", "Clean Drinking Water", "Hygiene Certified"],
+        latitude: f.latitude || center.location?.latitude || null,
+        longitude: f.longitude || center.location?.longitude || null,
+        description: f.description || `Satvik food dining option near ${center.name || "Pilgrimage Center"}.`,
+        googleMapLink: gLink,
+      };
+    });
+
+    // 3. PARKING & OTHER SELECTED SERVICES (Hospitals, Base camps, Pharmacies, Restrooms, Water, ATMs)
+    const otherServices = [];
+
+    (services.parking || []).forEach((pk, idx) => {
+      const pName = pk.name || `${center.name || "Pilgrimage Center"} Parking Facility`;
+      otherServices.push({
+        _id: pk._id || `prk_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: pk.externalPlaceId || pk.serviceId || `place_prk_${idx}`,
+        name: pName,
+        category: "Parking Location",
+        serviceType: "Vehicle Parking",
+        address: formatAddress(pName, pk.address, pk.distanceKm),
+        phone: formatPhone(pk.phone, pk.contactNumber, pk.contact?.phone),
+        facilities: pk.facilities?.length ? pk.facilities : ["Security Guarded", "CCTV Monitored"],
+        latitude: pk.latitude || center.location?.latitude || null,
+        longitude: pk.longitude || center.location?.longitude || null,
+        googleMapLink: formatGoogleMapUrl(pk),
+      });
+    });
+
+    (services.hospitals || []).forEach((h, idx) => {
+      otherServices.push({
+        _id: h._id || `hosp_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: h.externalPlaceId || h.serviceId || `place_hosp_${idx}`,
+        name: h.name,
+        category: "Medical & Health Support",
+        serviceType: "Hospital / First-Aid Clinic",
+        address: h.address,
+        phone: h.phone || "Emergency Helpline: 108",
+        latitude: h.latitude,
+        longitude: h.longitude,
+      });
+    });
+
+    (services.baseCamps || []).forEach((bc, idx) => {
+      otherServices.push({
+        _id: bc._id || `bc_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: bc.externalPlaceId || bc.serviceId || `place_bc_${idx}`,
+        name: bc.name,
+        category: "Pilgrimage Base Camp",
+        serviceType: "Base Camp / Shelter",
+        address: bc.address,
+        phone: bc.phone || "Not available",
+        latitude: bc.latitude,
+        longitude: bc.longitude,
+      });
+    });
+
+    (services.pharmacies || []).forEach((p, idx) => {
+      otherServices.push({
+        _id: p._id || `pharm_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: p.externalPlaceId || p.serviceId || `place_phr_${idx}`,
+        name: p.name,
+        category: "Medical Support",
+        serviceType: "Pharmacy",
+        address: p.address,
+        phone: p.phone || "Not available",
+        latitude: p.latitude,
+        longitude: p.longitude,
+      });
+    });
+
+    (services.restrooms || []).forEach((r, idx) => {
+      otherServices.push({
+        _id: r._id || `rst_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: r.externalPlaceId || r.serviceId || `place_rst_${idx}`,
+        name: r.name,
+        category: "Sanitation Kiosk",
+        serviceType: "Public Restroom",
+        address: r.address,
+        latitude: r.latitude,
+        longitude: r.longitude,
+      });
+    });
+
+    (services.drinkingWater || []).forEach((w, idx) => {
+      otherServices.push({
+        _id: w._id || `wtr_${idx}`,
+        journeyId: journey._id,
+        userId: journey.userId,
+        placeId: w.externalPlaceId || w.serviceId || `place_wtr_${idx}`,
+        name: w.name,
+        category: "Drinking Water Kiosk",
+        serviceType: "Purified Water",
+        address: w.address,
+        latitude: w.latitude,
+        longitude: w.longitude,
+      });
+    });
+
+    // TOTAL SELECTED RECOMMENDATIONS COUNT (Excluding transport completely!)
+    const totalRecommendationsCount = accommodation.length + food.length + otherServices.length;
+
+    res.status(200).json({
+      success: true,
+      journeySummary: {
+        journeyId: journey._id,
+        pilgrimageCenter: {
+          id: center._id,
+          name: center.name || "Pilgrimage Center",
+          city: center.location?.city || "",
+          state: center.location?.state || "",
+          country: center.location?.country || "India",
+          image: center.image || "https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=800&auto=format&fit=crop",
+          latitude: center.location?.latitude,
+          longitude: center.location?.longitude,
+        },
+        startDate: journey.journeyDate,
+        returnDate: journey.returnDate,
+        status: journey.status || "PLANNED",
+        totalPilgrims: journey.totalPilgrims || 1,
+        totalRecommendationsCount,
+      },
+      recommendations: {
+        accommodation,
+        food,
+        otherServices,
+      },
+      // Backward compatibility field name if needed
+      bookings: {
+        accommodation,
+        food,
+        otherServices,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createJourney,
   getJourneys,
@@ -715,4 +992,5 @@ module.exports = {
   updateJourneyStatus,
   getJourneyProgress,
   completeJourney,
+  getJourneyBookings,
 };

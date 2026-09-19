@@ -31,6 +31,7 @@ const medicalReportRoutes = require("./routes/medicalReportRoutes");
 const physicianReviewRoutes = require("./routes/physicianReviewRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const weatherRoutes = require("./routes/weatherRoutes");
+const journeyAssistantRoutes = require("./routes/journeyAssistantRoutes");
 
 // Health Check route
 app.get("/api/health", (req, res) => {
@@ -50,6 +51,7 @@ app.use("/api/medical-reports", medicalReportRoutes);
 app.use("/api/physician/medical-reviews", physicianReviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/weather", weatherRoutes);
+app.use("/api/journey-assistant", journeyAssistantRoutes);
 
 // Error Handling Middleware
 app.use(notFound);
