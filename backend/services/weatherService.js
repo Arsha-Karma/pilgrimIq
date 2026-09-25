@@ -338,8 +338,11 @@ const fetchWeatherData = async (centerId, lat, lon, centerName) => {
 
       // If OpenWeatherMap returns fewer than 7 days, extend to 7 days for the full week
       while (forecast.length < 7) {
-        const lastItem = forecast[forecast.length - 1] || { date: new Date().toISOString().split("T")[0], temp: temp };
-        const nextDate = new Date(new Date(lastItem.date).getTime() + 86400000);
+        const lastItem = forecast[forecast.length - 1];
+        const lastDateVal = (lastItem && lastItem.date && !isNaN(new Date(lastItem.date).getTime()))
+          ? new Date(lastItem.date)
+          : new Date();
+        const nextDate = new Date(lastDateVal.getTime() + 86400000);
         const dateStr = nextDate.toISOString().split("T")[0];
         const dayName = daysOfWeek[nextDate.getDay()];
 

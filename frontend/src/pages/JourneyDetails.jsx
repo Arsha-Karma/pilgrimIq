@@ -80,7 +80,7 @@ function JourneyDetails() {
   };
 
   const handleContinueAssessment = () => {
-    alert("🚀 Ready for AI Decision Support! In future modules, this triggers the AI Pilgrim Safety Index & Travel Assessment Engine.");
+    navigate(`/travel-assessment/${journeyId}`);
   };
 
   if (loading) {

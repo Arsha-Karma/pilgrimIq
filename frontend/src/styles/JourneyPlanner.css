@@ -646,3 +646,69 @@
   margin-bottom: 16px;
   font-weight: 600;
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR JOURNEY PLANNER    */
+/* ========================================== */
+html.pilgrim-dark-theme .journey-planner-page,
+body.pilgrim-dark-mode .journey-planner-page {
+  background-color: #070e20 !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .center-summary-header-card,
+body.pilgrim-dark-mode .center-summary-header-card,
+html.pilgrim-dark-theme .planner-step-card,
+body.pilgrim-dark-mode .planner-step-card,
+html.pilgrim-dark-theme .summary-card,
+body.pilgrim-dark-mode .summary-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .center-info-box h2,
+body.pilgrim-dark-mode .center-info-box h2,
+html.pilgrim-dark-theme .step-title-box h3,
+body.pilgrim-dark-mode .step-title-box h3,
+html.pilgrim-dark-theme .summary-card h3,
+body.pilgrim-dark-mode .summary-card h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .location-line,
+body.pilgrim-dark-mode .location-line,
+html.pilgrim-dark-theme .step-title-box p,
+body.pilgrim-dark-mode .step-title-box p {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .option-box,
+body.pilgrim-dark-mode .option-box,
+html.pilgrim-dark-theme .recommendation-card,
+body.pilgrim-dark-mode .recommendation-card,
+html.pilgrim-dark-theme .service-card,
+body.pilgrim-dark-mode .service-card,
+html.pilgrim-dark-theme .sel-box,
+body.pilgrim-dark-mode .sel-box {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .option-box.selected,
+body.pilgrim-dark-mode .option-box.selected,
+html.pilgrim-dark-theme .recommendation-card.selected,
+body.pilgrim-dark-mode .recommendation-card.selected {
+  border-color: #2563eb !important;
+  background-color: #122247 !important;
+}
+
+html.pilgrim-dark-theme .btn-back-edit,
+body.pilgrim-dark-mode .btn-back-edit {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+

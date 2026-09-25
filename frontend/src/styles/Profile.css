@@ -1100,12 +1100,13 @@
 }
 
 .family-member-card {
-  min-width: 220px;
-  max-width: 220px;
+  min-width: 230px;
+  max-width: 230px;
+  box-sizing: border-box;
   background-color: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 18px 14px;
+  padding: 18px 12px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -1204,14 +1205,17 @@
 
 .member-card-buttons {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
+  box-sizing: border-box;
   margin-top: auto;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .btn-card-action {
   flex: 1;
-  padding: 6px 8px;
+  padding: 6px 4px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background-color: #ffffff;
@@ -1222,13 +1226,37 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
+  white-space: nowrap;
+  box-sizing: border-box;
   transition: all 0.2s ease;
 }
 
 .btn-card-action:hover {
   background-color: var(--blue-light);
   border-color: var(--blue-brand);
+}
+
+.btn-card-action.delete {
+  flex: 0 0 32px;
+  height: 29px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+  background-color: #fef2f2;
+  border-radius: 8px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.btn-card-action.delete:hover {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
 }
 
 .family-member-card.add-card {
@@ -3299,6 +3327,203 @@ html.pilgrim-dark-theme .camps-empty-state p,
 body.pilgrim-dark-mode .camps-empty-state p {
   color: #94a3b8 !important;
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR FAMILY MEMBERS     */
+/* ========================================== */
+html.pilgrim-dark-theme .family-members-section,
+body.pilgrim-dark-mode .family-members-section,
+html.pilgrim-dark-theme .family-form-card,
+body.pilgrim-dark-mode .family-form-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .section-title-row h3,
+body.pilgrim-dark-mode .section-title-row h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .form-card-header,
+body.pilgrim-dark-mode .form-card-header {
+  border-bottom-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .family-member-card,
+body.pilgrim-dark-mode .family-member-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .family-member-card:hover,
+body.pilgrim-dark-mode .family-member-card:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6) !important;
+}
+
+html.pilgrim-dark-theme .family-member-card.selected,
+body.pilgrim-dark-mode .family-member-card.selected {
+  background-color: #122247 !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3) !important;
+}
+
+html.pilgrim-dark-theme .family-member-card.add-card,
+body.pilgrim-dark-mode .family-member-card.add-card {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .family-member-card.add-card:hover,
+body.pilgrim-dark-mode .family-member-card.add-card:hover {
+  background-color: #0f1e42 !important;
+  border-color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .member-card-name,
+body.pilgrim-dark-mode .member-card-name {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .member-meta,
+body.pilgrim-dark-mode .member-meta {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .member-menu-btn,
+body.pilgrim-dark-mode .member-menu-btn {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .member-menu-btn:hover,
+body.pilgrim-dark-mode .member-menu-btn:hover {
+  color: #ffffff !important;
+  background-color: #1a294d !important;
+}
+
+html.pilgrim-dark-theme .btn-card-action,
+body.pilgrim-dark-mode .btn-card-action {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .btn-card-action:hover,
+body.pilgrim-dark-mode .btn-card-action:hover {
+  background-color: #1a294d !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .btn-card-action.delete,
+body.pilgrim-dark-mode .btn-card-action.delete {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .btn-card-action.delete:hover,
+body.pilgrim-dark-mode .btn-card-action.delete:hover {
+  background-color: rgba(239, 68, 68, 0.3) !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .family-empty-state,
+body.pilgrim-dark-mode .family-empty-state {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .family-empty-state h3,
+body.pilgrim-dark-mode .family-empty-state h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .family-empty-state p,
+body.pilgrim-dark-mode .family-empty-state p {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .health-details-card,
+body.pilgrim-dark-mode .health-details-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .health-details-header,
+body.pilgrim-dark-mode .health-details-header {
+  border-bottom-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .health-details-header h3,
+body.pilgrim-dark-mode .health-details-header h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .health-details-header span,
+body.pilgrim-dark-mode .health-details-header span {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .member-details-nav,
+body.pilgrim-dark-mode .member-details-nav {
+  border-bottom-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .member-subtab,
+body.pilgrim-dark-mode .member-subtab {
+  background-color: #071129 !important;
+  color: #cbd5e1 !important;
+  border: 1px solid #27375f !important;
+}
+
+html.pilgrim-dark-theme .member-subtab.active,
+body.pilgrim-dark-mode .member-subtab.active {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+}
+
+html.pilgrim-dark-theme .info-box,
+body.pilgrim-dark-mode .info-box {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .info-box h4,
+body.pilgrim-dark-mode .info-box h4 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .info-box strong,
+body.pilgrim-dark-mode .info-box strong {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .info-box div,
+body.pilgrim-dark-mode .info-box div {
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .info-box div[style*="background: #ffffff"],
+html.pilgrim-dark-theme .info-box div[style*="background: rgb(255, 255, 255)"],
+body.pilgrim-dark-mode .info-box div[style*="background: #ffffff"],
+body.pilgrim-dark-mode .info-box div[style*="background: rgb(255, 255, 255)"] {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .info-box div[style*="background: #ffffff"] span,
+body.pilgrim-dark-mode .info-box div[style*="background: #ffffff"] span {
+  color: #ffffff !important;
+}
+
 
 
 

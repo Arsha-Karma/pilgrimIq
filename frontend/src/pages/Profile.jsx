@@ -3146,10 +3146,10 @@ function Profile() {
                 </div>
 
                 {familyMembers.length === 0 ? (
-                  <div className="family-empty-state" style={{ textAlign: "center", padding: "40px 20px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+                  <div className="family-empty-state" style={{ textAlign: "center", padding: "40px 20px", borderRadius: "16px", border: "1px solid var(--border-color, #e2e8f0)" }}>
                     <div className="family-empty-icon" style={{ fontSize: "48px", marginBottom: 12 }}>👨‍👩‍👧‍👦</div>
-                    <h3 style={{ color: "#0f172a", fontSize: "18px", marginBottom: "6px" }}>No Family Members Added Yet</h3>
-                    <p style={{ color: "#64748b", margin: 0, fontSize: "14px" }}>
+                    <h3 style={{ fontSize: "18px", marginBottom: "6px" }}>No Family Members Added Yet</h3>
+                    <p style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
                       Click "Add Family Member" above to manually register your family member's details.
                     </p>
                   </div>
@@ -3205,7 +3205,7 @@ function Profile() {
                             </span>
                           </div>
 
-                          <div className="member-card-buttons" style={{ display: "flex", gap: "4px", marginTop: "8px" }}>
+                          <div className="member-card-buttons">
                             <button
                               className="btn-card-action view"
                               onClick={(e) => {
@@ -3213,7 +3213,6 @@ function Profile() {
                                 setSelectedMemberId(member._id);
                                 setFamilyHealthTab("info");
                               }}
-                              style={{ flex: 1 }}
                             >
                               <FiEye size={13} /> Details
                             </button>
@@ -3223,7 +3222,6 @@ function Profile() {
                                 e.stopPropagation();
                                 openEditMemberModal(member);
                               }}
-                              style={{ flex: 1 }}
                             >
                               <FiEdit2 size={13} /> Edit
                             </button>
@@ -3233,7 +3231,6 @@ function Profile() {
                                 e.stopPropagation();
                                 handleDeleteMember(member._id, member.name);
                               }}
-                              style={{ color: "#ef4444" }}
                               title="Delete Member"
                             >
                               <FiTrash2 size={13} />
@@ -3254,8 +3251,8 @@ function Profile() {
 
               {/* ACTIVE MEMBER HEALTH DETAILS INSPECTOR */}
               {activeMember && (
-                <div className="health-details-card" style={{ marginTop: 24, background: "#ffffff", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>
-                  <div className="health-details-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #e2e8f0" }}>
+                <div className="health-details-card" style={{ marginTop: 24, padding: 24, borderRadius: 16 }}>
+                  <div className="health-details-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingBottom: 16 }}>
                     <div className="active-member-identity" style={{ display: "flex", alignItems: "center", gap: 14 }}>
                       <div className="small-avatar" style={{ width: 46, height: 46, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: 18 }}>
                         {activeMember.profilePhoto ? (
@@ -3265,13 +3262,13 @@ function Profile() {
                         )}
                       </div>
                       <div>
-                        <h3 style={{ fontSize: 18, color: "#0f172a", margin: 0, fontWeight: 700 }}>
+                        <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>
                           {activeMember.name}{" "}
-                          <span style={{ fontSize: 13, color: "#2563eb", fontWeight: 600, background: "#eff6ff", padding: "2px 8px", borderRadius: 10 }}>
+                          <span style={{ fontSize: 13, color: "#2563eb", fontWeight: 600, background: "rgba(37, 99, 235, 0.12)", padding: "2px 8px", borderRadius: 10 }}>
                             {activeMember.relationship}
                           </span>
                         </h3>
-                        <span style={{ fontSize: 12, color: "#64748b" }}>
+                        <span style={{ fontSize: 12, opacity: 0.8 }}>
                           Age: {activeMember.age ? `${activeMember.age} Yrs` : "N/A"} | Gender: {activeMember.gender || "N/A"} | Blood Group: {activeMember.bloodGroup || "N/A"}
                         </span>
                       </div>
@@ -3281,19 +3278,19 @@ function Profile() {
                       <button className="btn-primary-blue" onClick={() => openEditMemberModal(activeMember)}>
                         <FiEdit2 size={14} /> Edit Member
                       </button>
-                      <button className="btn-soft-red" onClick={() => handleDeleteMember(activeMember._id, activeMember.name)} style={{ background: "#fee2e2", color: "#991b1b", border: "none", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      <button className="btn-soft-red" onClick={() => handleDeleteMember(activeMember._id, activeMember.name)} style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "none", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                         <FiTrash2 size={14} /> Delete
                       </button>
                     </div>
                   </div>
 
                   {/* NAV TABS */}
-                  <div className="member-details-nav" style={{ display: "flex", gap: 10, marginBottom: 20, borderBottom: "1px solid #e2e8f0", paddingBottom: 10, flexWrap: "wrap" }}>
+                  <div className="member-details-nav" style={{ display: "flex", gap: 10, marginBottom: 20, paddingBottom: 10, flexWrap: "wrap" }}>
                     <button
                       type="button"
                       className={`member-subtab ${familyHealthTab === "info" ? "active" : ""}`}
                       onClick={() => setFamilyHealthTab("info")}
-                      style={{ border: "none", background: familyHealthTab === "info" ? "#2563eb" : "#f1f5f9", color: familyHealthTab === "info" ? "#ffffff" : "#475569", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
                     >
                       Personal Information
                     </button>
@@ -3301,7 +3298,7 @@ function Profile() {
                       type="button"
                       className={`member-subtab ${familyHealthTab === "medical" ? "active" : ""}`}
                       onClick={() => setFamilyHealthTab("medical")}
-                      style={{ border: "none", background: familyHealthTab === "medical" ? "#2563eb" : "#f1f5f9", color: familyHealthTab === "medical" ? "#ffffff" : "#475569", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
                     >
                       Medical & Fitness
                     </button>
@@ -3309,7 +3306,7 @@ function Profile() {
                       type="button"
                       className={`member-subtab ${familyHealthTab === "measurements" ? "active" : ""}`}
                       onClick={() => setFamilyHealthTab("measurements")}
-                      style={{ border: "none", background: familyHealthTab === "measurements" ? "#2563eb" : "#f1f5f9", color: familyHealthTab === "measurements" ? "#ffffff" : "#475569", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
                     >
                       Health Measurements
                     </button>
@@ -3317,7 +3314,7 @@ function Profile() {
                       type="button"
                       className={`member-subtab ${familyHealthTab === "reports" ? "active" : ""}`}
                       onClick={() => setFamilyHealthTab("reports")}
-                      style={{ border: "none", background: familyHealthTab === "reports" ? "#2563eb" : "#f1f5f9", color: familyHealthTab === "reports" ? "#ffffff" : "#475569", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
                     >
                       Medical Reports ({(activeMember.reports || []).length})
                     </button>
@@ -3326,9 +3323,9 @@ function Profile() {
                   {/* SUBTAB 1: PERSONAL INFORMATION */}
                   {familyHealthTab === "info" && (
                     <div className="member-panel-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                      <div className="info-box" style={{ background: "#f8fafc", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                        <h4 style={{ color: "#0f172a", marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Personal Information</h4>
-                        <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#334155" }}>
+                      <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                        <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Personal Information</h4>
+                        <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
                           <div><strong>Full Name:</strong> {activeMember.name}</div>
                           <div><strong>Relationship:</strong> {activeMember.relationship}</div>
                           <div><strong>Date of Birth:</strong> {activeMember.dob || "Not entered"}</div>
@@ -3344,19 +3341,19 @@ function Profile() {
                         </div>
                       </div>
 
-                      <div className="info-box" style={{ background: "#f8fafc", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                        <h4 style={{ color: "#0f172a", marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Independent PSI Risk Evaluation</h4>
+                      <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                        <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Independent PSI Risk Evaluation</h4>
                         {(() => {
                           const psi = calculateMemberPsi(activeMember);
                           return (
-                            <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #cbd5e1" }}>
+                            <div className="psi-calc-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #cbd5e1)" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{psi.psiScore} / 100</span>
+                                <span style={{ fontSize: 20, fontWeight: 800 }}>{psi.psiScore} / 100</span>
                                 <span style={{ padding: "4px 10px", borderRadius: 12, fontWeight: 700, fontSize: 12, background: psi.psiScore > 75 ? "#dcfce7" : psi.psiScore > 55 ? "#fef9c3" : "#fee2e2", color: psi.psiScore > 75 ? "#166534" : psi.psiScore > 55 ? "#854d0e" : "#991b1b" }}>
                                   {psi.psiRiskLevel}
                                 </span>
                               </div>
-                              <p style={{ fontSize: 12, color: "#64748b", marginTop: 8, margin: "8px 0 0" }}>
+                              <p style={{ fontSize: 12, opacity: 0.8, marginTop: 8, margin: "8px 0 0" }}>
                                 Calculated independently using {activeMember.name}'s own age, medical conditions, and fitness parameters.
                               </p>
                             </div>
@@ -3369,9 +3366,9 @@ function Profile() {
                   {/* SUBTAB 2: MEDICAL & FITNESS */}
                   {familyHealthTab === "medical" && (
                     <div className="member-panel-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                      <div className="info-box" style={{ background: "#f8fafc", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                        <h4 style={{ color: "#0f172a", marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Medical Information</h4>
-                        <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#334155" }}>
+                      <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                        <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Medical Information</h4>
+                        <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
                           <div><strong>Existing Medical Conditions:</strong> {activeMember.chronicConditions || (Array.isArray(activeMember.existingConditions) ? activeMember.existingConditions.join(", ") : "") || "None"}</div>
                           <div><strong>Current Medications:</strong> {activeMember.currentMedicines || "None"}</div>
                           <div><strong>Drug Allergies:</strong> {activeMember.drugAllergies || "None"}</div>
@@ -3384,9 +3381,9 @@ function Profile() {
                         </div>
                       </div>
 
-                      <div className="info-box" style={{ background: "#f8fafc", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                        <h4 style={{ color: "#0f172a", marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Fitness Information</h4>
-                        <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#334155" }}>
+                      <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                        <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Fitness Information</h4>
+                        <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
                           <div><strong>Physical Activity Level:</strong> {activeMember.activityLevel || "Not entered"}</div>
                           <div><strong>Walking Capacity:</strong> {activeMember.walkingCapacity || "Not entered"}</div>
                           <div><strong>Stair Climbing Ability:</strong> {activeMember.stairClimbing || "Not entered"}</div>
@@ -3398,28 +3395,28 @@ function Profile() {
 
                   {/* SUBTAB 3: HEALTH MEASUREMENTS */}
                   {familyHealthTab === "measurements" && (
-                    <div className="info-box" style={{ background: "#f8fafc", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                      <h4 style={{ color: "#0f172a", marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Health Measurements (Vitals & Labs)</h4>
+                    <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                      <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Health Measurements (Vitals & Labs)</h4>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-                        <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                          <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", fontWeight: 700 }}>Blood Pressure</span>
-                          <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{activeMember.bloodPressure || "Not entered"}</span>
+                        <div className="vital-measurement-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                          <span style={{ fontSize: 11, opacity: 0.75, textTransform: "uppercase", display: "block", fontWeight: 700 }}>Blood Pressure</span>
+                          <span style={{ fontSize: 16, fontWeight: 700 }}>{activeMember.bloodPressure || "Not entered"}</span>
                         </div>
-                        <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                          <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", fontWeight: 700 }}>Blood Sugar</span>
-                          <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{activeMember.bloodSugar || "Not entered"}</span>
+                        <div className="vital-measurement-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                          <span style={{ fontSize: 11, opacity: 0.75, textTransform: "uppercase", display: "block", fontWeight: 700 }}>Blood Sugar</span>
+                          <span style={{ fontSize: 16, fontWeight: 700 }}>{activeMember.bloodSugar || "Not entered"}</span>
                         </div>
-                        <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                          <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", fontWeight: 700 }}>Heart Rate</span>
-                          <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{activeMember.heartRate || "Not entered"}</span>
+                        <div className="vital-measurement-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                          <span style={{ fontSize: 11, opacity: 0.75, textTransform: "uppercase", display: "block", fontWeight: 700 }}>Heart Rate</span>
+                          <span style={{ fontSize: 16, fontWeight: 700 }}>{activeMember.heartRate || "Not entered"}</span>
                         </div>
-                        <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                          <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", fontWeight: 700 }}>Oxygen Saturation (SpO2)</span>
-                          <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{activeMember.spo2 || "Not entered"}</span>
+                        <div className="vital-measurement-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                          <span style={{ fontSize: 11, opacity: 0.75, textTransform: "uppercase", display: "block", fontWeight: 700 }}>Oxygen Saturation (SpO2)</span>
+                          <span style={{ fontSize: 16, fontWeight: 700 }}>{activeMember.spo2 || "Not entered"}</span>
                         </div>
-                        <div style={{ background: "#ffffff", padding: 14, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                          <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", fontWeight: 700 }}>Hemoglobin Level</span>
-                          <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{activeMember.hemoglobin || "Not entered"}</span>
+                        <div className="vital-measurement-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #e2e8f0)" }}>
+                          <span style={{ fontSize: 11, opacity: 0.75, textTransform: "uppercase", display: "block", fontWeight: 700 }}>Hemoglobin Level</span>
+                          <span style={{ fontSize: 16, fontWeight: 700 }}>{activeMember.hemoglobin || "Not entered"}</span>
                         </div>
                       </div>
                     </div>

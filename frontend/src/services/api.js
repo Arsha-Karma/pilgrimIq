@@ -256,6 +256,16 @@ export const apiGetAllMedicalReports = async (token = null) => {
   });
 };
 
+// Crowd Prediction API
+export const apiPredictCrowd = async (crowdData, token = null) => {
+  return fetchAPI("/crowd/predict", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(crowdData),
+  });
+};
+
+
 export {
   apiGetBaseCamps,
   apiGetBaseCampById,

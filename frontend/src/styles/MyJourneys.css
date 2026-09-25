@@ -170,3 +170,78 @@
   font-size: 56px;
   margin-bottom: 12px;
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR MY JOURNEYS        */
+/* ========================================== */
+html.pilgrim-dark-theme .my-journeys-page,
+body.pilgrim-dark-mode .my-journeys-page {
+  background-color: #070e20 !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .my-journeys-header,
+body.pilgrim-dark-mode .my-journeys-header {
+  background: #0d1938 !important;
+  border-bottom: 1px solid #27375f !important;
+}
+
+html.pilgrim-dark-theme .journey-item-card,
+body.pilgrim-dark-mode .journey-item-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .journey-item-card:hover,
+body.pilgrim-dark-mode .journey-item-card:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
+}
+
+html.pilgrim-dark-theme .card-info-body h3,
+body.pilgrim-dark-mode .card-info-body h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .card-info-body .loc,
+body.pilgrim-dark-mode .card-info-body .loc {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .meta-row,
+body.pilgrim-dark-mode .meta-row {
+  background-color: #071129 !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .btn-delete,
+body.pilgrim-dark-mode .btn-delete {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fca5a5 !important;
+}
+
+html.pilgrim-dark-theme .btn-delete:hover,
+body.pilgrim-dark-mode .btn-delete:hover {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .empty-journeys-card,
+body.pilgrim-dark-mode .empty-journeys-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .empty-journeys-card h3,
+body.pilgrim-dark-mode .empty-journeys-card h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .empty-journeys-card p,
+body.pilgrim-dark-mode .empty-journeys-card p {
+  color: #94a3b8 !important;
+}
+

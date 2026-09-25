@@ -335,3 +335,107 @@
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR JOURNEY DETAILS    */
+/* ========================================== */
+html.pilgrim-dark-theme .journey-details-page,
+body.pilgrim-dark-mode .journey-details-page {
+  background-color: #070e20 !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .journey-details-hero,
+body.pilgrim-dark-mode .journey-details-hero {
+  background: #0d1938 !important;
+  border-bottom: 1px solid #27375f !important;
+}
+
+html.pilgrim-dark-theme .journey-stats-grid .stat-card,
+body.pilgrim-dark-mode .journey-stats-grid .stat-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .journey-stats-grid .stat-card .label,
+body.pilgrim-dark-mode .journey-stats-grid .stat-card .label {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .journey-stats-grid .stat-card .val,
+body.pilgrim-dark-mode .journey-stats-grid .stat-card .val {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .detail-section-card,
+body.pilgrim-dark-mode .detail-section-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .detail-section-card h3,
+body.pilgrim-dark-mode .detail-section-card h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .detail-section-card .sub-text,
+body.pilgrim-dark-mode .detail-section-card .sub-text {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .center-text-meta h4,
+body.pilgrim-dark-mode .center-text-meta h4 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .center-text-meta .desc,
+body.pilgrim-dark-mode .center-text-meta .desc {
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .meta-pills span,
+body.pilgrim-dark-mode .meta-pills span {
+  background-color: #071129 !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .fam-card-item,
+body.pilgrim-dark-mode .fam-card-item {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .fam-details h5,
+body.pilgrim-dark-mode .fam-details h5 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .fam-details p,
+body.pilgrim-dark-mode .fam-details p {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .no-fam-msg,
+body.pilgrim-dark-mode .no-fam-msg {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .selected-place-item-card,
+body.pilgrim-dark-mode .selected-place-item-card {
+  background-color: #062319 !important;
+  border-color: #14532d !important;
+}
+
+html.pilgrim-dark-theme .selected-place-item-card h4,
+body.pilgrim-dark-mode .selected-place-item-card h4 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .selected-place-item-card p,
+body.pilgrim-dark-mode .selected-place-item-card p {
+  color: #a7f3d0 !important;
+}
+

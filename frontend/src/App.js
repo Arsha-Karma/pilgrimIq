@@ -25,6 +25,7 @@ import JourneyAssistance from "./pages/JourneyAssistance";
 import AIJourneyAssistant from "./pages/AIJourneyAssistant";
 import Settings from "./pages/Settings";
 import Bookings from "./pages/Bookings";
+import TravelAssessment from "./pages/TravelAssessment";
 
 function App() {
   useEffect(() => {
@@ -45,6 +46,8 @@ function App() {
         <Route path="/journey-planner" element={<Navigate to="/centers" replace />} />
         <Route path="/journey-planner/:pilgrimageCenterId" element={<JourneyPlanner />} />
         <Route path="/journey/:journeyId" element={<JourneyDetails />} />
+        <Route path="/travel-assessment" element={<TravelAssessment />} />
+        <Route path="/travel-assessment/:journeyId" element={<TravelAssessment />} />
         <Route path="/journey-assistance" element={<JourneyAssistance />} />
         <Route path="/journey-assistance/:journeyId" element={<JourneyAssistance />} />
         <Route path="/journey-assistant" element={<AIJourneyAssistant />} />

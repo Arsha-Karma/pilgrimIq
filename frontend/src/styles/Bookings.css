@@ -656,3 +656,169 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ========================================== */
+/* DARK MODE OVERRIDES FOR BOOKINGS / RECS    */
+/* ========================================== */
+html.pilgrim-dark-theme .bookings-page,
+body.pilgrim-dark-mode .bookings-page,
+html.pilgrim-dark-theme .bookings-main-content,
+body.pilgrim-dark-mode .bookings-main-content {
+  background-color: #070e20 !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .selected-journey-banner,
+body.pilgrim-dark-mode .selected-journey-banner {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .banner-title-area h2,
+body.pilgrim-dark-mode .banner-title-area h2 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .banner-meta-row,
+body.pilgrim-dark-mode .banner-meta-row,
+html.pilgrim-dark-theme .banner-meta-item,
+body.pilgrim-dark-mode .banner-meta-item {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .btn-change-journey,
+body.pilgrim-dark-mode .btn-change-journey {
+  background-color: #1a294e !important;
+  border-color: #27375f !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .btn-change-journey:hover,
+body.pilgrim-dark-mode .btn-change-journey:hover {
+  background-color: #253b6e !important;
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .journey-select-card,
+body.pilgrim-dark-mode .journey-select-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .journey-select-card:hover,
+body.pilgrim-dark-mode .journey-select-card:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6) !important;
+}
+
+html.pilgrim-dark-theme .journey-card-body h3,
+body.pilgrim-dark-mode .journey-card-body h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .journey-location,
+body.pilgrim-dark-mode .journey-location {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .meta-pill-item,
+body.pilgrim-dark-mode .meta-pill-item {
+  background-color: #071129 !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .journey-card-footer,
+body.pilgrim-dark-mode .journey-card-footer {
+  border-top-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .category-section-title,
+body.pilgrim-dark-mode .category-section-title {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .booking-item-card,
+body.pilgrim-dark-mode .booking-item-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.pilgrim-dark-theme .booking-card-title,
+body.pilgrim-dark-mode .booking-card-title {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .booking-card-category,
+body.pilgrim-dark-mode .booking-card-category {
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .field-label,
+body.pilgrim-dark-mode .field-label {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .field-val,
+body.pilgrim-dark-mode .field-val {
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .facility-tag,
+body.pilgrim-dark-mode .facility-tag {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .empty-bookings-card,
+body.pilgrim-dark-mode .empty-bookings-card,
+html.pilgrim-dark-theme .empty-column-card,
+body.pilgrim-dark-mode .empty-column-card {
+  background-color: #0d1938 !important;
+  border-color: #27375f !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .empty-bookings-card h3,
+body.pilgrim-dark-mode .empty-bookings-card h3 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .empty-bookings-card p,
+body.pilgrim-dark-mode .empty-bookings-card p,
+html.pilgrim-dark-theme .empty-column-card,
+body.pilgrim-dark-mode .empty-column-card {
+  color: #94a3b8 !important;
+}
+
+html.pilgrim-dark-theme .booking-modal-card,
+body.pilgrim-dark-mode .booking-modal-card {
+  background-color: #0d1938 !important;
+  border: 1px solid #27375f !important;
+  color: #f8fafc !important;
+}
+
+html.pilgrim-dark-theme .modal-header,
+body.pilgrim-dark-mode .modal-header,
+html.pilgrim-dark-theme .modal-footer,
+body.pilgrim-dark-mode .modal-footer {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .modal-header h2,
+body.pilgrim-dark-mode .modal-header h2 {
+  color: #ffffff !important;
+}
+
+html.pilgrim-dark-theme .modal-info-block,
+body.pilgrim-dark-mode .modal-info-block {
+  background-color: #071129 !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+

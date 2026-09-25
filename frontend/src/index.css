@@ -34,7 +34,17 @@ select option:checked {
 /* DARK MODE SCOPED TO USER DASHBOARDS ONLY   */
 /* ========================================== */
 html.pilgrim-dark-theme .pilgrim-dashboard-wrapper,
+body.pilgrim-dark-mode .pilgrim-dashboard-wrapper,
 html.pilgrim-dark-theme .pilgrim-settings-wrapper,
+body.pilgrim-dark-mode .pilgrim-settings-wrapper,
+html.pilgrim-dark-theme .my-journeys-page,
+body.pilgrim-dark-mode .my-journeys-page,
+html.pilgrim-dark-theme .bookings-page,
+body.pilgrim-dark-mode .bookings-page,
+html.pilgrim-dark-theme .journey-details-page,
+body.pilgrim-dark-mode .journey-details-page,
+html.pilgrim-dark-theme .journey-planner-page,
+body.pilgrim-dark-mode .journey-planner-page,
 html.pilgrim-dark-theme .my-journeys-container,
 html.pilgrim-dark-theme .journey-assistance-container,
 html.pilgrim-dark-theme .medical-analysis-container,
@@ -75,7 +85,11 @@ html.pilgrim-dark-theme .pilgrim-dashboard-wrapper h4,
 html.pilgrim-dark-theme .pilgrim-settings-wrapper h1,
 html.pilgrim-dark-theme .pilgrim-settings-wrapper h2,
 html.pilgrim-dark-theme .pilgrim-settings-wrapper h3,
-html.pilgrim-dark-theme .pilgrim-settings-wrapper h4 {
+html.pilgrim-dark-theme .pilgrim-settings-wrapper h4,
+body.pilgrim-dark-mode h1,
+body.pilgrim-dark-mode h2,
+body.pilgrim-dark-mode h3,
+body.pilgrim-dark-mode h4 {
   color: #ffffff !important;
 }
 
