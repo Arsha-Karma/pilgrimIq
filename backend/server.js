@@ -41,6 +41,8 @@ app.get("/api/health", (req, res) => {
 
 const baseCampRoutes = require("./routes/baseCampRoutes");
 
+const travelAssessmentRoutes = require("./routes/travelAssessmentRoutes");
+
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/base-camps", baseCampRoutes);
@@ -54,6 +56,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/journey-assistant", journeyAssistantRoutes);
 app.use("/api/crowd", crowdRoutes);
+app.use("/api/travel-assessment", travelAssessmentRoutes);
+
 
 
 // Error Handling Middleware

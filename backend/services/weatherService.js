@@ -57,51 +57,73 @@ const formatTime = (unixSec) => {
 };
 
 /**
- * Calculate Weather Risk (LOW, MODERATE, HIGH) and generate risk reasons.
+ * Calculate Weather Risk (LOW, MODERATE, HIGH) using Heat Index Risk Scale (°C)
+ *
+ * Heat Index Scale:
+ * 🟢 Low Risk (Caution): 27°C to 32°C (Fatigue possible with prolonged exposure)
+ * 🟡 Moderate Risk (Extreme Caution): 33°C to 39°C (Dehydration & heat cramps common during heavy activity)
+ * 🟠 High Risk (Danger): 40°C to 51°C (Heat cramps / severe exhaustion likely; heat stroke threat)
+ * 🔴 Extreme Risk (Extreme Danger): 52°C+ (Heat stroke imminent; immediate medical danger)
  */
 const calculateWeatherRisk = ({ temperature, feelsLike, humidity, windSpeed, rainProbability, condition }) => {
   let score = 0;
   const reasons = [];
   const cond = (condition || "").toLowerCase();
 
-  // Temperature checks
-  if (temperature > 38 || temperature < 5) {
+  const effectiveTemp = feelsLike !== undefined && feelsLike !== null ? feelsLike : temperature;
+
+  // 1. Heat Index Risk Scale (°C)
+  if (effectiveTemp >= 52) {
+    score += 4;
+    reasons.push(`🔴 Extreme Heat Danger (${Math.round(effectiveTemp)}°C Heat Index): Heat stroke imminent with continued outdoor exposure.`);
+  } else if (effectiveTemp >= 40) {
     score += 3;
-    reasons.push(`Extreme temperature (${Math.round(temperature)}°C)`);
-  } else if (temperature > 32 || temperature < 12) {
-    score += 1.5;
-    reasons.push(`High/uncomfortable temperature (${Math.round(temperature)}°C)`);
+    reasons.push(`🟠 High Heat Danger (${Math.round(effectiveTemp)}°C Heat Index): Severe exhaustion and heat stroke threat.`);
+  } else if (effectiveTemp >= 33) {
+    score += 2;
+    reasons.push(`🟡 Moderate Heat Caution (${Math.round(effectiveTemp)}°C Heat Index): Risk of dehydration and heat cramps during heavy activity.`);
+  } else if (effectiveTemp >= 27) {
+    score += 1;
+    reasons.push(`🟢 Low Heat Caution (${Math.round(effectiveTemp)}°C Heat Index): Fatigue and sluggishness possible with prolonged exposure.`);
+  } else if (effectiveTemp < 5) {
+    score += 2;
+    reasons.push(`Freezing cold temperature (${Math.round(effectiveTemp)}°C).`);
   }
 
-  // Rain & Severe weather checks
-  if (rainProbability >= 65 || cond.includes("heavy rain") || cond.includes("thunderstorm") || cond.includes("storm") || cond.includes("snow")) {
+  // 2. Rain & Severe weather checks
+  const isSevereRain = cond.includes("heavy rain") || cond.includes("thunderstorm") || cond.includes("storm") || cond.includes("snow");
+  if (isSevereRain) {
     score += 3;
-    reasons.push(`${rainProbability}% rain probability with potential severe weather`);
-  } else if (rainProbability >= 30 || cond.includes("rain") || cond.includes("drizzle") || cond.includes("shower")) {
+    reasons.push(`Severe Weather Warning: ${condition || "Storm/Heavy Rain"}`);
+  } else if (rainProbability >= 65 || cond.includes("rain") || cond.includes("drizzle") || cond.includes("shower")) {
     score += 1.5;
-    reasons.push(`${rainProbability}% rain probability expected`);
-  }
-
-  // Humidity checks
-  if (humidity > 80) {
-    score += 1.5;
-    reasons.push(`High humidity level (${humidity}%)`);
-  } else if (humidity > 70) {
+    reasons.push(`${rainProbability}% rain probability (${condition || "Rain"})`);
+  } else if (rainProbability >= 30) {
     score += 0.5;
-    reasons.push(`Moderate to high humidity (${humidity}%)`);
+    reasons.push(`${rainProbability}% chance of light precipitation`);
   }
 
-  // Wind speed checks
+  // 3. Humidity checks
+  if (humidity > 80 && effectiveTemp >= 33) {
+    score += 1;
+    reasons.push(`High humidity level (${humidity}%) elevating heat stress.`);
+  } else if (humidity > 85) {
+    score += 0.5;
+    reasons.push(`High relative humidity (${humidity}%)`);
+  }
+
+  // 4. Wind speed checks
   if (windSpeed >= 40) {
     score += 3;
     reasons.push(`Dangerous wind conditions (${windSpeed} km/h)`);
-  } else if (windSpeed >= 20) {
+  } else if (windSpeed >= 25) {
     score += 1;
-    reasons.push(`Stronger wind speeds (${windSpeed} km/h)`);
+    reasons.push(`Strong wind speeds (${windSpeed} km/h)`);
   }
 
+  // 5. Final Weather Risk Determination
   let weatherRisk = "LOW";
-  if (score >= 4 || cond.includes("thunderstorm") || cond.includes("storm")) {
+  if (score >= 3.5 || isSevereRain || effectiveTemp >= 40) {
     weatherRisk = "HIGH";
   } else if (score >= 1.5) {
     weatherRisk = "MODERATE";
