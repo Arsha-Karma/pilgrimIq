@@ -42,6 +42,7 @@ app.get("/api/health", (req, res) => {
 const baseCampRoutes = require("./routes/baseCampRoutes");
 
 const travelAssessmentRoutes = require("./routes/travelAssessmentRoutes");
+const doctorRoutes = require("./routes/doctorRoutes");
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -52,6 +53,7 @@ app.use("/api/journeys", journeyRoutes);
 app.use("/api/nearby-services", nearbyServiceRoutes);
 app.use("/api/medical-reports", medicalReportRoutes);
 app.use("/api/physician/medical-reviews", physicianReviewRoutes);
+app.use("/api/doctor", doctorRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/journey-assistant", journeyAssistantRoutes);

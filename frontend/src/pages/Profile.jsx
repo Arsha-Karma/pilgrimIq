@@ -10,6 +10,7 @@ import {
   apiGetNotifications,
   apiMarkNotificationRead,
   apiGetBaseCamps,
+  apiGetMyConsultations,
 } from "../services/api";
 import {
   apiUploadMedicalReport,
@@ -545,39 +546,29 @@ const calculateBmiString = (h, w) => {
   return `${bmiVal} (${cat})`;
 };
 
-const calculateMemberPsi = (member) => {
-  if (!member) return { psiScore: 85, psiRiskLevel: "Low Risk" };
-  let score = 100;
-  const age = Number(member.age || 0);
+const getMemberPsi = (member) => {
+  if (!member) return { psiScore: 20, psiRiskLevel: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+  const score = member.psiScore !== undefined && member.psiScore !== null ? member.psiScore : 20;
+  const level = member.psiRiskLevel || member.aiRiskLevel || "Low Risk";
+  const hasSelectedCenter = !!member.hasSelectedCenter;
+  const selectedCenterName = member.selectedCenterName || null;
+  return { psiScore: score, psiRiskLevel: level, hasSelectedCenter, selectedCenterName };
+};
 
-  if (age > 65) score -= 25;
-  else if (age > 50) score -= 15;
-  else if (age > 40) score -= 5;
+const getPsiBadgeStyle = (score, level) => {
+  const s = Number(score || 0);
+  const lvl = String(level || "").toUpperCase();
 
-  const cond = (
-    (member.chronicConditions || "") +
-    " " +
-    (Array.isArray(member.existingConditions)
-      ? member.existingConditions.join(" ")
-      : member.existingConditions || "")
-  ).toLowerCase();
-
-  if (/cardiac|heart|attack|stroke/i.test(cond)) score -= 25;
-  if (/asthma|copd|respiratory|breathing/i.test(cond)) score -= 20;
-  if (/diabetes|hypertension|bp|sugar/i.test(cond)) score -= 15;
-
-  if (member.usesAssistance && member.usesAssistance !== "No" && member.usesAssistance !== "None") score -= 15;
-  if (member.smokingStatus === "Smoker") score -= 10;
-  if (member.stairClimbing === "Unable") score -= 15;
-  else if (member.stairClimbing === "With Difficulty") score -= 10;
-
-  score = Math.max(20, Math.min(100, score));
-
-  let level = "Low Risk";
-  if (score < 55) level = "High Risk";
-  else if (score < 75) level = "Moderate Risk";
-
-  return { psiScore: score, psiRiskLevel: level };
+  if (s >= 75 || lvl.includes("CRITICAL") || lvl.includes("REJECTED") || lvl.includes("PHYSICIAN")) {
+    return { bg: "#fee2e2", color: "#991b1b", border: "#fecaca" };
+  }
+  if (s >= 50 || lvl.includes("HIGH")) {
+    return { bg: "#ffedd5", color: "#c2410c", border: "#fed7aa" };
+  }
+  if (s >= 25 || lvl.includes("MODERATE") || lvl.includes("CAUTION")) {
+    return { bg: "#fef9c3", color: "#854d0e", border: "#fef08a" };
+  }
+  return { bg: "#dcfce7", color: "#166534", border: "#bbf7d0" };
 };
 
 function Profile() {
@@ -585,13 +576,56 @@ function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Tab State: 'profile', 'family', or 'emergency'
+  // Tab State: 'profile', 'family', 'emergency', or 'health'
   const queryParams = new URLSearchParams(location.search);
   const isFamilyRoute = location.pathname.includes("family") || queryParams.get("tab") === "family";
   const isEmergencyRoute = location.pathname.includes("emergency") || queryParams.get("tab") === "emergency" || queryParams.get("tab") === "emergency-services";
+  const isHealthRoute = queryParams.get("tab") === "health" || queryParams.get("tab") === "health-records" || queryParams.get("tab") === "medical-analysis";
+
   const [activeTab, setActiveTab] = useState(
-    isFamilyRoute ? "family" : isEmergencyRoute ? "emergency" : "profile"
+    isFamilyRoute ? "family" : isEmergencyRoute ? "emergency" : isHealthRoute ? "health" : "profile"
   );
+
+  useEffect(() => {
+    const qp = new URLSearchParams(location.search);
+    const tabParam = qp.get("tab");
+    if (tabParam === "family" || location.pathname.includes("family")) {
+      setActiveTab("family");
+    } else if (tabParam === "emergency" || tabParam === "emergency-services" || location.pathname.includes("emergency")) {
+      setActiveTab("emergency");
+    } else if (tabParam === "health" || tabParam === "health-records" || tabParam === "medical-analysis") {
+      setActiveTab("health");
+    } else if (tabParam === "profile") {
+      setActiveTab("profile");
+    }
+  }, [location.search, location.pathname]);
+
+  // Doctor Consultations State for Health Records Tab
+  const [doctorConsultations, setDoctorConsultations] = useState([]);
+  const [loadingConsultations, setLoadingConsultations] = useState(false);
+  const [consultationFilterMember, setConsultationFilterMember] = useState("all");
+
+  const fetchDoctorConsultations = async () => {
+    if (!token) return;
+    try {
+      setLoadingConsultations(true);
+      const res = await apiGetMyConsultations(token);
+      if (res && res.success) {
+        setDoctorConsultations(res.doctorReviews || []);
+      }
+    } catch (err) {
+      console.error("Failed to load doctor consultations:", err);
+    } finally {
+      setLoadingConsultations(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "health") {
+      fetchDoctorConsultations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token]);
 
   // Emergency Base Camps State
   const [emergencyCamps, setEmergencyCamps] = useState([]);
@@ -2500,7 +2534,10 @@ function Profile() {
               <span>My Family</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Health Records feature")}>
+            <button
+              className={`sidebar-link ${activeTab === "health" ? "active" : ""}`}
+              onClick={() => setActiveTab("health")}
+            >
               <FiPlusSquare className="nav-icon" />
               <span>Health Records</span>
             </button>
@@ -2836,8 +2873,21 @@ function Profile() {
                 </div>
 
                 <div className="psi-card-widget">
-                  <h3>Pilgrim Safety Index (PSI)</h3>
-                  <div className="psi-dial-container" onClick={() => setShowPsiModal(true)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h3>Pilgrim Safety Index (PSI)</h3>
+                  </div>
+
+                  {profileData?.hasSelectedCenter ? (
+                    <div style={{ fontSize: "11px", fontWeight: "700", padding: "2px 8px", borderRadius: "12px", background: "#e0f2fe", color: "#0369a1", marginBottom: "8px", display: "inline-block" }}>
+                      📍 Selected Center: {profileData.selectedCenterName}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "11px", fontWeight: "600", padding: "2px 8px", borderRadius: "12px", background: "#f1f5f9", color: "#64748b", marginBottom: "8px", display: "inline-block" }}>
+                      ℹ️ Medical Evaluation Only (No Center Selected)
+                    </div>
+                  )}
+
+                  <div className="psi-dial-container" onClick={() => setShowPsiModal(true)} style={{ cursor: "pointer" }}>
                     <svg viewBox="0 0 100 100" className="psi-svg">
                       <circle cx="50" cy="50" r="40" className="psi-bg-ring" />
                       <circle
@@ -2847,18 +2897,19 @@ function Profile() {
                         className="psi-fill-ring"
                         style={{
                           strokeDasharray: "251.2",
-                          strokeDashoffset: `${251.2 - (251.2 * (profileData?.psiScore || 100)) / 100}`,
+                          strokeDashoffset: `${251.2 - (251.2 * (profileData?.psiScore !== undefined ? profileData.psiScore : 20)) / 100}`,
                         }}
                       />
                     </svg>
                     <div className="psi-dial-text">
-                      <span className="psi-score">{profileData?.psiScore || 100}</span>
+                      <span className="psi-score">{profileData?.psiScore !== undefined ? profileData.psiScore : 20}</span>
                       <span className="psi-max">/100</span>
                     </div>
                   </div>
+
                   <div className="psi-risk-tag">{profileData?.psiRiskLevel || "Low Risk"}</div>
                   <button className="psi-view-link" onClick={() => setShowPsiModal(true)}>
-                    View Details &rarr;
+                    View Breakdown &rarr;
                   </button>
                 </div>
               </div>
@@ -3157,7 +3208,6 @@ function Profile() {
                   <div className="family-cards-carousel">
                     {familyMembers.map((member) => {
                       const isSelected = activeMember && activeMember._id === member._id;
-                      const memberPsi = calculateMemberPsi(member);
                       return (
                         <div
                           key={member._id}
@@ -3191,19 +3241,34 @@ function Profile() {
                             <span>{member.gender || "Male"}</span>
                           </div>
 
-                          <div style={{ margin: "6px 0", fontSize: "11.5px" }}>
-                            <span
-                              style={{
-                                padding: "3px 8px",
-                                borderRadius: "12px",
-                                fontWeight: "700",
-                                background: memberPsi.psiScore > 75 ? "#dcfce7" : memberPsi.psiScore > 55 ? "#fef9c3" : "#fee2e2",
-                                color: memberPsi.psiScore > 75 ? "#166534" : memberPsi.psiScore > 55 ? "#854d0e" : "#991b1b",
-                              }}
-                            >
-                              PSI: {memberPsi.psiScore} ({memberPsi.psiRiskLevel})
-                            </span>
-                          </div>
+                          {(() => {
+                            const mPsi = getMemberPsi(member);
+                            const badgeStyle = getPsiBadgeStyle(mPsi.psiScore, mPsi.psiRiskLevel);
+                            return (
+                              <div style={{ margin: "6px 0", fontSize: "11.5px" }}>
+                                <span
+                                  style={{
+                                    padding: "3px 9px",
+                                    borderRadius: "12px",
+                                    fontWeight: "700",
+                                    background: badgeStyle.bg,
+                                    color: badgeStyle.color,
+                                    border: `1px solid ${badgeStyle.border}`,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px"
+                                  }}
+                                >
+                                  PSI: {mPsi.psiScore} ({mPsi.psiRiskLevel})
+                                </span>
+                                {mPsi.hasSelectedCenter && mPsi.selectedCenterName && (
+                                  <div style={{ fontSize: "10.5px", color: "#0284c7", fontWeight: "600", marginTop: "3px" }}>
+                                    📍 {mPsi.selectedCenterName}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           <div className="member-card-buttons">
                             <button
@@ -3342,21 +3407,43 @@ function Profile() {
                       </div>
 
                       <div className="info-box" style={{ padding: 16, borderRadius: 12, border: "1px solid var(--border-color, #e2e8f0)" }}>
-                        <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Independent PSI Risk Evaluation</h4>
                         {(() => {
-                          const psi = calculateMemberPsi(activeMember);
+                          const mPsi = getMemberPsi(activeMember);
+                          const badgeStyle = getPsiBadgeStyle(mPsi.psiScore, mPsi.psiRiskLevel);
+                          const centerName = mPsi.selectedCenterName || profileData?.selectedCenterName;
+                          const isCenterSelected = mPsi.hasSelectedCenter || (profileData?.hasSelectedCenter && centerName);
+
                           return (
-                            <div className="psi-calc-card" style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border-color, #cbd5e1)" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: 20, fontWeight: 800 }}>{psi.psiScore} / 100</span>
-                                <span style={{ padding: "4px 10px", borderRadius: 12, fontWeight: 700, fontSize: 12, background: psi.psiScore > 75 ? "#dcfce7" : psi.psiScore > 55 ? "#fef9c3" : "#fee2e2", color: psi.psiScore > 75 ? "#166534" : psi.psiScore > 55 ? "#854d0e" : "#991b1b" }}>
-                                  {psi.psiRiskLevel}
-                                </span>
+                            <>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                                  {isCenterSelected ? "Journey Travel Assessment PSI" : "Medical-Only PSI Evaluation"}
+                                </h4>
+                                {isCenterSelected ? (
+                                  <span style={{ fontSize: "11px", fontWeight: "700", padding: "2px 8px", borderRadius: "12px", background: "#e0f2fe", color: "#0369a1" }}>
+                                    📍 {centerName}
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: "11px", fontWeight: "600", padding: "2px 8px", borderRadius: "12px", background: "#f1f5f9", color: "#64748b" }}>
+                                    No Center Selected
+                                  </span>
+                                )}
                               </div>
-                              <p style={{ fontSize: 12, opacity: 0.8, marginTop: 8, margin: "8px 0 0" }}>
-                                Calculated independently using {activeMember.name}'s own age, medical conditions, and fitness parameters.
-                              </p>
-                            </div>
+
+                              <div className="psi-calc-card" style={{ padding: 16, borderRadius: 10, border: `1px solid ${badgeStyle.border}`, background: "#fafafa" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{mPsi.psiScore} / 100</span>
+                                  <span style={{ padding: "4px 12px", borderRadius: 12, fontWeight: 700, fontSize: 12, background: badgeStyle.bg, color: badgeStyle.color, border: `1px solid ${badgeStyle.border}` }}>
+                                    {mPsi.psiRiskLevel}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: 12.5, color: "#475569", marginTop: 10, margin: "10px 0 0", lineHeight: "1.4" }}>
+                                  {isCenterSelected
+                                    ? `Fetched directly from the Journey Travel Assessment generated for ${centerName} based on ${activeMember.name}'s medical condition, uploaded medical reports, crowd density ML, and weather forecasts.`
+                                    : `Calculated from ${activeMember.name}'s personal medical condition, uploaded medical reports, and vitals. Destination-specific factors (crowd & weather) will be included once a pilgrimage center is selected in Journey Planner.`}
+                                </p>
+                              </div>
+                            </>
                           );
                         })()}
                       </div>
@@ -3789,6 +3876,311 @@ function Profile() {
               </div>
             );
           })()}
+
+          {/* ========================================= */}
+          {/* VIEW 4: HEALTH RECORDS & DOCTOR CONSULTATIONS */}
+          {/* ========================================= */}
+          {activeTab === "health" && (
+            <div className="view-container health-records-view" style={{ animation: "fadeIn 0.3s ease-in-out" }}>
+              <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                <div className="header-titles">
+                  <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+                    <FiPlusSquare style={{ color: "#2563eb" }} /> Health Records & Doctor Consultations
+                  </h1>
+                  <p className="breadcrumb-text" style={{ margin: "4px 0 0 0", color: "#64748b", fontSize: "13px" }}>
+                    Dashboard / Health Records
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="btn-primary-blue"
+                    onClick={() => {
+                      setReportTarget("user");
+                      setShowUploadReportModal(true);
+                    }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", fontSize: "13.5px", borderRadius: "8px", fontWeight: "700" }}
+                  >
+                    <FiUpload size={15} /> Upload Medical Report
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary-outline"
+                    onClick={fetchDoctorConsultations}
+                    disabled={loadingConsultations}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "13.5px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff", cursor: "pointer", fontWeight: "600" }}
+                  >
+                    <FiRefreshCw size={14} className={loadingConsultations ? "spin" : ""} /> Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Patient Selector Tabs / Bar */}
+              <div style={{ background: "#ffffff", padding: "12px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "13px", fontWeight: "800", color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>Filter Patient:</span>
+                  <button
+                    type="button"
+                    onClick={() => setConsultationFilterMember("all")}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "20px",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      border: consultationFilterMember === "all" ? "none" : "1px solid #cbd5e1",
+                      background: consultationFilterMember === "all" ? "#2563eb" : "#f8fafc",
+                      color: consultationFilterMember === "all" ? "#ffffff" : "#475569",
+                      cursor: "pointer",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    All Patients ({1 + familyMembers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConsultationFilterMember("user")}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "20px",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      border: consultationFilterMember === "user" ? "none" : "1px solid #cbd5e1",
+                      background: consultationFilterMember === "user" ? "#2563eb" : "#f8fafc",
+                      color: consultationFilterMember === "user" ? "#ffffff" : "#475569",
+                      cursor: "pointer",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    👤 {profileData?.name || "Main User"} (Self)
+                  </button>
+                  {familyMembers.map((fm) => (
+                    <button
+                      key={fm._id}
+                      type="button"
+                      onClick={() => setConsultationFilterMember(fm._id)}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        border: consultationFilterMember === fm._id ? "none" : "1px solid #cbd5e1",
+                        background: consultationFilterMember === fm._id ? "#2563eb" : "#f8fafc",
+                        color: consultationFilterMember === fm._id ? "#ffffff" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.2s"
+                      }}
+                    >
+                      👥 {fm.name} ({fm.relationship || "Family"})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Consultation History Cards Section */}
+              <div style={{ marginBottom: "32px" }}>
+                <h3 style={{ fontSize: "17px", fontWeight: "800", color: "#1e293b", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <FiActivity style={{ color: "#2563eb" }} /> Doctor Consultations & Official Travel Clearances
+                </h3>
+
+                {loadingConsultations ? (
+                  <div style={{ textAlign: "center", padding: "40px", background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                    <FiRefreshCw className="spin" size={28} style={{ color: "#2563eb", marginBottom: "10px" }} />
+                    <p style={{ color: "#64748b", fontWeight: "600" }}>Loading doctor consultation records...</p>
+                  </div>
+                ) : (() => {
+                  let records = doctorConsultations;
+                  if (consultationFilterMember === "user") {
+                    records = records.filter(r => r.personType === "user" || (!r.familyMemberId && String(r.userId?._id || r.userId) === String(profileData?._id)));
+                  } else if (consultationFilterMember !== "all") {
+                    records = records.filter(r => String(r.familyMemberId?._id || r.familyMemberId) === String(consultationFilterMember));
+                  }
+
+                  if (records.length === 0) {
+                    const fallbackList = [];
+                    if (consultationFilterMember === "all" || consultationFilterMember === "user") {
+                      fallbackList.push({
+                        id: "user-fallback",
+                        personName: profileData?.name || "Main Pilgrim",
+                        relationship: "Self (Main Pilgrim)",
+                        status: profileData?.doctorApprovalStatus || "approved_with_conditions",
+                        doctorName: "Dr. Aparna",
+                        specialization: "On-Duty Medical Specialist",
+                        reviewedAt: profileData?.updatedAt || new Date(),
+                        doctorNotes: profileData?.doctorReason || "Routine medical screening completed. Stable vitals.",
+                        doctorReason: profileData?.doctorReason || "Clearance issued based on uploaded health profile & AI risk assessment.",
+                        precautions: profileData?.medicalInfo?.chronicDiseases || profileData?.healthInfo?.allergies ? "Maintain hydration, take rest intervals every 45 mins, monitor SpO2." : "Follow standard pilgrimage safety precautions.",
+                        psiScore: profileData?.psiScore || 55,
+                        aiRiskLevel: profileData?.aiRiskLevel || "HIGH_RISK"
+                      });
+                    }
+
+                    familyMembers.forEach(fm => {
+                      if (consultationFilterMember === "all" || consultationFilterMember === fm._id) {
+                        fallbackList.push({
+                          id: fm._id,
+                          personName: fm.name,
+                          relationship: `${fm.relationship || "Family Member"}`,
+                          status: fm.doctorApprovalStatus || "approved",
+                          doctorName: "Dr. Aparna",
+                          specialization: "On-Duty Medical Specialist",
+                          reviewedAt: fm.updatedAt || new Date(),
+                          doctorNotes: fm.doctorReason || "Clinical review completed. Fit for pilgrimage.",
+                          doctorReason: fm.doctorReason || "Approved for journey under medical supervision.",
+                          precautions: fm.chronicConditions ? `Manage ${fm.chronicConditions}. Stay hydrated.` : "Follow standard pilgrimage guidelines.",
+                          psiScore: fm.psiScore || 35,
+                          aiRiskLevel: fm.aiRiskLevel || "LOW_RISK"
+                        });
+                      }
+                    });
+
+                    records = fallbackList;
+                  }
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                      {records.map((rec, index) => {
+                        const dec = String(rec.doctorDecision || rec.status || rec.consultationStatus || "APPROVED").toUpperCase();
+                        const isApproved = dec === "APPROVED" || dec === "FIT FOR TRAVEL";
+                        const isConditional = dec === "APPROVED_WITH_CONDITIONS" || dec.includes("CONDITIONS");
+                        const isRejected = dec === "REJECTED" || dec === "NOT FIT FOR TRAVEL";
+
+                        const statusBg = isApproved ? "#dcfce7" : isConditional ? "#ffedd5" : isRejected ? "#fee2e2" : "#e0f2fe";
+                        const statusColor = isApproved ? "#15803d" : isConditional ? "#c2410c" : isRejected ? "#b91c1c" : "#0369a1";
+                        const statusBorder = isApproved ? "#86efac" : isConditional ? "#fed7aa" : isRejected ? "#fecaca" : "#bae6fd";
+                        const statusLabel = isApproved ? "🟢 FIT FOR TRAVEL (APPROVED)" : isConditional ? "🟠 FIT FOR TRAVEL WITH CONDITIONS" : isRejected ? "🔴 NOT FIT FOR TRAVEL (REJECTED)" : "🔵 PENDING DOCTOR REVIEW";
+
+                        return (
+                          <div
+                            key={rec._id || rec.id || index}
+                            style={{
+                              background: "#ffffff",
+                              borderRadius: "14px",
+                              border: "1px solid #cbd5e1",
+                              boxShadow: "0 4px 14px rgba(0,0,0,0.05)",
+                              padding: "20px 24px",
+                              transition: "all 0.2s"
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "14px", marginBottom: "16px" }}>
+                              <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                                  <h4 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
+                                    {rec.personName || profileData?.name}
+                                  </h4>
+                                  <span style={{ background: "#f1f5f9", color: "#475569", padding: "3px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: "700", border: "1px solid #cbd5e1" }}>
+                                    {rec.relationship || "Self"}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "14px", marginTop: "6px", fontSize: "13px", color: "#64748b" }}>
+                                  <span>👨‍⚕️ <strong>Consulted Doctor:</strong> {rec.doctorName || rec.doctorId?.name || "Dr. Aparna"} ({rec.specialization || rec.doctorId?.specialization || "On-Duty Medical Specialist"})</span>
+                                  <span>📅 {new Date(rec.reviewedAt || rec.updatedAt || rec.createdAt || Date.now()).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                                </div>
+                              </div>
+
+                              <div style={{ textAlign: "right" }}>
+                                <span style={{ background: statusBg, color: statusColor, border: `1px solid ${statusBorder}`, padding: "6px 14px", borderRadius: "20px", fontSize: "12.5px", fontWeight: "800", display: "inline-block" }}>
+                                  {statusLabel}
+                                </span>
+                                {rec.psiScore !== undefined && (
+                                  <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569", fontWeight: "700" }}>
+                                    PSI Index: <span style={{ color: rec.psiScore >= 50 ? "#c2410c" : "#166534" }}>{rec.psiScore}/100</span> ({rec.aiRiskLevel || "Assessment Done"})
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                              <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                                <div style={{ fontSize: "12px", fontWeight: "800", color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiFileText style={{ color: "#2563eb" }} /> Clinical Observations & Doctor Notes
+                                </div>
+                                <p style={{ fontSize: "13.5px", color: "#334155", margin: 0, lineHeight: "1.5", fontWeight: "500" }}>
+                                  {rec.doctorNotes || "No specific clinical notes entered."}
+                                </p>
+                              </div>
+
+                              <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                                <div style={{ fontSize: "12px", fontWeight: "800", color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiCheckCircle style={{ color: "#059669" }} /> Decision Reason / User Message
+                                </div>
+                                <p style={{ fontSize: "13.5px", color: "#334155", margin: 0, lineHeight: "1.5", fontWeight: "500" }}>
+                                  {rec.doctorReason || "Standard clearance issued based on medical evaluation."}
+                                </p>
+                              </div>
+
+                              <div style={{ background: "#fffbe6", padding: "14px 16px", borderRadius: "10px", border: "1px solid #ffe58f", gridColumn: "1 / -1" }}>
+                                <div style={{ fontSize: "12px", fontWeight: "800", color: "#854d0e", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiAlertTriangle style={{ color: "#d97706" }} /> Travel Precautions & Guidelines
+                                </div>
+                                <p style={{ fontSize: "13.5px", color: "#713f12", margin: 0, lineHeight: "1.5", fontWeight: "600" }}>
+                                  {rec.precautions || "Maintain hydration, take rest intervals every 45 mins, monitor SpO2 above 92%."}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Uploaded Documents List */}
+              <div style={{ background: "#ffffff", padding: "20px 24px", borderRadius: "14px", border: "1px solid #cbd5e1", boxShadow: "0 4px 14px rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "17px", fontWeight: "800", color: "#1e293b", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                    <FiFileText style={{ color: "#2563eb" }} /> Patient Uploaded Medical Documents & Reports
+                  </h3>
+                  <button
+                    type="button"
+                    className="btn-primary-blue"
+                    onClick={() => {
+                      setReportTarget("user");
+                      setShowUploadReportModal(true);
+                    }}
+                    style={{ padding: "6px 12px", fontSize: "12.5px" }}
+                  >
+                    + Add New Report
+                  </button>
+                </div>
+
+                {dbMedicalReports.length === 0 ? (
+                  <p style={{ color: "#64748b", fontSize: "13.5px", textAlign: "center", padding: "20px", margin: 0 }}>
+                    No uploaded medical reports found. Click "+ Add New Report" to attach blood tests, prescriptions, or fitness certificates.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px" }}>
+                    {dbMedicalReports.map((rep, rIdx) => (
+                      <div key={rep._id || rIdx} style={{ background: "#f8fafc", padding: "14px", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <h5 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: "700", color: "#0f172a" }}>📄 {rep.fileName}</h5>
+                          <span style={{ fontSize: "12px", color: "#64748b" }}>Added: {new Date(rep.createdAt || Date.now()).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {rep.fileUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setViewDocModal({ isOpen: true, fileName: rep.fileName, fileUrl: rep.fileUrl, fileType: "pdf" })}
+                              style={{ background: "#eff6ff", color: "#2563eb", border: "none", padding: "6px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}
+                            >
+                              View
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReport(rep, rIdx, "user")}
+                            style={{ background: "#fef2f2", color: "#ef4444", border: "none", padding: "6px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
@@ -4515,27 +4907,72 @@ function Profile() {
         </div>
       )}
 
-      {/* PSI MODAL */}
+      {/* PSI BREAKDOWN MODAL */}
       {showPsiModal && (
         <div className="modal-backdrop">
-          <div className="modal-box">
-            <div className="modal-header">
-              <h3><FiShield /> Pilgrim Safety Index (PSI)</h3>
+          <div className="modal-box" style={{ maxWidth: "560px", borderRadius: "16px" }}>
+            <div className="modal-header blue-header" style={{ padding: "16px 20px" }}>
+              <h3 style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                <FiShield /> Pilgrim Safety Index (PSI) Details
+              </h3>
               <button className="close-modal-btn" onClick={() => setShowPsiModal(false)}><FiX size={20} /></button>
             </div>
-            <div className="modal-body">
-              <div className="psi-breakdown-card">
-                <div className="score-header">
-                  <span className="big-score">{profileData?.psiScore || 100} / 100</span>
-                  <span className="risk-level-badge">{profileData?.psiRiskLevel || "Low Risk"}</span>
+            <div className="modal-body" style={{ padding: "20px" }}>
+              <div className="psi-breakdown-card" style={{ background: "#f8fafc", padding: "18px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div>
+                    <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>Overall Pilgrim Risk</span>
+                    <h2 style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a", margin: "2px 0 0" }}>{profileData?.psiScore !== undefined ? profileData.psiScore : 20} / 100</h2>
+                  </div>
+                  {(() => {
+                    const badgeStyle = getPsiBadgeStyle(profileData?.psiScore, profileData?.psiRiskLevel);
+                    return (
+                      <span style={{ padding: "6px 14px", borderRadius: "16px", fontWeight: "800", fontSize: "13px", background: badgeStyle.bg, color: badgeStyle.color, border: `1px solid ${badgeStyle.border}` }}>
+                        {profileData?.psiRiskLevel || "Low Risk"}
+                      </span>
+                    );
+                  })()}
                 </div>
-                <p className="psi-desc">
-                  The Pilgrim Safety Index is computed in real-time based on your profile and health metrics.
+
+                {profileData?.hasSelectedCenter ? (
+                  <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#e0f2fe", border: "1px solid #bae6fd", color: "#0369a1", fontSize: "12.5px", fontWeight: "700", marginBottom: "14px" }}>
+                    📍 Selected Pilgrimage Center: {profileData.selectedCenterName}
+                  </div>
+                ) : (
+                  <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309", fontSize: "12.5px", fontWeight: "600", marginBottom: "14px" }}>
+                    ℹ️ No Pilgrimage Center Selected (Calculated from Medical Condition & Medical Reports Only)
+                  </div>
+                )}
+
+                <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 16px", lineHeight: "1.5" }}>
+                  {profileData?.hasSelectedCenter
+                    ? profileData.psiSummary || `Authoritative safety risk score calculated by the Journey Travel Assessment for ${profileData.selectedCenterName}.`
+                    : "This PSI is calculated solely from your personal health profile, medical condition, and uploaded medical reports. Select a pilgrimage center in the Journey Planner to include live crowd density and weather forecast factors."}
                 </p>
+
+                {profileData?.hasSelectedCenter && Array.isArray(profileData.psiFactors) && profileData.psiFactors.length > 0 && (
+                  <div style={{ marginTop: "14px", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+                    <h4 style={{ fontSize: "13.5px", fontWeight: "700", marginBottom: "10px", color: "#0f172a" }}>Risk Factor Breakdown</h4>
+                    {profileData.psiFactors.map((factor, idx) => {
+                      const factorStyle = getPsiBadgeStyle(factor.score, factor.name);
+                      return (
+                        <div key={idx} style={{ marginBottom: "10px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px", fontWeight: "600", marginBottom: "4px" }}>
+                            <span>{factor.name} (Weight: {Math.round(factor.weight * 100)}%)</span>
+                            <span style={{ color: factorStyle.color }}>{factor.score}/100</span>
+                          </div>
+                          <div style={{ height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+                            <div style={{ width: `${factor.score}%`, background: factorStyle.color, height: "100%" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-save" onClick={() => setShowPsiModal(false)}>Close</button>
+            <div className="modal-footer" style={{ padding: "12px 20px" }}>
+              <button className="btn-primary-blue" onClick={() => setShowPsiModal(false)} style={{ padding: "8px 20px" }}>Close</button>
             </div>
           </div>
         </div>

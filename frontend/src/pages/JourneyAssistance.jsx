@@ -50,6 +50,7 @@ function JourneyAssistance() {
   // Demo Journey Mode State
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isDemoPlaying, setIsDemoPlaying] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [demoIndex, setDemoIndex] = useState(0);
   const demoTimerRef = useRef(null);
 
@@ -207,6 +208,7 @@ function JourneyAssistance() {
         watchIdRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDemoMode, journeyStatus, journey, totalDistance, token]);
 
   // Demo Mode Movement Simulation Loop
@@ -254,6 +256,7 @@ function JourneyAssistance() {
     return () => {
       if (demoTimerRef.current) clearInterval(demoTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDemoMode, isDemoPlaying, routeCoordinates, totalDistance]);
 
   const handlePauseJourney = async () => {

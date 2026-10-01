@@ -44,7 +44,7 @@ function UserSidebar({ activeTab = "" }) {
         <button
           type="button"
           className={`sidebar-link ${activeTab === "health" || activeTab === "medical-analysis" ? "active" : ""}`}
-          onClick={() => navigate("/profile")}
+          onClick={() => navigate("/profile?tab=health")}
         >
           <FiPlusSquare className="nav-icon" />
           <span>Health Records</span>

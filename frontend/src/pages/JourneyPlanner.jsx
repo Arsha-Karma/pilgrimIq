@@ -5,7 +5,7 @@ import UserSidebar from "../components/UserSidebar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetPilgrimageCenterById, apiGetProfile } from "../services/api";
-import { apiCreateJourney, apiStartJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
+import { apiCreateJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
 import { apiGetWeatherByCenterId } from "../services/weatherService";
 import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyPlanner.css";
@@ -616,9 +616,8 @@ function JourneyPlanner() {
 
       const result = await apiCreateJourney(payload, token);
       if (result && result.journey) {
-        // Start the journey record and navigate directly to Journey Assistance
-        await apiStartJourney(result.journey._id, token);
-        navigate("/journey-assistance");
+        // Navigate directly to Travel Readiness Assessment page
+        navigate(`/travel-assessment/${result.journey._id}`);
       } else {
         throw new Error("Failed to create journey record");
       }
@@ -953,9 +952,9 @@ function JourneyPlanner() {
                               isRejected: true,
                               doctorReason: userProfile?.doctorReason || "",
                             })}
-                            style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12.5px" }}
+                            style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "13px" }}
                           >
-                            Travel in Your Own Responsibility →
+                            ⚠️ Travel on Your Own Responsibility →
                           </button>
                         ) : null}
                       </div>
@@ -1029,9 +1028,9 @@ function JourneyPlanner() {
                                 isRejected: true,
                                 doctorReason: fm.doctorReason || "",
                               })}
-                              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
+                              style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "12.5px" }}
                             >
-                              Main User: Accept Responsibility for {fm.name}
+                              ⚠️ Travel on Your Own Responsibility ({fm.name}) →
                             </button>
                           ) : (
                             <button
@@ -1628,7 +1627,7 @@ function JourneyPlanner() {
                 onClick={handleConfirmSaveJourney}
                 disabled={submitting}
               >
-                {submitting ? "Starting Journey..." : "Confirm & Start Journey 🚀"}
+                {submitting ? "Confirming Journey..." : "Confirm Journey"}
               </button>
             </div>
           </div>

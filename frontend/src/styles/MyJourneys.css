@@ -84,7 +84,8 @@
   object-fit: cover;
 }
 
-.status-pill {
+.my-journeys-container .status-pill,
+.journey-card .status-pill {
   position: absolute;
   top: 12px;
   right: 12px;

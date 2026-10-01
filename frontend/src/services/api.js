@@ -265,6 +265,15 @@ export const apiPredictCrowd = async (crowdData, token = null) => {
   });
 };
 
+// Doctor Consultations API for Pilgrim Profile
+export const apiGetMyConsultations = async (token) => {
+  return fetchAPI("/physician/my-consultations", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+
 
 export {
   apiGetBaseCamps,

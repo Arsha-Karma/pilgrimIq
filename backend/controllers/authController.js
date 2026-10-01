@@ -4,6 +4,7 @@ const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
 const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
+const { getLatestUserAndFamilyPsi } = require("../services/psiService");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -301,8 +302,31 @@ const getUserProfile = async (req, res, next) => {
       const familyMembers = await FamilyMember.find({ user: user._id }).sort({ createdAt: -1 });
 
       const completionPercentage = calculateProfileCompletion(user);
-      const psi = calculatePsiRisk(user);
       const isCompleted = user.profileCompleted || completionPercentage > 0;
+
+      // Fetch latest valid PSI from Travel Assessment (or Medical-only fallback)
+      let psiData = { hasSelectedCenter: false, selectedCenterName: null, mainUserPsi: { score: 20, level: "Low Risk" }, familyMembersPsiMap: {} };
+      try {
+        psiData = await getLatestUserAndFamilyPsi(user._id);
+      } catch (err) {
+        console.warn("Failed to get latest PSI for profile:", err.message);
+      }
+
+      const mainUserPsi = psiData.mainUserPsi || { score: 20, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+      const familyMembersPsiMap = psiData.familyMembersPsiMap || {};
+
+      const formattedFamilyMembers = familyMembers.map((fm) => {
+        const fmId = fm._id.toString();
+        const fmPsi = familyMembersPsiMap[fmId] || { score: 20, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+        return {
+          ...fm.toObject(),
+          psiScore: fmPsi.score,
+          psiRiskLevel: fmPsi.level,
+          aiRiskLevel: fmPsi.level === "LOW RISK" ? "LOW_RISK" : fmPsi.level === "HIGH RISK" ? "HIGH_RISK" : fmPsi.level === "CRITICAL RISK" ? "CRITICAL_RISK" : "MODERATE_RISK",
+          hasSelectedCenter: fmPsi.hasSelectedCenter,
+          selectedCenterName: fmPsi.selectedCenterName,
+        };
+      });
 
       res.json({
         _id: user._id,
@@ -327,8 +351,12 @@ const getUserProfile = async (req, res, next) => {
         isVerified: user.isVerified !== undefined ? user.isVerified : true,
         profileCompleted: isCompleted,
         completionPercentage: completionPercentage,
-        psiScore: user.psiScore || psi.psiScore,
-        psiRiskLevel: user.psiRiskLevel || psi.psiRiskLevel,
+        psiScore: mainUserPsi.score,
+        psiRiskLevel: mainUserPsi.level,
+        hasSelectedCenter: mainUserPsi.hasSelectedCenter,
+        selectedCenterName: mainUserPsi.selectedCenterName,
+        psiFactors: mainUserPsi.factors || [],
+        psiSummary: mainUserPsi.assessmentSummary || "",
         healthInfo: user.healthInfo || {
           chronicDiseases: "",
           allergies: "",
@@ -392,7 +420,7 @@ const getUserProfile = async (req, res, next) => {
           bookings: 0,
           feedbackRating: 0,
         },
-        familyMembers: familyMembers || [],
+        familyMembers: formattedFamilyMembers,
         createdAt: user.createdAt,
       });
     } else {

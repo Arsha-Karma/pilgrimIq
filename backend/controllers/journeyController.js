@@ -137,6 +137,14 @@ const createJourney = async (req, res, next) => {
       .populate("pilgrimageCenterId")
       .populate("travelingFamilyMembers");
 
+    // Automatically calculate & persist Travel Assessment PSI for newly selected pilgrimage center
+    try {
+      const { calculateJourneyPsi } = require("../services/psiService");
+      await calculateJourneyPsi(journey._id, req.user._id, true);
+    } catch (psiErr) {
+      console.warn("Auto PSI calculation warning on journey creation:", psiErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Journey planned and saved successfully!",

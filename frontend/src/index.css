@@ -128,4 +128,72 @@ html.pilgrim-dark-theme .pilgrim-settings-wrapper textarea {
   color: #0f172a !important;
 }
 
+/* ======================================================== */
+/* GLOBAL HIGH-CONTRAST TEXT & BACKGROUND RULES (ALL PAGES)   */
+/* 1. Dark Blue Background -> PURE WHITE TEXT (#ffffff)     */
+/* 2. White Background     -> PURE BLACK TEXT (#000000)     */
+/* ======================================================== */
+
+/* DARK BLUE BACKGROUND CONTAINERS & HEADERS -> PURE WHITE TEXT */
+.modal-header,
+.blue-header,
+.dark-header,
+.bg-dark-blue,
+.modal-header.blue-header,
+.modal-header.purple-header,
+.modal-header.red-header {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+.modal-header h1,
+.modal-header h2,
+.modal-header h3,
+.modal-header h4,
+.modal-header h5,
+.modal-header h6,
+.modal-header p,
+.modal-header span,
+.modal-header strong,
+.modal-header b,
+.modal-header label,
+.modal-header div,
+.modal-header svg,
+.modal-header button {
+  color: #ffffff !important;
+}
+
+.modal-header .btn-close-modal,
+.modal-header button {
+  color: #ffffff !important;
+}
+
+.modal-header .btn-close-modal svg {
+  color: #ffffff !important;
+}
+
+/* WHITE BACKGROUND CONTAINERS & MODAL BODIES -> PURE BLACK TEXT */
+.modal-card,
+.modal-body {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.modal-body label,
+.modal-body p,
+.modal-body span:not([class*="badge"]):not([class*="status"]):not([class*="pill"]),
+.modal-body h1,
+.modal-body h2,
+.modal-body h3,
+.modal-body h4,
+.modal-body h5,
+.modal-body h6,
+.modal-body strong,
+.modal-body b,
+.modal-body td,
+.modal-body th {
+  color: #000000;
+}
+
+
 

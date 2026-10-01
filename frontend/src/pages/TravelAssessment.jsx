@@ -23,10 +23,7 @@ import {
   FiZap,
   FiCheck,
   FiInfo,
-  FiThermometer,
   FiActivity,
-  FiHeart,
-  FiUserCheck,
   FiAlertOctagon
 } from "react-icons/fi";
 
@@ -105,7 +102,6 @@ function TravelAssessment() {
   const fetchPsiAssessment = async (targetJourney, forceRefresh = false) => {
     if (!targetJourney || !targetJourney._id) return;
 
-    const reqKey = `${targetJourney._id}_${forceRefresh ? Date.now() : "initial"}`;
     if (!forceRefresh && fetchedKeyRef.current === targetJourney._id) {
       return; // Deduplicated
     }
@@ -134,6 +130,7 @@ function TravelAssessment() {
     if (journey && journey._id) {
       fetchPsiAssessment(journey);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journey]);
 
   const handleSelectJourneyChange = (e) => {

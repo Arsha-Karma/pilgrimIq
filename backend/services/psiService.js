@@ -35,6 +35,66 @@ const getFallbackCrowdScore = (centerName, dateStr) => {
 };
 
 /**
+ * Helper to compute health risk score from profile medical conditions & vitals
+ */
+const computeMedicalConditionScore = (personDoc) => {
+  if (!personDoc) return 20;
+
+  let score = 20; // Base low risk
+  const age = Number(personDoc.age || 0);
+
+  // Age risk factors
+  if (age > 70) score += 20;
+  else if (age > 60) score += 10;
+  else if (age > 50) score += 5;
+
+  // Medical conditions & chronic diseases
+  const conditionsStr = [
+    personDoc.chronicConditions,
+    personDoc.healthInfo?.chronicDiseases,
+    Array.isArray(personDoc.existingConditions) ? personDoc.existingConditions.join(" ") : personDoc.existingConditions,
+    Array.isArray(personDoc.medicalInfo?.existingConditions) ? personDoc.medicalInfo.existingConditions.join(" ") : personDoc.medicalInfo?.existingConditions,
+    personDoc.medicalInfo?.otherCondition,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (/cardiac|heart|attack|stroke/i.test(conditionsStr)) score += 30;
+  if (/asthma|copd|respiratory|breathing/i.test(conditionsStr)) score += 25;
+  if (/kidney|renal|dialysis/i.test(conditionsStr)) score += 25;
+  if (/diabetes|hypertension|bp|sugar/i.test(conditionsStr)) score += 15;
+
+  // Health Vitals
+  const spo2 = Number(
+    personDoc.spo2 || personDoc.healthMeasurements?.spo2 || 0
+  );
+  if (spo2 > 0 && spo2 < 92) score += 25;
+  else if (spo2 > 0 && spo2 < 95) score += 15;
+
+  const bloodSugar = Number(
+    personDoc.bloodSugar || personDoc.healthMeasurements?.bloodSugar || 0
+  );
+  if (bloodSugar > 200) score += 15;
+  else if (bloodSugar > 140) score += 10;
+
+  // Fitness & Mobility
+  const usesAssistance = personDoc.usesAssistance || personDoc.fitnessInfo?.usesAssistance || "";
+  if (usesAssistance && usesAssistance !== "No" && usesAssistance !== "None" && usesAssistance !== false) {
+    score += 15;
+  }
+
+  const stairClimbing = personDoc.stairClimbing || personDoc.fitnessInfo?.stairClimbing || "";
+  if (stairClimbing === "Unable") score += 15;
+  else if (stairClimbing === "With Difficulty") score += 10;
+
+  const walking = personDoc.walkingCapacity || personDoc.fitnessInfo?.continuousWalking || "";
+  if (walking === "Less than 1 km") score += 10;
+
+  const smoking = personDoc.smokingStatus || personDoc.medicalInfo?.smokingStatus || "";
+  if (smoking === "Smoker") score += 10;
+
+  return Math.min(score, 90);
+};
+
+/**
  * Retrieves latest medical risk assessment for a user or family member
  */
 const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
@@ -45,6 +105,12 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
   } else {
     query.ownerType = "user";
   }
+
+  const personDoc = familyMemberId
+    ? await FamilyMember.findById(familyMemberId)
+    : await User.findById(userId);
+
+  const conditionScore = computeMedicalConditionScore(personDoc);
 
   // Fetch latest uploaded medical report
   const latestReport = await MedicalReport.findOne(query).sort({ createdAt: -1 });
@@ -63,12 +129,13 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
       rawStatus === "CRITICAL" ||
       rawStatus === "CRITICAL_RISK";
 
-    let score = isRejectedOrCritical ? 90 : normalizeRiskScore(rawStatus, 20);
-    let level = isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : rawStatus;
+    let reportScore = isRejectedOrCritical ? 90 : normalizeRiskScore(rawStatus, 20);
+    let finalScore = Math.max(reportScore, conditionScore);
+    let level = isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : getPsiRiskLevel(finalScore);
 
     return {
       available: true,
-      score,
+      score: finalScore,
       level,
       aiSummary: latestReport.aiSummary || "",
       physicianRequired: physicianRequired || isRejectedOrCritical,
@@ -80,60 +147,157 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
   }
 
   // Fallback: check User or FamilyMember profile flags if report is not uploaded
-  if (familyMemberId) {
-    const fm = await FamilyMember.findById(familyMemberId);
-    if (fm) {
-      const isRejectedOrCritical =
-        fm.doctorApprovalStatus === "rejected" ||
-        fm.doctorApprovalStatus === "not_approved" ||
-        fm.doctorApprovalStatus === "Not_approved" ||
-        fm.aiRiskLevel === "HIGH_RISK" ||
-        fm.aiRiskLevel === "CRITICAL" ||
-        fm.aiRiskLevel === "PHYSICIAN_NOT_APPROVED";
+  if (personDoc) {
+    const isRejectedOrCritical =
+      personDoc.doctorApprovalStatus === "rejected" ||
+      personDoc.doctorApprovalStatus === "not_approved" ||
+      personDoc.doctorApprovalStatus === "Not_approved" ||
+      personDoc.aiRiskLevel === "HIGH_RISK" ||
+      personDoc.aiRiskLevel === "CRITICAL" ||
+      personDoc.aiRiskLevel === "PHYSICIAN_NOT_APPROVED" ||
+      personDoc.psiRiskLevel === "High Risk" ||
+      personDoc.psiRiskLevel === "CRITICAL";
 
-      let score = isRejectedOrCritical ? 90 : normalizeRiskScore(fm.aiRiskLevel || "LOW_RISK", 20);
-      let physicianRequired = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || isRejectedOrCritical;
-      return {
-        available: true,
-        score,
-        level: isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : (fm.aiRiskLevel || "LOW_RISK"),
-        physicianRequired,
-        physicianStatus: fm.doctorApprovalStatus || "none",
-        isRejectedOrCritical,
-        responsibilityAccepted: fm.responsibilityAccepted || false,
-      };
-    }
-  } else {
-    const user = await User.findById(userId);
-    if (user) {
-      const isRejectedOrCritical =
-        user.doctorApprovalStatus === "rejected" ||
-        user.doctorApprovalStatus === "not_approved" ||
-        user.doctorApprovalStatus === "Not_approved" ||
-        user.psiRiskLevel === "High Risk" ||
-        user.psiRiskLevel === "CRITICAL";
+    let finalScore = isRejectedOrCritical ? 90 : Math.max(conditionScore, normalizeRiskScore(personDoc.aiRiskLevel || personDoc.psiRiskLevel || "LOW_RISK", 20));
+    let physicianRequired = personDoc.doctorApprovalStatus === "pending" || personDoc.doctorApprovalStatus === "rejected" || isRejectedOrCritical;
 
-      let userRisk = user.psiRiskLevel || "Low Risk";
-      let score = isRejectedOrCritical ? 90 : normalizeRiskScore(userRisk, 20);
-      let physicianRequired = user.doctorApprovalStatus === "pending" || user.doctorApprovalStatus === "rejected" || isRejectedOrCritical;
-      return {
-        available: true,
-        score,
-        level: isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : userRisk,
-        physicianRequired,
-        physicianStatus: user.doctorApprovalStatus || "none",
-        isRejectedOrCritical,
-        responsibilityAccepted: user.responsibilityAccepted || false,
-      };
-    }
+    return {
+      available: true,
+      score: finalScore,
+      level: isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : getPsiRiskLevel(finalScore),
+      physicianRequired,
+      physicianStatus: personDoc.doctorApprovalStatus || "none",
+      isRejectedOrCritical,
+      responsibilityAccepted: personDoc.responsibilityAccepted || false,
+    };
   }
 
   return {
     available: false,
-    score: null,
-    level: "UNAVAILABLE",
+    score: 20,
+    level: "LOW RISK",
     physicianRequired: false,
     physicianStatus: "none",
+  };
+};
+
+/**
+ * Calculates PSI when NO pilgrimage center is selected yet.
+ * Computed ONLY from medical condition & uploaded medical report.
+ */
+const calculateMedicalOnlyPsi = async (userId, familyMemberId = null) => {
+  const medAssessment = await fetchMedicalAssessment(userId, familyMemberId);
+  const score = medAssessment.score !== null && medAssessment.score !== undefined ? medAssessment.score : 20;
+  const level = getPsiRiskLevel(score);
+
+  return {
+    score,
+    level,
+    hasSelectedCenter: false,
+    selectedCenterName: null,
+    isMedicalOnly: true,
+    medicalAssessment: medAssessment,
+  };
+};
+
+/**
+ * Retrieves the latest valid PSI generated by the Journey Travel Assessment
+ * for main user and family members, or falls back to medical-only PSI if no pilgrimage center selected.
+ */
+const getLatestUserAndFamilyPsi = async (userId) => {
+  // 1. Check if user has an active/latest journey plan with a selected pilgrimage center
+  const latestJourney = await Journey.findOne({ userId })
+    .populate("pilgrimageCenterId")
+    .sort({ createdAt: -1 });
+
+  let latestAssessment = null;
+
+  if (latestJourney && latestJourney.pilgrimageCenterId) {
+    latestAssessment = await TravelAssessment.findOne({ journeyId: latestJourney._id })
+      .populate("pilgrimageCenterId");
+
+    if (!latestAssessment) {
+      try {
+        latestAssessment = await calculateJourneyPsi(latestJourney._id, userId);
+      } catch (err) {
+        console.warn("Failed to generate travel assessment for latest journey:", err.message);
+      }
+    }
+  }
+
+  // Fallback check: if no journey-linked assessment, find the latest overall assessment for user
+  if (!latestAssessment) {
+    latestAssessment = await TravelAssessment.findOne({ userId })
+      .populate("pilgrimageCenterId")
+      .sort({ updatedAt: -1 });
+  }
+
+  const hasSelectedCenter = !!(latestAssessment && latestAssessment.pilgrimageCenterId && latestAssessment.assessmentStatus === "COMPLETED");
+  const selectedCenterName = hasSelectedCenter ? (latestAssessment.pilgrimageCenterId?.name || "Pilgrimage Center") : null;
+
+  // 2. Determine Main User PSI
+  let mainUserPsi = null;
+  if (hasSelectedCenter) {
+    mainUserPsi = {
+      score: latestAssessment.psiScore,
+      level: latestAssessment.psiLevel,
+      hasSelectedCenter: true,
+      selectedCenterName,
+      journeyDate: latestAssessment.journeyDate,
+      factors: latestAssessment.factors || [],
+      assessmentSummary: latestAssessment.assessmentSummary || "",
+    };
+  } else {
+    const medOnly = await calculateMedicalOnlyPsi(userId, null);
+    mainUserPsi = {
+      score: medOnly.score,
+      level: medOnly.level,
+      hasSelectedCenter: false,
+      selectedCenterName: null,
+      factors: [],
+      assessmentSummary: "Calculated from personal medical condition and medical reports (No pilgrimage center selected yet).",
+    };
+  }
+
+  // 3. Determine Family Members PSI
+  const familyMembers = await FamilyMember.find({ user: userId });
+  const familyMembersPsiMap = {};
+
+  for (const fm of familyMembers) {
+    let fmPsi = null;
+
+    if (hasSelectedCenter && Array.isArray(latestAssessment.familyMembersAssessments)) {
+      const match = latestAssessment.familyMembersAssessments.find(
+        (a) => a.familyMemberId && a.familyMemberId.toString() === fm._id.toString()
+      );
+      if (match && match.psiScore !== undefined) {
+        fmPsi = {
+          score: match.psiScore,
+          level: match.psiLevel,
+          hasSelectedCenter: true,
+          selectedCenterName,
+        };
+      }
+    }
+
+    if (!fmPsi) {
+      const medOnly = await calculateMedicalOnlyPsi(userId, fm._id);
+      fmPsi = {
+        score: medOnly.score,
+        level: medOnly.level,
+        hasSelectedCenter: false,
+        selectedCenterName: null,
+      };
+    }
+
+    familyMembersPsiMap[fm._id.toString()] = fmPsi;
+  }
+
+  return {
+    hasSelectedCenter,
+    selectedCenterName,
+    mainUserPsi,
+    familyMembersPsiMap,
   };
 };
 
@@ -507,4 +671,6 @@ module.exports = {
   fetchMedicalAssessment,
   fetchCrowdAssessment,
   fetchWeatherAssessment,
+  calculateMedicalOnlyPsi,
+  getLatestUserAndFamilyPsi,
 };

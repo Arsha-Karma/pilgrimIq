@@ -122,7 +122,7 @@ const medicalReportSchema = new mongoose.Schema(
       required: { type: Boolean, default: false },
       status: {
         type: String,
-        enum: ["none", "pending", "approved", "not_approved", "further_evaluation"],
+        enum: ["none", "pending", "approved", "not_approved", "rejected", "further_evaluation", "approved_with_conditions"],
         default: "none",
       },
       physicianId: {

@@ -12,13 +12,9 @@ import {
   FiEye,
   FiPhone,
   FiAlertCircle,
-  FiHome,
-  FiCoffee,
   FiNavigation,
   FiX,
   FiGrid,
-  FiGlobe,
-  FiClock,
   FiStar,
   FiExternalLink
 } from "react-icons/fi";
