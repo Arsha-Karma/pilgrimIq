@@ -669,1055 +669,1055 @@ function JourneyPlanner() {
 
         <div className="pilgrim-main-content" style={{ padding: 0 }}>
           <div className="planner-hero-banner">
-        <div className="banner-content">
-          <div className="breadcrumb-nav">
-            <Link to="/centers">
-              <FiArrowLeft /> Pilgrimage Centers
-            </Link>{" "}
-            / <span>Journey Planner</span>
+            <div className="banner-content">
+              <div className="breadcrumb-nav">
+                <Link to="/centers">
+                  <FiArrowLeft /> Pilgrimage Centers
+                </Link>{" "}
+                / <span>Journey Planner</span>
+              </div>
+              <h1>
+                Journey Planning & Trip Setup
+              </h1>
+              <p>Configure your pilgrimage dates, traveling pilgrims, route preferences, and nearby support services.</p>
+            </div>
           </div>
-          <h1>
-            Journey Planning & Trip Setup
-          </h1>
-          <p>Configure your pilgrimage dates, traveling pilgrims, route preferences, and nearby support services.</p>
-        </div>
-      </div>
 
-      <div className="planner-container">
-        {/* PILGRIMAGE CENTER HEADER CARD */}
-        <div className="center-summary-header-card">
-          <div className="center-thumb-box">
-            <img
-              src={
-                center.image ||
-                "https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=800&auto=format&fit=crop"
-              }
-              alt={center.name}
+          <div className="planner-container">
+            {/* PILGRIMAGE CENTER HEADER CARD */}
+            <div className="center-summary-header-card">
+              <div className="center-thumb-box">
+                <img
+                  src={
+                    center.image ||
+                    "https://images.unsplash.com/photo-1548625149-fc4a29cf7092?q=80&w=800&auto=format&fit=crop"
+                  }
+                  alt={center.name}
+                />
+                <span className="religion-pill">{center.religion}</span>
+              </div>
+
+              <div className="center-info-box">
+                <h2>{center.name}</h2>
+                <p className="location-line">
+                  <FiMapPin className="pin" /> {center.location?.city}, {center.location?.state},{" "}
+                  {center.location?.country}
+                </p>
+
+                <div className="center-meta-tags">
+                  <span className="meta-tag">☀️ Season: {center.visitingInformation?.bestSeason || "All Year"}</span>
+                  <span className="meta-tag">🌡️ Climate: {center.visitingInformation?.climate || "Moderate"}</span>
+                  <span className="meta-tag">🚶 Trek: {center.difficulty?.walking || "Moderate"}</span>
+                  <span className="meta-tag">🧗 Climb: {center.difficulty?.climbing || "Moderate"}</span>
+                  <span className="meta-tag">🕒 Hours: {center.timings?.openingTime} - {center.timings?.closingTime}</span>
+                </div>
+
+                <p className="center-desc">{center.description}</p>
+              </div>
+            </div>
+
+            {/* WEATHER INTEGRATION MODULE */}
+            <WeatherCard
+              weatherData={weatherData}
+              loading={loadingWeather}
+              error={weatherError}
+              centerName={center?.name}
             />
-            <span className="religion-pill">{center.religion}</span>
-          </div>
 
-          <div className="center-info-box">
-            <h2>{center.name}</h2>
-            <p className="location-line">
-              <FiMapPin className="pin" /> {center.location?.city}, {center.location?.state},{" "}
-              {center.location?.country}
-            </p>
-
-            <div className="center-meta-tags">
-              <span className="meta-tag">☀️ Season: {center.visitingInformation?.bestSeason || "All Year"}</span>
-              <span className="meta-tag">🌡️ Climate: {center.visitingInformation?.climate || "Moderate"}</span>
-              <span className="meta-tag">🚶 Trek: {center.difficulty?.walking || "Moderate"}</span>
-              <span className="meta-tag">🧗 Climb: {center.difficulty?.climbing || "Moderate"}</span>
-              <span className="meta-tag">🕒 Hours: {center.timings?.openingTime} - {center.timings?.closingTime}</span>
+            {/* STEP CONTROLS / TAB HEADERS */}
+            <div className="planner-step-tabs">
+              <button
+                type="button"
+                className={`step-tab-btn ${currentStep === "form" ? "active" : ""}`}
+                onClick={() => setCurrentStep("form")}
+              >
+                1. Journey Configuration & Services
+              </button>
+              <button
+                type="button"
+                className={`step-tab-btn ${currentStep === "summary" ? "active" : ""}`}
+                onClick={(e) => handleReviewSummary(e)}
+              >
+                2. Journey Summary & Confirmation
+              </button>
             </div>
 
-            <p className="center-desc">{center.description}</p>
-          </div>
-        </div>
+            {currentStep === "form" ? (
+              <form onSubmit={handleReviewSummary} className="planner-main-form" noValidate>
+                {/* SECTION 1: JOURNEY DATES */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiCalendar className="sec-icon" />
+                    <div>
+                      <h3>1. Journey Dates</h3>
+                      <p>Select your departure and expected return dates</p>
+                    </div>
+                  </div>
 
-        {/* WEATHER INTEGRATION MODULE */}
-        <WeatherCard
-          weatherData={weatherData}
-          loading={loadingWeather}
-          error={weatherError}
-          centerName={center?.name}
-        />
+                  <div className="form-grid-2">
+                    <div className="form-group">
+                      <label>
+                        Journey Start Date *
+                      </label>
+                      <input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        max="2099-12-31"
+                        value={journeyDate}
+                        onFocus={() => handleFieldFocus("journeyDate")}
+                        onChange={(e) => setJourneyDate(sanitizeDateInput(e.target.value))}
+                        onBlur={() => handleFieldBlur("journeyDate")}
+                        className={`form-control ${fieldTouch.journeyDate && errors.journeyDate ? "input-error" : ""}`}
+                        required
+                      />
+                      {renderSingleFieldMessage("journeyDate")}
+                    </div>
 
-        {/* STEP CONTROLS / TAB HEADERS */}
-        <div className="planner-step-tabs">
-          <button
-            type="button"
-            className={`step-tab-btn ${currentStep === "form" ? "active" : ""}`}
-            onClick={() => setCurrentStep("form")}
-          >
-            1. Journey Configuration & Services
-          </button>
-          <button
-            type="button"
-            className={`step-tab-btn ${currentStep === "summary" ? "active" : ""}`}
-            onClick={(e) => handleReviewSummary(e)}
-          >
-            2. Journey Summary & Confirmation
-          </button>
-        </div>
-
-        {currentStep === "form" ? (
-          <form onSubmit={handleReviewSummary} className="planner-main-form" noValidate>
-            {/* SECTION 1: JOURNEY DATES */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiCalendar className="sec-icon" />
-                <div>
-                  <h3>1. Journey Dates</h3>
-                  <p>Select your departure and expected return dates</p>
-                </div>
-              </div>
-
-              <div className="form-grid-2">
-                <div className="form-group">
-                  <label>
-                    Journey Start Date *
-                  </label>
-                  <input
-                    type="date"
-                    min={new Date().toISOString().split("T")[0]}
-                    max="2099-12-31"
-                    value={journeyDate}
-                    onFocus={() => handleFieldFocus("journeyDate")}
-                    onChange={(e) => setJourneyDate(sanitizeDateInput(e.target.value))}
-                    onBlur={() => handleFieldBlur("journeyDate")}
-                    className={`form-control ${fieldTouch.journeyDate && errors.journeyDate ? "input-error" : ""}`}
-                    required
-                  />
-                  {renderSingleFieldMessage("journeyDate")}
+                    <div className="form-group">
+                      <label>
+                        Expected Return Date *
+                      </label>
+                      <input
+                        type="date"
+                        min={journeyDate || new Date().toISOString().split("T")[0]}
+                        max="2099-12-31"
+                        value={returnDate}
+                        onFocus={() => handleFieldFocus("returnDate")}
+                        onChange={(e) => setReturnDate(sanitizeDateInput(e.target.value))}
+                        onBlur={() => handleFieldBlur("returnDate")}
+                        className={`form-control ${fieldTouch.returnDate && errors.returnDate ? "input-error" : ""}`}
+                        required
+                      />
+                      {renderSingleFieldMessage("returnDate")}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label>
-                    Expected Return Date *
-                  </label>
-                  <input
-                    type="date"
-                    min={journeyDate || new Date().toISOString().split("T")[0]}
-                    max="2099-12-31"
-                    value={returnDate}
-                    onFocus={() => handleFieldFocus("returnDate")}
-                    onChange={(e) => setReturnDate(sanitizeDateInput(e.target.value))}
-                    onBlur={() => handleFieldBlur("returnDate")}
-                    className={`form-control ${fieldTouch.returnDate && errors.returnDate ? "input-error" : ""}`}
-                    required
-                  />
-                  {renderSingleFieldMessage("returnDate")}
-                </div>
-              </div>
-            </div>
+                {/* SECTION 2: TRAVELLING FAMILY MEMBERS */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiUsers className="sec-icon" />
+                    <div>
+                      <h3>2. Select Travelling Family Members</h3>
+                      <p>Choose family members accompanying you from your profile</p>
+                    </div>
+                    <div className="pilgrim-count-badge">
+                      Total Pilgrims: <strong>{totalPilgrimsCount}</strong>
+                    </div>
+                  </div>
 
-            {/* SECTION 2: TRAVELLING FAMILY MEMBERS */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiUsers className="sec-icon" />
-                <div>
-                  <h3>2. Select Travelling Family Members</h3>
-                  <p>Choose family members accompanying you from your profile</p>
-                </div>
-                <div className="pilgrim-count-badge">
-                  Total Pilgrims: <strong>{totalPilgrimsCount}</strong>
-                </div>
-              </div>
+                  <div className="family-selector-wrapper">
+                    <div className="alone-option-box">
+                      <label className="checkbox-custom-label">
+                        <input
+                          type="checkbox"
+                          checked={travelingAlone}
+                          onChange={handleToggleTravelingAlone}
+                        />
+                        <span className="label-title">👤 Traveling Alone (No family members)</span>
+                      </label>
+                    </div>
 
-              <div className="family-selector-wrapper">
-                <div className="alone-option-box">
-                  <label className="checkbox-custom-label">
-                    <input
-                      type="checkbox"
-                      checked={travelingAlone}
-                      onChange={handleToggleTravelingAlone}
-                    />
-                    <span className="label-title">👤 Traveling Alone (No family members)</span>
-                  </label>
-                </div>
-
-                {!travelingAlone && (
-                  <div className="family-members-grid">
-                    {loadingFamily ? (
-                      <p className="loading-sub">Fetching your registered family members...</p>
-                    ) : familyMembers.length > 0 ? (
-                      familyMembers.map((member) => {
-                        const isChecked = selectedFamilyMemberIds.includes(member._id);
-                        return (
-                          <div
-                            key={member._id}
-                            className={`family-member-card ${isChecked ? "selected" : ""}`}
-                            onClick={() => handleToggleFamilyMember(member._id)}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}}
-                              style={{ marginRight: "10px" }}
-                            />
-                            <div className="member-avatar">
-                              {member.name ? member.name.charAt(0).toUpperCase() : "F"}
-                            </div>
-                            <div className="member-info">
-                              <h4>{member.name}</h4>
-                              <p>
-                                {member.relationship} {member.age ? `• ${member.age} Yrs` : ""}
-                              </p>
-                              {member.chronicConditions && (
-                                <span className="health-tag-warning">
-                                  🩺 {member.chronicConditions}
-                                </span>
-                              )}
-                            </div>
+                    {!travelingAlone && (
+                      <div className="family-members-grid">
+                        {loadingFamily ? (
+                          <p className="loading-sub">Fetching your registered family members...</p>
+                        ) : familyMembers.length > 0 ? (
+                          familyMembers.map((member) => {
+                            const isChecked = selectedFamilyMemberIds.includes(member._id);
+                            return (
+                              <div
+                                key={member._id}
+                                className={`family-member-card ${isChecked ? "selected" : ""}`}
+                                onClick={() => handleToggleFamilyMember(member._id)}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => { }}
+                                  style={{ marginRight: "10px" }}
+                                />
+                                <div className="member-avatar">
+                                  {member.name ? member.name.charAt(0).toUpperCase() : "F"}
+                                </div>
+                                <div className="member-info">
+                                  <h4>{member.name}</h4>
+                                  <p>
+                                    {member.relationship} {member.age ? `• ${member.age} Yrs` : ""}
+                                  </p>
+                                  {member.chronicConditions && (
+                                    <span className="health-tag-warning">
+                                      🩺 {member.chronicConditions}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="no-family-alert">
+                            <p>No family members added in your profile yet.</p>
+                            <Link to="/profile" className="btn-small-link">
+                              + Add Family Members in Profile
+                            </Link>
                           </div>
-                        );
-                      })
-                    ) : (
-                      <div className="no-family-alert">
-                        <p>No family members added in your profile yet.</p>
-                        <Link to="/profile" className="btn-small-link">
-                          + Add Family Members in Profile
-                        </Link>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* SECTION 2.5: MEDICAL RISK ASSESSMENT & DOCTOR AUTHORIZATION */}
-            <div className="form-section-card" style={{ background: "#0f172a", border: "1px solid #1e293b", color: "#f8fafc" }}>
-              <div className="section-title">
-                <FiShield className="sec-icon" style={{ color: "#3b82f6" }} />
-                <div>
-                  <h3 style={{ color: "#f8fafc" }}>Medical Risk Assessment & Travel Authorization</h3>
-                  <p style={{ color: "#94a3b8" }}>Individual clinical risk index, PSI score, and doctor clearance status for each traveler</p>
                 </div>
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginTop: "16px" }}>
-                {/* MAIN USER CARD */}
-                {(() => {
-                  const mainUserRisk = userProfile?.psiRiskLevel || "Low Risk";
-                  const isHigh = mainUserRisk === "High Risk" || userProfile?.doctorApprovalStatus === "pending" || userProfile?.doctorApprovalStatus === "rejected";
-                  const isMod = mainUserRisk === "Moderate Risk";
-                  const docStatus = userProfile?.doctorApprovalStatus || "none";
-                  const respAcc = userProfile?.responsibilityAccepted;
-
-                  let statusText = "Safe to Continue";
-                  let statusBg = "rgba(16,185,129,0.15)";
-                  let statusColor = "#34d399";
-
-                  if (isHigh) {
-                    if (docStatus === "approved") {
-                      statusText = "✓ Doctor Approved";
-                      statusBg = "rgba(16,185,129,0.2)";
-                      statusColor = "#34d399";
-                    } else if (docStatus === "rejected") {
-                      statusText = "✕ Doctor Rejected";
-                      statusBg = "rgba(239,68,68,0.2)";
-                      statusColor = "#f87171";
-                    } else {
-                      statusText = "Doctor Approval Required";
-                      statusBg = "rgba(239,68,68,0.2)";
-                      statusColor = "#f87171";
-                    }
-                  } else if (isMod) {
-                    statusText = "Safety Advice";
-                    statusBg = "rgba(245,158,11,0.2)";
-                    statusColor = "#fbbf24";
-                  }
-
-                  return (
-                    <div style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHigh ? "1px solid #ef4444" : "1px solid #334155" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
-                          👤 {userProfile?.name || authUser?.name || "Main User"} (Self)
-                        </span>
-                        <span style={{ fontSize: "11px", background: statusBg, color: statusColor, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
-                          {statusText}
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
-                        Medical Risk: <strong style={{ color: isHigh ? "#f87171" : isMod ? "#fbbf24" : "#34d399" }}>{isHigh ? "HIGH / CRITICAL" : isMod ? "MODERATE" : "LOW"}</strong>
-                        {" • "}PSI: <strong>{userProfile?.psiScore || 95}/100</strong>
-                      </div>
-
-                      {docStatus === "rejected" && userProfile?.doctorReason && (
-                        <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
-                          <strong>Doctor Reason:</strong> {userProfile.doctorReason}
-                        </div>
-                      )}
-
-                      {/* Main User ONLY gets Journey Buttons */}
-                      <div style={{ marginTop: "12px" }}>
-                        {!isHigh || docStatus === "approved" || respAcc ? (
-                          <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <FiCheckCircle /> Cleared to Continue Journey
-                          </div>
-                        ) : docStatus === "pending" ? (
-                          <button type="button" disabled style={{ width: "100%", padding: "8px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", cursor: "not-allowed", opacity: 0.7, fontSize: "12.5px" }}>
-                            Doctor Approval Required (Pending Review)
-                          </button>
-                        ) : docStatus === "rejected" || docStatus === "not_approved" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenResponsibilityModal({
-                              type: "user",
-                              name: userProfile?.name || "Main User",
-                              relationship: "Self",
-                              isRejected: true,
-                              doctorReason: userProfile?.doctorReason || "",
-                            })}
-                            style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "13px" }}
-                          >
-                            ⚠️ Travel on Your Own Responsibility →
-                          </button>
-                        ) : null}
-                      </div>
+                {/* SECTION 2.5: MEDICAL RISK ASSESSMENT & DOCTOR AUTHORIZATION */}
+                <div className="form-section-card" style={{ background: "#0f172a", border: "1px solid #1e293b", color: "#f8fafc" }}>
+                  <div className="section-title">
+                    <FiShield className="sec-icon" style={{ color: "#3b82f6" }} />
+                    <div>
+                      <h3 style={{ color: "#f8fafc" }}>Medical Risk Assessment & Travel Authorization</h3>
+                      <p style={{ color: "#94a3b8" }}>Individual clinical risk index, PSI score, and doctor clearance status for each traveler</p>
                     </div>
-                  );
-                })()}
-
-                {/* FAMILY MEMBER CARDS */}
-                {!travelingAlone && selectedFamilyObjects.map((fm) => {
-                  const isHighFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected" || fm.doctorApprovalStatus === "not_approved";
-                  const isModFm = fm.aiRiskLevel === "MODERATE_RISK";
-                  const docStatusFm = fm.doctorApprovalStatus || "none";
-
-                  let statusTextFm = "Safe";
-                  let statusBgFm = "rgba(16,185,129,0.15)";
-                  let statusColorFm = "#34d399";
-
-                  if (isHighFm) {
-                    if (docStatusFm === "approved") {
-                      statusTextFm = "✓ Doctor Approved";
-                      statusBgFm = "rgba(16,185,129,0.2)";
-                      statusColorFm = "#34d399";
-                    } else if (docStatusFm === "rejected" || docStatusFm === "not_approved") {
-                      statusTextFm = "✕ Doctor Rejected";
-                      statusBgFm = "rgba(239,68,68,0.2)";
-                      statusColorFm = "#f87171";
-                    } else {
-                      statusTextFm = "Doctor Approval Required";
-                      statusBgFm = "rgba(239,68,68,0.2)";
-                      statusColorFm = "#f87171";
-                    }
-                  } else if (isModFm) {
-                    statusTextFm = "Safety Advice";
-                    statusBgFm = "rgba(245,158,11,0.2)";
-                    statusColorFm = "#fbbf24";
-                  }
-
-                  return (
-                    <div key={fm._id} style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHighFm ? "1px solid #ef4444" : "1px solid #334155" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
-                          👥 {fm.name} ({fm.relationship})
-                        </span>
-                        <span style={{ fontSize: "11px", background: statusBgFm, color: statusColorFm, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
-                          {statusTextFm}
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
-                        Medical Risk: <strong style={{ color: isHighFm ? "#f87171" : isModFm ? "#fbbf24" : "#34d399" }}>{isHighFm ? "HIGH / CRITICAL" : isModFm ? "MODERATE" : "LOW"}</strong>
-                        {" • "}PSI: <strong>{fm.psiScore || 90}/100</strong>
-                      </div>
-
-                      {(docStatusFm === "rejected" || docStatusFm === "not_approved") && fm.doctorReason && (
-                        <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
-                          <strong>Doctor Reason:</strong> {fm.doctorReason}
-                        </div>
-                      )}
-
-                      {/* Responsibility button enabled ONLY when doctor rejects */}
-                      {isHighFm && !fm.responsibilityAccepted && docStatusFm !== "approved" && (
-                        <div style={{ marginTop: "10px" }}>
-                          {docStatusFm === "rejected" || docStatusFm === "not_approved" ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenResponsibilityModal({
-                                type: "family_member",
-                                familyMemberId: fm._id,
-                                name: fm.name,
-                                relationship: fm.relationship,
-                                isRejected: true,
-                                doctorReason: fm.doctorReason || "",
-                              })}
-                              style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "12.5px" }}
-                            >
-                              ⚠️ Travel on Your Own Responsibility ({fm.name}) →
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", opacity: 0.65, cursor: "not-allowed", fontSize: "12px", fontWeight: "600" }}
-                            >
-                              Doctor Approval Required (Pending Review)
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* SECTION 3: STARTING LOCATION */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiMapPin className="sec-icon" />
-                <div>
-                  <h3>3. Starting Location</h3>
-                  <p>Specify where your journey originates</p>
-                </div>
-              </div>
-
-              <div className="radio-options-row">
-                <label className="radio-btn-label">
-                  <input
-                    type="radio"
-                    name="locationType"
-                    value="manual"
-                    checked={locationType === "manual"}
-                    onChange={() => setLocationType("manual")}
-                  />
-                  <span>Enter Location Manually</span>
-                </label>
-
-                <label className="radio-btn-label">
-                  <input
-                    type="radio"
-                    name="locationType"
-                    value="current"
-                    checked={locationType === "current"}
-                    onChange={handleCurrentLocationSelect}
-                  />
-                  <span>📍 Use Current Geolocation</span>
-                </label>
-              </div>
-
-              {locationType === "manual" && (
-                <div className="form-grid-4" style={{ marginTop: "16px" }}>
-                  {/* 1. COUNTRY */}
-                  <div className="form-group">
-                    <label>Country *</label>
-                    <input
-                      type="text"
-                      value={startLocation.country}
-                      onChange={(e) => setStartLocation({ ...startLocation, country: e.target.value })}
-                      className="form-control"
-                      readOnly
-                    />
                   </div>
 
-                  {/* 2. STATE */}
-                  <div className="form-group">
-                    <label>State *</label>
-                    <select
-                      value={startLocation.state}
-                      onChange={(e) => setStartLocation({ ...startLocation, state: e.target.value })}
-                      onFocus={() => handleFieldFocus("state")}
-                      onBlur={() => handleFieldBlur("state")}
-                      className={`form-control ${fieldTouch.state && errors.state ? "input-error" : ""}`}
-                      required
-                    >
-                      <option value="">-- Select State / UT --</option>
-                      {INDIAN_STATES_AND_UTS.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
-                    {renderSingleFieldMessage("state")}
-                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginTop: "16px" }}>
+                    {/* MAIN USER CARD */}
+                    {(() => {
+                      const mainUserRisk = userProfile?.psiRiskLevel || "Low Risk";
+                      const isHigh = mainUserRisk === "High Risk" || userProfile?.doctorApprovalStatus === "pending" || userProfile?.doctorApprovalStatus === "rejected";
+                      const isMod = mainUserRisk === "Moderate Risk";
+                      const docStatus = userProfile?.doctorApprovalStatus || "none";
+                      const respAcc = userProfile?.responsibilityAccepted;
 
-                  {/* 3. CITY / ORIGIN */}
-                  <div className="form-group">
-                    <label>City / Origin *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Kochi / Delhi"
-                      value={startLocation.city}
-                      onChange={(e) => setStartLocation({ ...startLocation, city: e.target.value })}
-                      onFocus={() => handleFieldFocus("city")}
-                      onBlur={() => handleFieldBlur("city")}
-                      className={`form-control ${fieldTouch.city && errors.city ? "input-error" : ""}`}
-                      required
-                    />
-                    {renderSingleFieldMessage("city")}
-                  </div>
+                      let statusText = "Safe to Continue";
+                      let statusBg = "rgba(16,185,129,0.15)";
+                      let statusColor = "#34d399";
 
-                  {/* 4. FULL ADDRESS / LANDMARK */}
-                  <div className="form-group">
-                    <label>Full Address / Landmark *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. MG Road, Near Central Station"
-                      value={startLocation.address}
-                      onChange={(e) => setStartLocation({ ...startLocation, address: e.target.value })}
-                      onFocus={() => handleFieldFocus("address")}
-                      onBlur={() => handleFieldBlur("address")}
-                      className={`form-control ${fieldTouch.address && errors.address ? "input-error" : ""}`}
-                      required
-                    />
-                    {renderSingleFieldMessage("address")}
-                  </div>
-                </div>
-              )}
-
-              {locationType === "current" && (
-                <div style={{ marginTop: "16px", padding: "14px 18px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", color: "#166534", fontSize: "14px" }}>
-                  <strong style={{ display: "block", marginBottom: "4px", color: "#15803d", fontSize: "14.5px" }}>
-                    📍 Current Geolocation Detected
-                  </strong>
-                  <p style={{ margin: 0, color: "#166534", fontWeight: "500" }}>
-                    {startLocation.address || "Current Location"}
-                    {startLocation.city && startLocation.city !== "Current City" ? ` (${startLocation.city}, ${startLocation.state})` : ""}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* SECTION 4: MODE OF TRANSPORT & PREFERENCES */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiTruck className="sec-icon" />
-                <div>
-                  <h3>4. Transport & Travel Preferences</h3>
-                  <p>Transportation mode, walking endurance, and budget options</p>
-                </div>
-              </div>
-
-              <div className="form-grid-3">
-                <div className="form-group">
-                  <label>Mode of Transport *</label>
-                  <select
-                    value={transportMode}
-                    onFocus={() => handleFieldFocus("transportMode")}
-                    onChange={(e) => setTransportMode(e.target.value)}
-                    onBlur={() => handleFieldBlur("transportMode")}
-                    className={`form-control ${fieldTouch.transportMode && errors.transportMode ? "input-error" : ""}`}
-                    required
-                  >
-                    <option value="">-- Select Transport Mode --</option>
-                    <option value="Car">Car</option>
-                    <option value="Bus">Bus</option>
-                    <option value="Train">Train</option>
-                    <option value="Flight">Flight</option>
-                    <option value="Taxi/Cab">Taxi / Cab</option>
-                    <option value="Walking">Walking / On Foot</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {renderSingleFieldMessage("transportMode")}
-                </div>
-
-                <div className="form-group">
-                  <label>Expected Walking Level *</label>
-                  <select
-                    value={walkingLevel}
-                    onFocus={() => handleFieldFocus("walkingLevel")}
-                    onChange={(e) => setWalkingLevel(e.target.value)}
-                    onBlur={() => handleFieldBlur("walkingLevel")}
-                    className={`form-control ${fieldTouch.walkingLevel && errors.walkingLevel ? "input-error" : ""}`}
-                    required
-                  >
-                    <option value="">-- Select Walking Level --</option>
-                    <option value="Low">Low (Easy Walking)</option>
-                    <option value="Moderate">Moderate (Average Trek)</option>
-                    <option value="High">High (Demanding Trek)</option>
-                  </select>
-                  {renderSingleFieldMessage("walkingLevel")}
-                </div>
-
-                <div className="form-group">
-                  <label>Travel Budget *</label>
-                  <select
-                    value={budgetType}
-                    onFocus={() => handleFieldFocus("budgetType")}
-                    onChange={(e) => setBudgetType(e.target.value)}
-                    onBlur={() => handleFieldBlur("budgetType")}
-                    className={`form-control ${fieldTouch.budgetType && errors.budgetType ? "input-error" : ""}`}
-                    required
-                  >
-                    <option value="">-- Select Travel Budget --</option>
-                    <option value="Low">Low / Economy</option>
-                    <option value="Moderate">Moderate / Standard</option>
-                    <option value="High">High / Premium</option>
-                    <option value="Custom">Custom Amount</option>
-                  </select>
-                  {renderSingleFieldMessage("budgetType")}
-                </div>
-              </div>
-
-              {budgetType === "Custom" && (
-                <div className="form-group" style={{ maxWidth: "300px", marginTop: "12px" }}>
-                  <label>Budget Amount (₹) *</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 15000"
-                    value={customBudgetAmount}
-                    onFocus={() => handleFieldFocus("customBudgetAmount")}
-                    onChange={(e) => setCustomBudgetAmount(e.target.value)}
-                    onBlur={() => handleFieldBlur("customBudgetAmount")}
-                    className={`form-control ${fieldTouch.customBudgetAmount && errors.customBudgetAmount ? "input-error" : ""}`}
-                    required
-                  />
-                  {renderSingleFieldMessage("customBudgetAmount")}
-                </div>
-              )}
-            </div>
-
-            {/* SECTION 5: ACCOMMODATION & FOOD REQUIREMENTS */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiHome className="sec-icon" />
-                <div>
-                  <h3>5. Accommodation & Food Options</h3>
-                  <p>Configure search filters for nearby hotels and restaurants</p>
-                </div>
-              </div>
-
-              <div className="form-grid-3">
-                <div className="form-group">
-                  <label>Need Nearby Accommodation? *</label>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`btn-toggle ${accommodationRequired ? "active" : ""}`}
-                      onClick={() => setAccommodationRequired(true)}
-                    >
-                      YES
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn-toggle ${!accommodationRequired ? "active" : ""}`}
-                      onClick={() => setAccommodationRequired(false)}
-                    >
-                      NO
-                    </button>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Need Nearby Food Recommendations? *</label>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`btn-toggle ${foodRequired ? "active" : ""}`}
-                      onClick={() => setFoodRequired(true)}
-                    >
-                      YES
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn-toggle ${!foodRequired ? "active" : ""}`}
-                      onClick={() => setFoodRequired(false)}
-                    >
-                      NO
-                    </button>
-                  </div>
-                </div>
-
-                {foodRequired && (
-                  <div className="form-group">
-                    <label>Dietary Preference *</label>
-                    <select
-                      value={foodPreference}
-                      onChange={(e) => setFoodPreference(e.target.value)}
-                      onFocus={() => handleFieldFocus("foodPreference")}
-                      onBlur={() => handleFieldBlur("foodPreference")}
-                      className={`form-control ${fieldTouch.foodPreference && errors.foodPreference ? "input-error" : ""}`}
-                      required
-                    >
-                      <option value="">-- Select Dietary Preference --</option>
-                      <option value="Vegetarian">Pure Vegetarian</option>
-                      <option value="Non-Vegetarian">Non-Vegetarian</option>
-                      <option value="Vegan">Vegan</option>
-                      <option value="No preference">No preference</option>
-                    </select>
-                    {renderSingleFieldMessage("foodPreference")}
-                  </div>
-                )}
-              </div>
-
-              <div className="form-group" style={{ marginTop: "16px", maxWidth: "400px" }}>
-                <label>Service Search Radius around Pilgrimage Center *</label>
-                <div className="radius-selector-buttons">
-                  {[5, 10, 15, 20].map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      className={`btn-radius ${searchRadius === r ? "active" : ""}`}
-                      onClick={() => setSearchRadius(r)}
-                    >
-                      {r} km
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* SECTION 6: NEARBY SERVICES & LEAFLET MAP */}
-            <div className="form-section-card">
-              <div className="section-title">
-                <FiCompass className="sec-icon" />
-                <div>
-                  <h3>6. Nearby Support Services & Interactive Map</h3>
-                  <p>Real coordinates search calculated by distance from {center.name}</p>
-                </div>
-              </div>
-
-              {/* Category Filter Pills */}
-              <div className="nearby-category-pills">
-                {[
-                  { id: "accommodation", label: "🏨 Accommodation" },
-                  { id: "restaurants", label: "🍽️ Restaurants/Food" },
-                  { id: "parking", label: "🅿️ Parking" },
-                  { id: "hospitals", label: "🏥 Hospitals" },
-                  { id: "pharmacies", label: "💊 Pharmacies" },
-                  { id: "restrooms", label: "🚻 Restrooms" },
-                  { id: "drinkingWater", label: "🚰 Water Kiosks" },
-                  { id: "atms", label: "🏧 ATMs" },
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className={`cat-pill-btn ${activeCategory === cat.id ? "active" : ""}`}
-                    onClick={() => setActiveCategory(cat.id)}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Leaflet Interactive Map */}
-              <div className="map-wrapper-box" style={{ marginBottom: "20px" }}>
-                <JourneyMap
-                  centerCoords={center.location}
-                  centerName={center.name}
-                  places={nearbyPlaces}
-                  selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
-                  onSelectPlace={handleToggleSelectPlace}
-                />
-              </div>
-
-              {/* Places List Cards */}
-              <div className="nearby-places-list">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-                  <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
-                    Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
-                  </h4>
-                  {nearbyPlaces.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn-view-all-services"
-                      onClick={() => setIsViewAllOpen(true)}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "7px 14px",
-                        borderRadius: "8px",
-                        background: "#eff6ff",
-                        color: "#2563eb",
-                        border: "1px solid #bfdbfe",
-                        fontSize: "13px",
-                        fontWeight: "700",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <FiInfo size={14} /> View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} ({nearbyPlaces.length})
-                    </button>
-                  )}
-                </div>
-
-                {loadingNearby ? (
-                  <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
-                    <p style={{ margin: 0, fontSize: "14px", color: "#2563eb", fontWeight: "600" }}>Searching nearby services...</p>
-                  </div>
-                ) : nearbyPlaces.length > 0 ? (
-                  <div className="places-cards-grid">
-                    {nearbyPlaces.slice(0, 6).map((place, idx) => {
-                      const selectedList = selectedServices[activeCategory] || [];
-                      const placeId = place.externalPlaceId || idx;
-                      const isSelected = selectedList.some(
-                        (item) => item.externalPlaceId === place.externalPlaceId
-                      );
-
-                      const originLat = startLocation.latitude || center.location?.latitude;
-                      const originLng = startLocation.longitude || center.location?.longitude;
-                      const directionsUrl = originLat && originLng
-                        ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
-                        : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+                      if (isHigh) {
+                        if (docStatus === "approved") {
+                          statusText = "✓ Doctor Approved";
+                          statusBg = "rgba(16,185,129,0.2)";
+                          statusColor = "#34d399";
+                        } else if (docStatus === "rejected") {
+                          statusText = "✕ Doctor Rejected";
+                          statusBg = "rgba(239,68,68,0.2)";
+                          statusColor = "#f87171";
+                        } else {
+                          statusText = "Doctor Approval Required";
+                          statusBg = "rgba(239,68,68,0.2)";
+                          statusColor = "#f87171";
+                        }
+                      } else if (isMod) {
+                        statusText = "Safety Advice";
+                        statusBg = "rgba(245,158,11,0.2)";
+                        statusColor = "#fbbf24";
+                      }
 
                       return (
-                        <div key={placeId} className={`place-card ${isSelected ? "selected" : ""}`}>
-                          <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
-                              {place.placeType || place.category}
+                        <div style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHigh ? "1px solid #ef4444" : "1px solid #334155" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+                              👤 {userProfile?.name || authUser?.name || "Main User"} (Self)
                             </span>
-                            <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
-                              📍 {place.distanceKm} km
+                            <span style={{ fontSize: "11px", background: statusBg, color: statusColor, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
+                              {statusText}
                             </span>
                           </div>
 
-                          <h5 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h5>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "8px" }}>
-                            <span style={{ color: "#b45309", fontWeight: "700" }}>
-                              {place.rating ? `⭐ ${place.rating} / 5` : "Rating N/A"}
-                            </span>
-                            {place.isOpen !== null && place.isOpen !== undefined && (
-                              <span style={{ fontSize: "11px", fontWeight: "700", color: place.isOpen ? "#047857" : "#b91c1c", background: place.isOpen ? "#ecfdf5" : "#fef2f2", padding: "2px 6px", borderRadius: "4px" }}>
-                                {place.isOpen ? "Open Now" : "Closed"}
-                              </span>
-                            )}
+                          <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                            Medical Risk: <strong style={{ color: isHigh ? "#f87171" : isMod ? "#fbbf24" : "#34d399" }}>{isHigh ? "HIGH / CRITICAL" : isMod ? "MODERATE" : "LOW"}</strong>
+                            {" • "}PSI: <strong>{userProfile?.psiScore || 95}/100</strong>
                           </div>
 
-                          <p className="place-address" style={{ margin: "0 0 10px 0", fontSize: "12.5px", color: "#64748b", lineHeight: "1.35" }}>{place.address}</p>
-
-                          {place.dietaryInfo && place.dietaryInfo.isVegetarian && (
-                            <div style={{ marginBottom: "10px" }}>
-                              <span style={{ fontSize: "11px", fontWeight: "700", color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "3px 8px", borderRadius: "6px" }}>
-                                🌱 {place.dietaryInfo.label}
-                              </span>
+                          {docStatus === "rejected" && userProfile?.doctorReason && (
+                            <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
+                              <strong>Doctor Reason:</strong> {userProfile.doctorReason}
                             </div>
                           )}
 
-                          <div className="place-card-actions" style={{ display: "flex", gap: "6px", marginTop: "auto" }}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDetailPlace(place)}
-                              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
-                            >
-                              <FiInfo size={13} /> Details
-                            </button>
-
-                            <a
-                              href={directionsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: "700", textDecoration: "none" }}
-                            >
-                              <FiNavigation size={13} /> Directions
-                            </a>
-
-                            <button
-                              type="button"
-                              className={`btn-select-place ${isSelected ? "selected" : ""}`}
-                              onClick={() => handleToggleSelectPlace(place)}
-                              style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
-                            >
-                              {isSelected ? "✓ Selected" : "+ Select"}
-                            </button>
+                          {/* Main User ONLY gets Journey Buttons */}
+                          <div style={{ marginTop: "12px" }}>
+                            {!isHigh || docStatus === "approved" || respAcc ? (
+                              <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                                <FiCheckCircle /> Cleared to Continue Journey
+                              </div>
+                            ) : docStatus === "pending" ? (
+                              <button type="button" disabled style={{ width: "100%", padding: "8px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", cursor: "not-allowed", opacity: 0.7, fontSize: "12.5px" }}>
+                                Doctor Approval Required (Pending Review)
+                              </button>
+                            ) : docStatus === "rejected" || docStatus === "not_approved" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenResponsibilityModal({
+                                  type: "user",
+                                  name: userProfile?.name || "Main User",
+                                  relationship: "Self",
+                                  isRejected: true,
+                                  doctorReason: userProfile?.doctorReason || "",
+                                })}
+                                style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "13px" }}
+                              >
+                                ⚠️ Travel on Your Own Responsibility →
+                              </button>
+                            ) : null}
                           </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* FAMILY MEMBER CARDS */}
+                    {!travelingAlone && selectedFamilyObjects.map((fm) => {
+                      const isHighFm = fm.aiRiskLevel === "HIGH_RISK" || fm.doctorApprovalStatus === "pending" || fm.doctorApprovalStatus === "rejected" || fm.doctorApprovalStatus === "not_approved";
+                      const isModFm = fm.aiRiskLevel === "MODERATE_RISK";
+                      const docStatusFm = fm.doctorApprovalStatus || "none";
+
+                      let statusTextFm = "Safe";
+                      let statusBgFm = "rgba(16,185,129,0.15)";
+                      let statusColorFm = "#34d399";
+
+                      if (isHighFm) {
+                        if (docStatusFm === "approved") {
+                          statusTextFm = "✓ Doctor Approved";
+                          statusBgFm = "rgba(16,185,129,0.2)";
+                          statusColorFm = "#34d399";
+                        } else if (docStatusFm === "rejected" || docStatusFm === "not_approved") {
+                          statusTextFm = "✕ Doctor Rejected";
+                          statusBgFm = "rgba(239,68,68,0.2)";
+                          statusColorFm = "#f87171";
+                        } else {
+                          statusTextFm = "Doctor Approval Required";
+                          statusBgFm = "rgba(239,68,68,0.2)";
+                          statusColorFm = "#f87171";
+                        }
+                      } else if (isModFm) {
+                        statusTextFm = "Safety Advice";
+                        statusBgFm = "rgba(245,158,11,0.2)";
+                        statusColorFm = "#fbbf24";
+                      }
+
+                      return (
+                        <div key={fm._id} style={{ background: "#1e293b", padding: "16px", borderRadius: "12px", border: isHighFm ? "1px solid #ef4444" : "1px solid #334155" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+                              👥 {fm.name} ({fm.relationship})
+                            </span>
+                            <span style={{ fontSize: "11px", background: statusBgFm, color: statusColorFm, padding: "3px 8px", borderRadius: "6px", fontWeight: "700" }}>
+                              {statusTextFm}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                            Medical Risk: <strong style={{ color: isHighFm ? "#f87171" : isModFm ? "#fbbf24" : "#34d399" }}>{isHighFm ? "HIGH / CRITICAL" : isModFm ? "MODERATE" : "LOW"}</strong>
+                            {" • "}PSI: <strong>{fm.psiScore || 90}/100</strong>
+                          </div>
+
+                          {(docStatusFm === "rejected" || docStatusFm === "not_approved") && fm.doctorReason && (
+                            <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5", fontSize: "12px", marginTop: "8px" }}>
+                              <strong>Doctor Reason:</strong> {fm.doctorReason}
+                            </div>
+                          )}
+
+                          {/* Responsibility button enabled ONLY when doctor rejects */}
+                          {isHighFm && !fm.responsibilityAccepted && docStatusFm !== "approved" && (
+                            <div style={{ marginTop: "10px" }}>
+                              {docStatusFm === "rejected" || docStatusFm === "not_approved" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenResponsibilityModal({
+                                    type: "family_member",
+                                    familyMemberId: fm._id,
+                                    name: fm.name,
+                                    relationship: fm.relationship,
+                                    isRejected: true,
+                                    doctorReason: fm.doctorReason || "",
+                                  })}
+                                  style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#dc2626", color: "#fff", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "12.5px" }}
+                                >
+                                  ⚠️ Travel on Your Own Responsibility ({fm.name}) →
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", background: "#64748b", color: "#fff", border: "none", opacity: 0.65, cursor: "not-allowed", fontSize: "12px", fontWeight: "600" }}
+                                >
+                                  Doctor Approval Required (Pending Review)
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                ) : (
-                  <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
-                    <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
-                      No services found within {searchRadius} km.
-                    </p>
+                </div>
+
+                {/* SECTION 3: STARTING LOCATION */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiMapPin className="sec-icon" />
+                    <div>
+                      <h3>3. Starting Location</h3>
+                      <p>Specify where your journey originates</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* SUBMIT / REVIEW BUTTON */}
-            <div className="planner-action-bar">
-              <button type="submit" className="btn-review-summary">
-                Review Journey Summary →
-              </button>
-            </div>
-          </form>
-        ) : (
-          /* SUMMARY STEP */
-          <div className="journey-summary-view-card">
-            <div className="summary-header">
-              <FiCheckCircle className="sum-check-icon" />
-              <div>
-                <h2>Journey Plan Summary</h2>
-                <p>Review all details before confirming your pilgrimage journey.</p>
-              </div>
-            </div>
+                  <div className="radio-options-row">
+                    <label className="radio-btn-label">
+                      <input
+                        type="radio"
+                        name="locationType"
+                        value="manual"
+                        checked={locationType === "manual"}
+                        onChange={() => setLocationType("manual")}
+                      />
+                      <span>Enter Location Manually</span>
+                    </label>
 
-            <div className="summary-sections-grid">
-              <div className="sum-box">
-                <h4>⛩️ Destination Pilgrimage Center</h4>
-                <p className="val-title">{center.name}</p>
-                <p className="val-sub">📍 {center.location?.city}, {center.location?.state}, {center.location?.country}</p>
-              </div>
+                    <label className="radio-btn-label">
+                      <input
+                        type="radio"
+                        name="locationType"
+                        value="current"
+                        checked={locationType === "current"}
+                        onChange={handleCurrentLocationSelect}
+                      />
+                      <span>📍 Use Current Geolocation</span>
+                    </label>
+                  </div>
 
-              <div className="sum-box">
-                <h4>📅 Travel Dates</h4>
-                <p className="val-title">{journeyDate} → {returnDate}</p>
-                <p className="val-sub">Start: {journeyDate} | Return: {returnDate}</p>
-              </div>
+                  {locationType === "manual" && (
+                    <div className="form-grid-4" style={{ marginTop: "16px" }}>
+                      {/* 1. COUNTRY */}
+                      <div className="form-group">
+                        <label>Country *</label>
+                        <input
+                          type="text"
+                          value={startLocation.country}
+                          onChange={(e) => setStartLocation({ ...startLocation, country: e.target.value })}
+                          className="form-control"
+                          readOnly
+                        />
+                      </div>
 
-              <div className="sum-box">
-                <h4>👨‍👩‍👧‍👦 Total Pilgrims</h4>
-                <p className="val-title">{totalPilgrimsCount} Pilgrim(s)</p>
-                <p className="val-sub">
-                  {travelingAlone ? "Traveling Alone" : `1 Main User + ${selectedFamilyObjects.length} Family Member(s)`}
-                </p>
-                {selectedFamilyObjects.length > 0 && (
-                  <div className="family-tags-row">
-                    {selectedFamilyObjects.map((f) => (
-                      <span key={f._id} className="fam-tag">{f.name} ({f.relationship})</span>
+                      {/* 2. STATE */}
+                      <div className="form-group">
+                        <label>State *</label>
+                        <select
+                          value={startLocation.state}
+                          onChange={(e) => setStartLocation({ ...startLocation, state: e.target.value })}
+                          onFocus={() => handleFieldFocus("state")}
+                          onBlur={() => handleFieldBlur("state")}
+                          className={`form-control ${fieldTouch.state && errors.state ? "input-error" : ""}`}
+                          required
+                        >
+                          <option value="">-- Select State / UT --</option>
+                          {INDIAN_STATES_AND_UTS.map((st) => (
+                            <option key={st} value={st}>
+                              {st}
+                            </option>
+                          ))}
+                        </select>
+                        {renderSingleFieldMessage("state")}
+                      </div>
+
+                      {/* 3. CITY / ORIGIN */}
+                      <div className="form-group">
+                        <label>City / Origin *</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Kochi / Delhi"
+                          value={startLocation.city}
+                          onChange={(e) => setStartLocation({ ...startLocation, city: e.target.value })}
+                          onFocus={() => handleFieldFocus("city")}
+                          onBlur={() => handleFieldBlur("city")}
+                          className={`form-control ${fieldTouch.city && errors.city ? "input-error" : ""}`}
+                          required
+                        />
+                        {renderSingleFieldMessage("city")}
+                      </div>
+
+                      {/* 4. FULL ADDRESS / LANDMARK */}
+                      <div className="form-group">
+                        <label>Full Address / Landmark *</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. MG Road, Near Central Station"
+                          value={startLocation.address}
+                          onChange={(e) => setStartLocation({ ...startLocation, address: e.target.value })}
+                          onFocus={() => handleFieldFocus("address")}
+                          onBlur={() => handleFieldBlur("address")}
+                          className={`form-control ${fieldTouch.address && errors.address ? "input-error" : ""}`}
+                          required
+                        />
+                        {renderSingleFieldMessage("address")}
+                      </div>
+                    </div>
+                  )}
+
+                  {locationType === "current" && (
+                    <div style={{ marginTop: "16px", padding: "14px 18px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", color: "#166534", fontSize: "14px" }}>
+                      <strong style={{ display: "block", marginBottom: "4px", color: "#15803d", fontSize: "14.5px" }}>
+                        📍 Current Geolocation Detected
+                      </strong>
+                      <p style={{ margin: 0, color: "#166534", fontWeight: "500" }}>
+                        {startLocation.address || "Current Location"}
+                        {startLocation.city && startLocation.city !== "Current City" ? ` (${startLocation.city}, ${startLocation.state})` : ""}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 4: MODE OF TRANSPORT & PREFERENCES */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiTruck className="sec-icon" />
+                    <div>
+                      <h3>4. Transport & Travel Preferences</h3>
+                      <p>Transportation mode, walking endurance, and budget options</p>
+                    </div>
+                  </div>
+
+                  <div className="form-grid-3">
+                    <div className="form-group">
+                      <label>Mode of Transport *</label>
+                      <select
+                        value={transportMode}
+                        onFocus={() => handleFieldFocus("transportMode")}
+                        onChange={(e) => setTransportMode(e.target.value)}
+                        onBlur={() => handleFieldBlur("transportMode")}
+                        className={`form-control ${fieldTouch.transportMode && errors.transportMode ? "input-error" : ""}`}
+                        required
+                      >
+                        <option value="">-- Select Transport Mode --</option>
+                        <option value="Car">Car</option>
+                        <option value="Bus">Bus</option>
+                        <option value="Train">Train</option>
+                        <option value="Flight">Flight</option>
+                        <option value="Taxi/Cab">Taxi / Cab</option>
+                        <option value="Walking">Walking / On Foot</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      {renderSingleFieldMessage("transportMode")}
+                    </div>
+
+                    <div className="form-group">
+                      <label>Expected Walking Level *</label>
+                      <select
+                        value={walkingLevel}
+                        onFocus={() => handleFieldFocus("walkingLevel")}
+                        onChange={(e) => setWalkingLevel(e.target.value)}
+                        onBlur={() => handleFieldBlur("walkingLevel")}
+                        className={`form-control ${fieldTouch.walkingLevel && errors.walkingLevel ? "input-error" : ""}`}
+                        required
+                      >
+                        <option value="">-- Select Walking Level --</option>
+                        <option value="Low">Low (Easy Walking)</option>
+                        <option value="Moderate">Moderate (Average Trek)</option>
+                        <option value="High">High (Demanding Trek)</option>
+                      </select>
+                      {renderSingleFieldMessage("walkingLevel")}
+                    </div>
+
+                    <div className="form-group">
+                      <label>Travel Budget *</label>
+                      <select
+                        value={budgetType}
+                        onFocus={() => handleFieldFocus("budgetType")}
+                        onChange={(e) => setBudgetType(e.target.value)}
+                        onBlur={() => handleFieldBlur("budgetType")}
+                        className={`form-control ${fieldTouch.budgetType && errors.budgetType ? "input-error" : ""}`}
+                        required
+                      >
+                        <option value="">-- Select Travel Budget --</option>
+                        <option value="Low">Low / Economy</option>
+                        <option value="Moderate">Moderate / Standard</option>
+                        <option value="High">High / Premium</option>
+                        <option value="Custom">Custom Amount</option>
+                      </select>
+                      {renderSingleFieldMessage("budgetType")}
+                    </div>
+                  </div>
+
+                  {budgetType === "Custom" && (
+                    <div className="form-group" style={{ maxWidth: "300px", marginTop: "12px" }}>
+                      <label>Budget Amount (₹) *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 15000"
+                        value={customBudgetAmount}
+                        onFocus={() => handleFieldFocus("customBudgetAmount")}
+                        onChange={(e) => setCustomBudgetAmount(e.target.value)}
+                        onBlur={() => handleFieldBlur("customBudgetAmount")}
+                        className={`form-control ${fieldTouch.customBudgetAmount && errors.customBudgetAmount ? "input-error" : ""}`}
+                        required
+                      />
+                      {renderSingleFieldMessage("customBudgetAmount")}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 5: ACCOMMODATION & FOOD REQUIREMENTS */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiHome className="sec-icon" />
+                    <div>
+                      <h3>5. Accommodation & Food Options</h3>
+                      <p>Configure search filters for nearby hotels and restaurants</p>
+                    </div>
+                  </div>
+
+                  <div className="form-grid-3">
+                    <div className="form-group">
+                      <label>Need Nearby Accommodation? *</label>
+                      <div className="toggle-btn-group">
+                        <button
+                          type="button"
+                          className={`btn-toggle ${accommodationRequired ? "active" : ""}`}
+                          onClick={() => setAccommodationRequired(true)}
+                        >
+                          YES
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-toggle ${!accommodationRequired ? "active" : ""}`}
+                          onClick={() => setAccommodationRequired(false)}
+                        >
+                          NO
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Need Nearby Food Recommendations? *</label>
+                      <div className="toggle-btn-group">
+                        <button
+                          type="button"
+                          className={`btn-toggle ${foodRequired ? "active" : ""}`}
+                          onClick={() => setFoodRequired(true)}
+                        >
+                          YES
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-toggle ${!foodRequired ? "active" : ""}`}
+                          onClick={() => setFoodRequired(false)}
+                        >
+                          NO
+                        </button>
+                      </div>
+                    </div>
+
+                    {foodRequired && (
+                      <div className="form-group">
+                        <label>Dietary Preference *</label>
+                        <select
+                          value={foodPreference}
+                          onChange={(e) => setFoodPreference(e.target.value)}
+                          onFocus={() => handleFieldFocus("foodPreference")}
+                          onBlur={() => handleFieldBlur("foodPreference")}
+                          className={`form-control ${fieldTouch.foodPreference && errors.foodPreference ? "input-error" : ""}`}
+                          required
+                        >
+                          <option value="">-- Select Dietary Preference --</option>
+                          <option value="Vegetarian">Pure Vegetarian</option>
+                          <option value="Non-Vegetarian">Non-Vegetarian</option>
+                          <option value="Vegan">Vegan</option>
+                          <option value="No preference">No preference</option>
+                        </select>
+                        {renderSingleFieldMessage("foodPreference")}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-group" style={{ marginTop: "16px", maxWidth: "400px" }}>
+                    <label>Service Search Radius around Pilgrimage Center *</label>
+                    <div className="radius-selector-buttons">
+                      {[5, 10, 15, 20].map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          className={`btn-radius ${searchRadius === r ? "active" : ""}`}
+                          onClick={() => setSearchRadius(r)}
+                        >
+                          {r} km
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 6: NEARBY SERVICES & LEAFLET MAP */}
+                <div className="form-section-card">
+                  <div className="section-title">
+                    <FiCompass className="sec-icon" />
+                    <div>
+                      <h3>6. Nearby Support Services & Interactive Map</h3>
+                      <p>Real coordinates search calculated by distance from {center.name}</p>
+                    </div>
+                  </div>
+
+                  {/* Category Filter Pills */}
+                  <div className="nearby-category-pills">
+                    {[
+                      { id: "accommodation", label: "🏨 Accommodation" },
+                      { id: "restaurants", label: "🍽️ Restaurants/Food" },
+                      { id: "parking", label: "🅿️ Parking" },
+                      { id: "hospitals", label: "🏥 Hospitals" },
+                      { id: "pharmacies", label: "💊 Pharmacies" },
+                      { id: "restrooms", label: "🚻 Restrooms" },
+                      { id: "drinkingWater", label: "🚰 Water Kiosks" },
+                      { id: "atms", label: "🏧 ATMs" },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        className={`cat-pill-btn ${activeCategory === cat.id ? "active" : ""}`}
+                        onClick={() => setActiveCategory(cat.id)}
+                      >
+                        {cat.label}
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
 
-              <div className="sum-box">
-                <h4>🚗 Transport & Travel Mode</h4>
-                <p className="val-title">{transportMode}</p>
-                <p className="val-sub">Walking Level: {walkingLevel}</p>
-              </div>
+                  {/* Leaflet Interactive Map */}
+                  <div className="map-wrapper-box" style={{ marginBottom: "20px" }}>
+                    <JourneyMap
+                      centerCoords={center.location}
+                      centerName={center.name}
+                      places={nearbyPlaces}
+                      selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
+                      onSelectPlace={handleToggleSelectPlace}
+                    />
+                  </div>
 
-              <div className="sum-box">
-                <h4>💰 Travel Budget</h4>
-                <p className="val-title">
-                  {budgetType} {budgetType === "Custom" ? `(₹${customBudgetAmount})` : ""}
-                </p>
-              </div>
+                  {/* Places List Cards */}
+                  <div className="nearby-places-list">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                      <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                        Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
+                      </h4>
+                      {nearbyPlaces.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn-view-all-services"
+                          onClick={() => setIsViewAllOpen(true)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "7px 14px",
+                            borderRadius: "8px",
+                            background: "#eff6ff",
+                            color: "#2563eb",
+                            border: "1px solid #bfdbfe",
+                            fontSize: "13px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FiInfo size={14} /> View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} ({nearbyPlaces.length})
+                        </button>
+                      )}
+                    </div>
 
-              <div className="sum-box">
-                <h4>🏡 Accommodation & Food</h4>
-                <p className="val-sub">Accommodation Required: {accommodationRequired ? "YES" : "NO"}</p>
-                <p className="val-sub">Food Recommendations: {foodRequired ? `YES (${foodPreference})` : "NO"}</p>
-                <p className="val-sub">Search Radius: {searchRadius} km</p>
-              </div>
-            </div>
+                    {loadingNearby ? (
+                      <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                        <p style={{ margin: 0, fontSize: "14px", color: "#2563eb", fontWeight: "600" }}>Searching nearby services...</p>
+                      </div>
+                    ) : nearbyPlaces.length > 0 ? (
+                      <div className="places-cards-grid">
+                        {nearbyPlaces.slice(0, 6).map((place, idx) => {
+                          const selectedList = selectedServices[activeCategory] || [];
+                          const placeId = place.externalPlaceId || idx;
+                          const isSelected = selectedList.some(
+                            (item) => item.externalPlaceId === place.externalPlaceId
+                          );
 
-            {/* SELECTED NEARBY SERVICES SUMMARY */}
-            <div className="summary-selected-services-box">
-              <h4>📍 Selected Support Services</h4>
-              {Object.keys(selectedServices).some((cat) => selectedServices[cat].length > 0) ? (
-                <div className="selected-services-grid">
-                  {Object.keys(selectedServices).map((cat) => {
-                    const list = selectedServices[cat];
-                    if (list.length === 0) return null;
-                    return (
-                      <div key={cat} className="sel-cat-block">
-                        <h5>{cat.toUpperCase()} ({list.length})</h5>
-                        {list.map((item) => (
-                          <div key={item.externalPlaceId} className="sel-item-row">
-                            <span>• {item.name}</span>
-                            <span className="dist">({item.distanceKm} km)</span>
-                          </div>
+                          const originLat = startLocation.latitude || center.location?.latitude;
+                          const originLng = startLocation.longitude || center.location?.longitude;
+                          const directionsUrl = originLat && originLng
+                            ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
+                            : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+
+                          return (
+                            <div key={placeId} className={`place-card ${isSelected ? "selected" : ""}`}>
+                              <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
+                                  {place.placeType || place.category}
+                                </span>
+                                <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
+                                  📍 {place.distanceKm} km
+                                </span>
+                              </div>
+
+                              <h5 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h5>
+
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "8px" }}>
+                                <span style={{ color: "#b45309", fontWeight: "700" }}>
+                                  {place.rating ? `⭐ ${place.rating} / 5` : "Rating N/A"}
+                                </span>
+                                {place.isOpen !== null && place.isOpen !== undefined && (
+                                  <span style={{ fontSize: "11px", fontWeight: "700", color: place.isOpen ? "#047857" : "#b91c1c", background: place.isOpen ? "#ecfdf5" : "#fef2f2", padding: "2px 6px", borderRadius: "4px" }}>
+                                    {place.isOpen ? "Open Now" : "Closed"}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="place-address" style={{ margin: "0 0 10px 0", fontSize: "12.5px", color: "#64748b", lineHeight: "1.35" }}>{place.address}</p>
+
+                              {place.dietaryInfo && place.dietaryInfo.isVegetarian && (
+                                <div style={{ marginBottom: "10px" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "3px 8px", borderRadius: "6px" }}>
+                                    🌱 {place.dietaryInfo.label}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="place-card-actions" style={{ display: "flex", gap: "6px", marginTop: "auto" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailPlace(place)}
+                                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                >
+                                  <FiInfo size={13} /> Details
+                                </button>
+
+                                <a
+                                  href={directionsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: "700", textDecoration: "none" }}
+                                >
+                                  <FiNavigation size={13} /> Directions
+                                </a>
+
+                                <button
+                                  type="button"
+                                  className={`btn-select-place ${isSelected ? "selected" : ""}`}
+                                  onClick={() => handleToggleSelectPlace(place)}
+                                  style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
+                                >
+                                  {isSelected ? "✓ Selected" : "+ Select"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                        <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                          No services found within {searchRadius} km.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* SUBMIT / REVIEW BUTTON */}
+                <div className="planner-action-bar">
+                  <button type="submit" className="btn-review-summary">
+                    Review Journey Summary →
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* SUMMARY STEP */
+              <div className="journey-summary-view-card">
+                <div className="summary-header">
+                  <FiCheckCircle className="sum-check-icon" />
+                  <div>
+                    <h2>Journey Plan Summary</h2>
+                    <p>Review all details before confirming your pilgrimage journey.</p>
+                  </div>
+                </div>
+
+                <div className="summary-sections-grid">
+                  <div className="sum-box">
+                    <h4>⛩️ Destination Pilgrimage Center</h4>
+                    <p className="val-title">{center.name}</p>
+                    <p className="val-sub">📍 {center.location?.city}, {center.location?.state}, {center.location?.country}</p>
+                  </div>
+
+                  <div className="sum-box">
+                    <h4>📅 Travel Dates</h4>
+                    <p className="val-title">{journeyDate} → {returnDate}</p>
+                    <p className="val-sub">Start: {journeyDate} | Return: {returnDate}</p>
+                  </div>
+
+                  <div className="sum-box">
+                    <h4>👨‍👩‍👧‍👦 Total Pilgrims</h4>
+                    <p className="val-title">{totalPilgrimsCount} Pilgrim(s)</p>
+                    <p className="val-sub">
+                      {travelingAlone ? "Traveling Alone" : `1 Main User + ${selectedFamilyObjects.length} Family Member(s)`}
+                    </p>
+                    {selectedFamilyObjects.length > 0 && (
+                      <div className="family-tags-row">
+                        {selectedFamilyObjects.map((f) => (
+                          <span key={f._id} className="fam-tag">{f.name} ({f.relationship})</span>
                         ))}
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="no-services-msg">No specific nearby services pre-selected (all default map markers remain available during journey).</p>
-              )}
-            </div>
+                    )}
+                  </div>
 
-            {submitError && (
-              <div className="submit-error-alert">
-                ⚠️ {submitError}
+                  <div className="sum-box">
+                    <h4>🚗 Transport & Travel Mode</h4>
+                    <p className="val-title">{transportMode}</p>
+                    <p className="val-sub">Walking Level: {walkingLevel}</p>
+                  </div>
+
+                  <div className="sum-box">
+                    <h4>💰 Travel Budget</h4>
+                    <p className="val-title">
+                      {budgetType} {budgetType === "Custom" ? `(₹${customBudgetAmount})` : ""}
+                    </p>
+                  </div>
+
+                  <div className="sum-box">
+                    <h4>🏡 Accommodation & Food</h4>
+                    <p className="val-sub">Accommodation Required: {accommodationRequired ? "YES" : "NO"}</p>
+                    <p className="val-sub">Food Recommendations: {foodRequired ? `YES (${foodPreference})` : "NO"}</p>
+                    <p className="val-sub">Search Radius: {searchRadius} km</p>
+                  </div>
+                </div>
+
+                {/* SELECTED NEARBY SERVICES SUMMARY */}
+                <div className="summary-selected-services-box">
+                  <h4>📍 Selected Support Services</h4>
+                  {Object.keys(selectedServices).some((cat) => selectedServices[cat].length > 0) ? (
+                    <div className="selected-services-grid">
+                      {Object.keys(selectedServices).map((cat) => {
+                        const list = selectedServices[cat];
+                        if (list.length === 0) return null;
+                        return (
+                          <div key={cat} className="sel-cat-block">
+                            <h5>{cat.toUpperCase()} ({list.length})</h5>
+                            {list.map((item) => (
+                              <div key={item.externalPlaceId} className="sel-item-row">
+                                <span>• {item.name}</span>
+                                <span className="dist">({item.distanceKm} km)</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="no-services-msg">No specific nearby services pre-selected (all default map markers remain available during journey).</p>
+                  )}
+                </div>
+
+                {submitError && (
+                  <div className="submit-error-alert">
+                    ⚠️ {submitError}
+                  </div>
+                )}
+
+                <div className="summary-action-buttons">
+                  <button
+                    type="button"
+                    className="btn-back-edit"
+                    onClick={() => setCurrentStep("form")}
+                    disabled={submitting}
+                  >
+                    ← Back & Edit Details
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-confirm-save"
+                    onClick={handleConfirmSaveJourney}
+                    disabled={submitting}
+                  >
+                    {submitting ? "Confirming Journey..." : "Confirm Journey"}
+                  </button>
+                </div>
               </div>
             )}
-
-            <div className="summary-action-buttons">
-              <button
-                type="button"
-                className="btn-back-edit"
-                onClick={() => setCurrentStep("form")}
-                disabled={submitting}
-              >
-                ← Back & Edit Details
-              </button>
-
-              <button
-                type="button"
-                className="btn-confirm-save"
-                onClick={handleConfirmSaveJourney}
-                disabled={submitting}
-              >
-                {submitting ? "Confirming Journey..." : "Confirm Journey"}
-              </button>
-            </div>
           </div>
-        )}
-      </div>
 
-      {/* Responsibility Confirmation Modal */}
-      {showResponsibilityModal && responsibilityTarget && (
-        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div className="modal-card" style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "16px", padding: "24px", maxWidth: "520px", width: "90%", color: "#f8fafc" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, color: responsibilityTarget.isRejected ? "#ef4444" : "#3b82f6" }}>
-                {responsibilityTarget.isRejected ? "⚠️ Travel Responsibility Warning" : "Travel Responsibility Confirmation"}
-              </h3>
-              <button onClick={() => setShowResponsibilityModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" }}>
-                <FiX />
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px", fontSize: "14px", lineHeight: "1.6", color: "#cbd5e1" }}>
-              {responsibilityTarget.isRejected ? (
-                <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "14px", borderRadius: "10px", color: "#fca5a5" }}>
-                  "The doctor has rejected travel for <strong>{responsibilityTarget.name} ({responsibilityTarget.relationship})</strong> because of the identified medical risk ({responsibilityTarget.doctorReason || "Clinical risk assessment"}). Continuing the journey despite the doctor's rejection is entirely at your own responsibility. Professional medical advice should be followed."
+          {/* Responsibility Confirmation Modal */}
+          {showResponsibilityModal && responsibilityTarget && (
+            <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+              <div className="modal-card" style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: "16px", padding: "24px", maxWidth: "520px", width: "90%", color: "#f8fafc" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <h3 style={{ margin: 0, color: responsibilityTarget.isRejected ? "#ef4444" : "#3b82f6" }}>
+                    {responsibilityTarget.isRejected ? "⚠️ Travel Responsibility Warning" : "Travel Responsibility Confirmation"}
+                  </h3>
+                  <button onClick={() => setShowResponsibilityModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" }}>
+                    <FiX />
+                  </button>
                 </div>
-              ) : (
-                <div style={{ background: "#064e3b", border: "1px solid #059669", padding: "14px", borderRadius: "10px", color: "#a7f3d0" }}>
-                  "The doctor has approved the travel. By continuing, you acknowledge the medical risk and agree to travel under your own responsibility."
+
+                <div style={{ marginBottom: "20px", fontSize: "14px", lineHeight: "1.6", color: "#cbd5e1" }}>
+                  {responsibilityTarget.isRejected ? (
+                    <div style={{ background: "#450a0a", border: "1px solid #dc2626", padding: "14px", borderRadius: "10px", color: "#fca5a5" }}>
+                      "The doctor has rejected travel for <strong>{responsibilityTarget.name} ({responsibilityTarget.relationship})</strong> because of the identified medical risk ({responsibilityTarget.doctorReason || "Clinical risk assessment"}). Continuing the journey despite the doctor's rejection is entirely at your own responsibility. Professional medical advice should be followed."
+                    </div>
+                  ) : (
+                    <div style={{ background: "#064e3b", border: "1px solid #059669", padding: "14px", borderRadius: "10px", color: "#a7f3d0" }}>
+                      "The doctor has approved the travel. By continuing, you acknowledge the medical risk and agree to travel under your own responsibility."
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowResponsibilityModal(false)}
+                    style={{ padding: "10px 18px", borderRadius: "8px", background: "#334155", color: "#fff", border: "none", cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmAcceptResponsibility}
+                    disabled={submittingResponsibility}
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: "8px",
+                      background: responsibilityTarget.isRejected ? "#dc2626" : "#2563eb",
+                      color: "#fff",
+                      border: "none",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {submittingResponsibility
+                      ? "Recording Acceptance..."
+                      : responsibilityTarget.isRejected
+                        ? "I Understand – Travel in My Own Responsibility"
+                        : "Confirm & Continue Journey"}
+                  </button>
+                </div>
+              </div>
             </div>
+          )}
 
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setShowResponsibilityModal(false)}
-                style={{ padding: "10px 18px", borderRadius: "8px", background: "#334155", color: "#fff", border: "none", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmAcceptResponsibility}
-                disabled={submittingResponsibility}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  background: responsibilityTarget.isRejected ? "#dc2626" : "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                }}
-              >
-                {submittingResponsibility
-                  ? "Recording Acceptance..."
-                  : responsibilityTarget.isRejected
-                  ? "I Understand – Travel in My Own Responsibility"
-                  : "Confirm & Continue Journey"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          {/* Place Details Modal */}
+          {selectedDetailPlace && (
+            <PlaceDetailsModal
+              isOpen={!!selectedDetailPlace}
+              onClose={() => setSelectedDetailPlace(null)}
+              place={selectedDetailPlace}
+              originCoords={startLocation.latitude ? startLocation : center?.location}
+              onSelectPlace={handleToggleSelectPlace}
+              isSelected={(selectedServices[activeCategory] || []).some((s) => s.externalPlaceId === selectedDetailPlace.externalPlaceId)}
+            />
+          )}
 
-      {/* Place Details Modal */}
-      {selectedDetailPlace && (
-        <PlaceDetailsModal
-          isOpen={!!selectedDetailPlace}
-          onClose={() => setSelectedDetailPlace(null)}
-          place={selectedDetailPlace}
-          originCoords={startLocation.latitude ? startLocation : center?.location}
-          onSelectPlace={handleToggleSelectPlace}
-          isSelected={(selectedServices[activeCategory] || []).some((s) => s.externalPlaceId === selectedDetailPlace.externalPlaceId)}
-        />
-      )}
-
-      {/* View All Services Modal */}
-      {isViewAllOpen && (
-        <ViewAllServicesModal
-          isOpen={isViewAllOpen}
-          onClose={() => setIsViewAllOpen(false)}
-          category={activeCategory}
-          radiusKm={searchRadius}
-          places={nearbyPlaces}
-          originCoords={startLocation.latitude ? startLocation : center?.location}
-          selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
-          onSelectPlace={handleToggleSelectPlace}
-          onViewDetails={(place) => setSelectedDetailPlace(place)}
-        />
-      )}
+          {/* View All Services Modal */}
+          {isViewAllOpen && (
+            <ViewAllServicesModal
+              isOpen={isViewAllOpen}
+              onClose={() => setIsViewAllOpen(false)}
+              category={activeCategory}
+              radiusKm={searchRadius}
+              places={nearbyPlaces}
+              originCoords={startLocation.latitude ? startLocation : center?.location}
+              selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
+              onSelectPlace={handleToggleSelectPlace}
+              onViewDetails={(place) => setSelectedDetailPlace(place)}
+            />
+          )}
         </div>
       </div>
     </div>
