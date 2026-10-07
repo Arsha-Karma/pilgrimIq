@@ -6,7 +6,7 @@ import reportWebVitals from './reportWebVitals';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './context/AuthContext';
 
-const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || "100520649993-ula9ms73fq7gesk43f21ut3j639j17hq.apps.googleusercontent.com";
+const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || "355096580337-lkao52vktrlot4gg6po9r181aqa6nbfu.apps.googleusercontent.com";
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
