@@ -122,7 +122,7 @@
 .about-hero {
   background: linear-gradient(180deg, var(--bg-dark-hero) 0%, #0c2557 100%);
   color: #ffffff;
-  padding: 40px 20px 50px;
+  padding: 100px 20px 50px;
   margin-top: 0;
   text-align: center;
 }

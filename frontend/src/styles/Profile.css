@@ -20,7 +20,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-top: 76px;
+  padding-top: 71px;
 }
 
 .pilgrim-dashboard-wrapper * {
@@ -284,8 +284,8 @@
 .pilgrim-dashboard-container {
   display: flex;
   flex: 1;
-  min-height: calc(100vh - 68px);
-  padding-top: 92px;
+  min-height: calc(100vh - 71px);
+  padding-top: 0;
 }
 
 /* SIDEBAR */

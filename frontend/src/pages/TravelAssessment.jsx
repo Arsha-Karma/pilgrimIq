@@ -196,7 +196,7 @@ function TravelAssessment() {
     <div className="travel-assessment-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="journey" />
 
         <div className="pilgrim-main-content" style={{ flex: 1, padding: "1.5rem" }}>

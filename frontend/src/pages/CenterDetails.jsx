@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import "../styles/CenterDetails.css";
 import Navbar from "../components/Navbar";
+import UserSidebar from "../components/UserSidebar";
 import { apiGetPilgrimageCenterById } from "../services/api";
 import {
   FiMapPin,
@@ -10,7 +11,6 @@ import {
   FiCheckSquare,
   FiGlobe,
   FiPhone,
-  FiArrowLeft,
   FiCompass,
   FiCheckCircle,
   FiInfo,
@@ -46,16 +46,13 @@ function CenterDetails() {
   };
 
   return (
-    <div className="center-details-page-wrapper">
+    <div className="center-details-page-wrapper pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="details-container">
-        {/* BREADCRUMB / BACK LINK */}
-        <div className="details-navigation">
-          <Link to="/centers" className="back-link">
-            <FiArrowLeft /> Back to Pilgrimage Centers
-          </Link>
-        </div>
+      <div className="pilgrim-dashboard-container">
+        <UserSidebar activeTab="journey" />
+
+        <div className="pilgrim-main-content">
 
         {loading ? (
           <div className="loading-state-card">
@@ -344,6 +341,7 @@ function CenterDetails() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

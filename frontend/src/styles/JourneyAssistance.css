@@ -4,7 +4,7 @@
   background-color: #0b1329;
   color: #f8fafc;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  padding-top: 85px !important; /* Prevents fixed navbar overlap */
+  padding-top: 71px !important; /* Prevents fixed navbar overlap */
   box-sizing: border-box;
 }
 

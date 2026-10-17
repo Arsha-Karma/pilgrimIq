@@ -73,7 +73,7 @@ function MyJourneys() {
     <div className="my-journeys-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="journey-planner" />
 
         <div className="pilgrim-main-content" style={{ padding: 0 }}>

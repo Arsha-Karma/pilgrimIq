@@ -373,7 +373,7 @@ function JourneyAssistance() {
     <div className="journey-assistance-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="journey-assistance" />
 
         <div className="pilgrim-main-content" style={{ padding: 0 }}>

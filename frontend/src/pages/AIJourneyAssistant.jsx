@@ -171,7 +171,7 @@ function AIJourneyAssistant() {
     <div className="pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="journey-assistant" />
 
         <div className="pilgrim-main-content">

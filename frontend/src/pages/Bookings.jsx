@@ -177,7 +177,7 @@ function Bookings() {
     <div className="bookings-page pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="bookings" />
 
         <div className="pilgrim-main-content bookings-main-content">

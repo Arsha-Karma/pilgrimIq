@@ -163,8 +163,10 @@
   width: 100%;
   min-height: 100vh;
   background: linear-gradient(180deg,
-      rgba(11, 25, 44, 0.45) 0%,
-      rgba(11, 25, 44, 0.35) 40%,
+      #07142f 0%,
+      rgba(7, 20, 47, 0.88) 71px,
+      rgba(11, 25, 44, 0.55) 140px,
+      rgba(11, 25, 44, 0.35) 50%,
       rgba(11, 45, 114, 0.25) 100%);
   display: flex;
   flex-direction: column;

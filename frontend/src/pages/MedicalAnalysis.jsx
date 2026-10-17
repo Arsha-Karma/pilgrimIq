@@ -113,7 +113,7 @@ function MedicalAnalysis() {
     return (
       <div className="pilgrim-dashboard-wrapper">
         <Navbar />
-        <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+        <div className="pilgrim-dashboard-container">
           <UserSidebar activeTab="medical-analysis" />
           <div className="pilgrim-main-content">
             <div className="analysis-card loading-card">
@@ -131,7 +131,7 @@ function MedicalAnalysis() {
     return (
       <div className="pilgrim-dashboard-wrapper">
         <Navbar />
-        <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+        <div className="pilgrim-dashboard-container">
           <UserSidebar activeTab="medical-analysis" />
           <div className="pilgrim-main-content">
             <div className="analysis-card error-card">
@@ -202,7 +202,7 @@ function MedicalAnalysis() {
     <div className="pilgrim-dashboard-wrapper">
       <Navbar />
 
-      <div className="pilgrim-dashboard-container" style={{ paddingTop: "72px" }}>
+      <div className="pilgrim-dashboard-container">
         <UserSidebar activeTab="health" />
 
         <div className="pilgrim-main-content">
