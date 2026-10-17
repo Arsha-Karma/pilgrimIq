@@ -1,0 +1,145 @@
+import { fetchAPI, getHeaders } from "./api";
+
+// Create a new journey plan
+export const apiCreateJourney = async (journeyData, token) => {
+  return fetchAPI("/journeys", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(journeyData),
+  });
+};
+
+// Accept responsibility for travel under own risk
+export const apiAcceptResponsibility = async (payload, token) => {
+  return fetchAPI("/journeys/accept-responsibility", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(payload),
+  });
+};
+
+// Start or activate a journey
+export const apiStartJourney = async (journeyId, token) => {
+  return fetchAPI("/journeys/start", {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ journeyId }),
+  });
+};
+
+// Get currently active journey for user
+export const apiGetActiveJourney = async (token) => {
+  return fetchAPI("/journeys/active", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Update active journey location
+export const apiUpdateJourneyLocation = async (id, locationData, token) => {
+  return fetchAPI(`/journeys/${id}/location`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify(locationData),
+  });
+};
+
+// Update active journey status
+export const apiUpdateJourneyStatus = async (id, status, token) => {
+  return fetchAPI(`/journeys/${id}/status`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+};
+
+// Get progress details for single journey
+export const apiGetJourneyProgress = async (id, token) => {
+  return fetchAPI(`/journeys/${id}/progress`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Complete journey
+export const apiCompleteJourney = async (id, token) => {
+  return fetchAPI(`/journeys/${id}/complete`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+};
+
+// Get current user's journeys
+export const apiGetMyJourneys = async (token) => {
+  return fetchAPI("/journeys/user/my-journeys", {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Get single journey by ID
+export const apiGetJourneyById = async (id, token) => {
+  return fetchAPI(`/journeys/${id}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Get bookings and selected services for a specific journey ID
+export const apiGetJourneyBookings = async (journeyId, token) => {
+  return fetchAPI(`/journeys/${journeyId}/bookings`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Update journey by ID
+export const apiUpdateJourney = async (id, journeyData, token) => {
+  return fetchAPI(`/journeys/${id}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(journeyData),
+  });
+};
+
+// Delete/Cancel journey by ID
+export const apiDeleteJourney = async (id, token) => {
+  return fetchAPI(`/journeys/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+};
+
+// Get nearby services (hotels, restaurants, hospitals, ATMs, etc.)
+export const apiGetNearbyServices = async (latitude, longitude, radius = 5, category = "accommodation", dietaryPreference = "No preference", token = null) => {
+  const queryParams = {
+    latitude,
+    longitude,
+    radius,
+    category,
+  };
+  if (dietaryPreference) {
+    queryParams.dietaryPreference = dietaryPreference;
+  }
+  const query = new URLSearchParams(queryParams).toString();
+
+  return fetchAPI(`/nearby-services?${query}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Expand shortened Google Maps link and resolve coordinates (Latitude & Longitude)
+export const apiExpandGoogleMapsUrl = async (url, meta = {}, token = null) => {
+  const queryParams = { url };
+  if (meta.name) queryParams.name = meta.name;
+  if (meta.city) queryParams.city = meta.city;
+  if (meta.state) queryParams.state = meta.state;
+  if (meta.country) queryParams.country = meta.country;
+
+  const query = new URLSearchParams(queryParams).toString();
+  return fetchAPI(`/nearby-services/expand-url?${query}`, {
+    method: "GET",
+    headers: getHeaders(token),
+  });
+};

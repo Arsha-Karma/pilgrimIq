@@ -1,0 +1,79 @@
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { getStoredSettings, applyThemePreference } from "./services/settingsService";
+
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import About from "./pages/About";
+import Features from "./pages/Features";
+import Centers from "./pages/Centers";
+import CenterDetails from "./pages/CenterDetails";
+import Services from "./pages/Services";
+import HowItWorks from "./pages/HowItWorks";
+import Contact from "./pages/Contact";
+import AdminDashboard from "./pages/AdminDashboard";
+import DoctorDashboard from "./pages/DoctorDashboard";
+import Profile from "./pages/Profile";
+import JourneyPlanner from "./pages/JourneyPlanner";
+import JourneyDetails from "./pages/JourneyDetails";
+import MyJourneys from "./pages/MyJourneys";
+import MedicalAnalysis from "./pages/MedicalAnalysis";
+import JourneyAssistance from "./pages/JourneyAssistance";
+import AIJourneyAssistant from "./pages/AIJourneyAssistant";
+import Settings from "./pages/Settings";
+import Bookings from "./pages/Bookings";
+import TravelAssessment from "./pages/TravelAssessment";
+
+function App() {
+  useEffect(() => {
+    const userSettings = getStoredSettings();
+    applyThemePreference(userSettings.appearanceSettings?.theme || "light");
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/family" element={<Profile />} />
+        <Route path="/my-family" element={<Profile />} />
+        <Route path="/emergency-services" element={<Profile />} />
+        <Route path="/medical-analysis/:reportId" element={<MedicalAnalysis />} />
+        <Route path="/journey-planner" element={<Navigate to="/centers" replace />} />
+        <Route path="/journey-planner/:pilgrimageCenterId" element={<JourneyPlanner />} />
+        <Route path="/journey/:journeyId" element={<JourneyDetails />} />
+        <Route path="/travel-assessment" element={<TravelAssessment />} />
+        <Route path="/travel-assessment/:journeyId" element={<TravelAssessment />} />
+        <Route path="/journey-assistance" element={<JourneyAssistance />} />
+        <Route path="/journey-assistance/:journeyId" element={<JourneyAssistance />} />
+        <Route path="/journey-assistant" element={<AIJourneyAssistant />} />
+        <Route path="/ai-journey-assistant" element={<AIJourneyAssistant />} />
+        <Route path="/my-journeys" element={<MyJourneys />} />
+        <Route path="/bookings" element={<Bookings />} />
+        <Route path="/bookings/:journeyId" element={<Bookings />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/doctor" element={<DoctorDashboard />} />
+        <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password/:resetToken" element={<ResetPassword />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/centers" element={<Centers />} />
+        <Route path="/pilgrimage-centers/:id" element={<CenterDetails />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
+        <Route path="/contact" element={<Contact />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
