@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./WeatherCard.css";
 import {
   FiSun,
@@ -13,31 +13,63 @@ import {
   FiCloud,
   FiThermometer,
   FiCheck,
-  FiRefreshCw
+  FiRefreshCw,
+  FiInfo,
 } from "react-icons/fi";
 
-const WeatherCard = ({ weatherData, loading, error, centerName }) => {
-  const [selectedDayIndex, setSelectedDayIndex] = useState(null); // null = Live Current Weather; 0..6 = Forecast Day
+const WeatherCard = ({
+  weatherData,
+  loading,
+  error,
+  centerName,
+  onRetry,
+  selectedJourneyDate,
+}) => {
+  const [selectedDayIndex, setSelectedDayIndex] = useState(null); // null = Live Current Weather; 0..15 = Forecast Day
+
+  const forecast = weatherData?.forecast || [];
+
+  // When selectedJourneyDate changes or weatherData loads, auto-select matching forecast day
+  useEffect(() => {
+    if (selectedJourneyDate && forecast.length > 0) {
+      const parsedDate = selectedJourneyDate.includes("T")
+        ? selectedJourneyDate.split("T")[0]
+        : selectedJourneyDate;
+
+      const idx = forecast.findIndex((f) => f.date === parsedDate);
+      if (idx !== -1) {
+        setSelectedDayIndex(idx);
+      } else {
+        setSelectedDayIndex(null);
+      }
+    } else {
+      setSelectedDayIndex(null);
+    }
+  }, [selectedJourneyDate, forecast]);
 
   if (loading) {
     return (
       <div className="weather-card-container loading-card">
         <div className="weather-spinner-wrapper">
           <FiLoader className="weather-spinner-icon" />
-          <p className="weather-loading-text">Fetching weather information...</p>
+          <p className="weather-loading-text">Fetching real-time weather information...</p>
         </div>
       </div>
     );
   }
 
   if (error || !weatherData) {
-    const isMissingCoords = error && error.includes("unavailable for this pilgrimage center");
+    const isMissingCoords =
+      error &&
+      (error.includes("unavailable for this pilgrimage center") ||
+        error.includes("coordinates are missing"));
+
     return (
       <div className="weather-card-container error-card">
         <div className="weather-error-content">
           <FiAlertTriangle className="weather-error-icon" />
-          <div>
-            <h4 className="weather-error-title">Weather Service Notice</h4>
+          <div style={{ flex: 1 }}>
+            <h4 className="weather-error-title">Weather Telemetry Notice</h4>
             <p className="weather-error-message">
               {error || "Weather information is temporarily unavailable."}
             </p>
@@ -45,6 +77,29 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
               <p className="weather-error-sub">
                 Latitude and longitude coordinates are missing for {centerName || "this center"}.
               </p>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                className="btn-retry-weather"
+                onClick={onRetry}
+                style={{
+                  marginTop: "12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  backgroundColor: "#dc2626",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                <FiRefreshCw /> Retry Weather Telemetry
+              </button>
             )}
           </div>
         </div>
@@ -62,38 +117,92 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
     rainProbability: currentRainProb,
     sunrise: currentSunrise,
     sunset: currentSunset,
-    forecast = [],
+    forecastNotice,
+    isForecastAvailable,
+    source,
   } = weatherData;
 
   // Active view: either selected forecast day or live current weather
-  const isForecastSelected = selectedDayIndex !== null && forecast[selectedDayIndex];
+  const isForecastSelected =
+    selectedDayIndex !== null && forecast[selectedDayIndex] !== undefined;
   const selectedDay = isForecastSelected ? forecast[selectedDayIndex] : null;
 
   const displayTemp = isForecastSelected ? selectedDay.temp : currentTemp;
-  const displayFeelsLike = isForecastSelected ? (selectedDay.feelsLike ?? selectedDay.temp) : currentFeelsLike;
-  const displayHumidity = isForecastSelected ? (selectedDay.humidity ?? currentHumidity) : currentHumidity;
-  const displayWindSpeed = isForecastSelected ? (selectedDay.windSpeed ?? currentWindSpeed) : currentWindSpeed;
-  const displayCondition = isForecastSelected ? selectedDay.condition : currentCondition;
+  const displayFeelsLike = isForecastSelected
+    ? selectedDay.feelsLike ?? selectedDay.temp
+    : currentFeelsLike;
+  const displayHumidity = isForecastSelected
+    ? selectedDay.humidity ?? currentHumidity
+    : currentHumidity;
+  const displayWindSpeed = isForecastSelected
+    ? selectedDay.windSpeed ?? currentWindSpeed
+    : currentWindSpeed;
+  const displayCondition = isForecastSelected
+    ? selectedDay.condition
+    : currentCondition;
   const displayIcon = isForecastSelected ? selectedDay.icon : currentIcon;
-  const displayRainProb = isForecastSelected ? selectedDay.rainProbability : currentRainProb;
-  const displaySunrise = isForecastSelected ? (selectedDay.sunrise ?? currentSunrise) : currentSunrise;
-  const displaySunset = isForecastSelected ? (selectedDay.sunset ?? currentSunset) : currentSunset;
+  const displayRainProb = isForecastSelected
+    ? selectedDay.rainProbability
+    : currentRainProb;
+  const displaySunrise = isForecastSelected
+    ? selectedDay.sunrise ?? currentSunrise
+    : currentSunrise;
+  const displaySunset = isForecastSelected
+    ? selectedDay.sunset ?? currentSunset
+    : currentSunset;
+
+  let eyebrowText = "LIVE METEOROLOGICAL TELEMETRY";
+  if (isForecastSelected) {
+    eyebrowText = `FORECAST FOR JOURNEY DAY: ${selectedDay.day.toUpperCase()} (${selectedDay.date})`;
+  } else if (forecastNotice) {
+    eyebrowText = "CURRENT LIVE WEATHER (Forecast not yet available for selected date)";
+  }
 
   return (
     <div className="weather-card-container">
+      {/* Notice Banner for Unsupported / Future Date */}
+      {forecastNotice && (
+        <div
+          className="weather-notice-banner"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            backgroundColor: "#fffbeb",
+            border: "1px solid #fde68a",
+            color: "#92400e",
+            padding: "10px 14px",
+            borderRadius: "10px",
+            marginBottom: "16px",
+            fontSize: "13px",
+            fontWeight: "600",
+          }}
+        >
+          <FiInfo style={{ color: "#d97706", fontSize: "20px", flexShrink: 0 }} />
+          <span>{forecastNotice}</span>
+        </div>
+      )}
+
       {/* CARD HEADER */}
       <div className="weather-card-header">
         <div className="header-title-box">
-          <span className="header-eyebrow">
-            {isForecastSelected ? `SELECTED FORECAST DAY: ${selectedDay.day.toUpperCase()} (${selectedDay.date})` : "LIVE METEOROLOGICAL DATA"}
-          </span>
+          <span className="header-eyebrow">{eyebrowText}</span>
           <h3>
             Weather at {weatherData.centerName || centerName || "Pilgrimage Center"}
-            {isForecastSelected && <span className="selected-day-tag"> — {selectedDay.day}, {selectedDay.date}</span>}
+            {isForecastSelected && (
+              <span className="selected-day-tag">
+                {" "}
+                — {selectedDay.day}, {selectedDay.date}
+              </span>
+            )}
           </h3>
+          <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>
+            Source: {source || "Live Meteorological Telemetry"}
+          </span>
         </div>
-        {isForecastSelected && (
-          <div className="header-action-group">
+
+        <div className="header-action-group" style={{ display: "flex", gap: "8px" }}>
+          {isForecastSelected && (
             <button
               type="button"
               className="reset-live-btn"
@@ -102,8 +211,20 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
             >
               <FiRefreshCw className="btn-icon" /> Reset to Current Live
             </button>
-          </div>
-        )}
+          )}
+
+          {onRetry && (
+            <button
+              type="button"
+              className="reset-live-btn"
+              onClick={onRetry}
+              title="Refresh Weather Telemetry"
+              style={{ background: "#f1f5f9", color: "#334155" }}
+            >
+              <FiRefreshCw className="btn-icon" /> Refresh
+            </button>
+          )}
+        </div>
       </div>
 
       {/* CURRENT / SELECTED DAY WEATHER HERO */}
@@ -168,26 +289,40 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
       <div className="sun-schedule-bar">
         <div className="sun-item">
           <FiSunrise className="sun-icon rise" />
-          <span>Sunrise: <strong>{displaySunrise}</strong></span>
+          <span>
+            Sunrise: <strong>{displaySunrise}</strong>
+          </span>
         </div>
         <div className="sun-divider"></div>
         <div className="sun-item">
           <FiSunset className="sun-icon set" />
-          <span>Sunset: <strong>{displaySunset}</strong></span>
+          <span>
+            Sunset: <strong>{displaySunset}</strong>
+          </span>
         </div>
       </div>
 
-      {/* 7-DAY FORECAST SECTION WITH DAY SELECTION */}
+      {/* MULTI-DAY FORECAST SECTION WITH DAY SELECTION */}
       {forecast.length > 0 && (
         <div className="weather-forecast-section">
           <div className="forecast-title-row">
             <div className="forecast-title">
               <FiCalendar className="forecast-icon" />
-              <h4>7-Day Weather Forecast</h4>
+              <h4>{forecast.length}-Day Meteorological Forecast</h4>
             </div>
+            <span style={{ fontSize: "12px", color: "#64748b" }}>
+              Click any day to view forecast details
+            </span>
           </div>
 
-          <div className="forecast-grid-7">
+          <div
+            className="forecast-grid-7"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+              gap: "10px",
+            }}
+          >
             {forecast.map((dayItem, idx) => {
               const isSelected = selectedDayIndex === idx;
               return (
@@ -217,7 +352,9 @@ const WeatherCard = ({ weatherData, loading, error, centerName }) => {
                   <div className="forecast-temp">
                     <strong>{dayItem.temp}°C</strong>
                     {dayItem.tempMin !== undefined && dayItem.tempMax !== undefined && (
-                      <span className="temp-range">{dayItem.tempMin}° / {dayItem.tempMax}°</span>
+                      <span className="temp-range">
+                        {dayItem.tempMin}° / {dayItem.tempMax}°
+                      </span>
                     )}
                   </div>
                   <span className="forecast-cond">{dayItem.condition}</span>

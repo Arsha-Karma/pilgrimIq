@@ -4,6 +4,8 @@ import Navbar from "../components/Navbar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetJourneyById, apiDeleteJourney, apiStartJourney } from "../services/journeyService";
+import { apiGetWeatherByCenterId } from "../services/weatherService";
+import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyDetails.css";
 import {
   FiMapPin,
@@ -28,6 +30,11 @@ function JourneyDetails() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Weather state for journey destination & travel date
+  const [weatherData, setWeatherData] = useState(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
+
   useEffect(() => {
     const fetchJourney = async () => {
       try {
@@ -50,6 +57,34 @@ function JourneyDetails() {
       fetchJourney();
     }
   }, [journeyId, token]);
+
+  const fetchWeather = async (forceRefresh = false) => {
+    const centerId = journey?.pilgrimageCenterId?._id || journey?.pilgrimageCenterId;
+    if (!centerId) return;
+    try {
+      setLoadingWeather(true);
+      setWeatherError("");
+      const data = await apiGetWeatherByCenterId(
+        centerId,
+        journey?.journeyDate || null,
+        token,
+        forceRefresh
+      );
+      setWeatherData(data);
+    } catch (err) {
+      console.error("Error loading weather details for journey:", err);
+      setWeatherError(err.message || "Weather information is temporarily unavailable.");
+    } finally {
+      setLoadingWeather(false);
+    }
+  };
+
+  useEffect(() => {
+    if (journey) {
+      fetchWeather();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journey]);
 
   const handleStartJourney = async () => {
     try {
@@ -246,6 +281,16 @@ function JourneyDetails() {
                 </div>
               </div>
             </div>
+
+            {/* WEATHER TELEMETRY CARD */}
+            <WeatherCard
+              weatherData={weatherData}
+              loading={loadingWeather}
+              error={weatherError}
+              centerName={center.name}
+              onRetry={() => fetchWeather(true)}
+              selectedJourneyDate={journey.journeyDate}
+            />
 
             {/* TRAVELLING PILGRIMS & FAMILY MEMBERS */}
             <div className="detail-section-card">

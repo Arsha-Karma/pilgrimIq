@@ -1,5 +1,10 @@
+const isBrowserLocal =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
 const DEFAULT_API_URL =
-  import.meta.env.VITE_API_URL || "https://pilgrimiq-backend.onrender.com/api";
+  import.meta.env.VITE_API_URL ||
+  (isBrowserLocal ? "http://localhost:5000/api" : "https://pilgrimiq-backend.onrender.com/api");
 
 export const getHeaders = (token) => {
   const headers = {
@@ -12,15 +17,18 @@ export const getHeaders = (token) => {
 };
 
 export const fetchAPI = async (endpoint, options = {}) => {
-  const isLocal = DEFAULT_API_URL.includes("127.0.0.1") || DEFAULT_API_URL.includes("localhost");
+  const isTargetLocal = DEFAULT_API_URL.includes("127.0.0.1") || DEFAULT_API_URL.includes("localhost");
   const urls = [
     `${DEFAULT_API_URL}${endpoint}`,
-    ...(isLocal
+    ...(isTargetLocal
       ? [
           DEFAULT_API_URL.includes("127.0.0.1")
             ? `http://localhost:5000/api${endpoint}`
             : `http://127.0.0.1:5000/api${endpoint}`,
+          `https://pilgrimiq-backend.onrender.com/api${endpoint}`,
         ]
+      : isBrowserLocal
+      ? [`http://localhost:5000/api${endpoint}`]
       : []),
   ];
 
@@ -246,9 +254,18 @@ export const apiMarkNotificationRead = async (id, token) => {
   });
 };
 
-// Weather API
-export const apiGetWeatherByCenterId = async (centerId, token = null) => {
-  return fetchAPI(`/weather/${centerId}`, {
+// Weather API - delegated with full date and refresh support
+export const apiGetWeatherByCenterId = async (centerId, date = null, token = null, refresh = false) => {
+  const queryParams = [];
+  if (date && date !== "null" && date !== "undefined") {
+    queryParams.push(`date=${encodeURIComponent(date)}`);
+  }
+  if (refresh) {
+    queryParams.push("refresh=true");
+  }
+  const queryString = queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
+
+  return fetchAPI(`/weather/${centerId}${queryString}`, {
     method: "GET",
     headers: getHeaders(token),
   });

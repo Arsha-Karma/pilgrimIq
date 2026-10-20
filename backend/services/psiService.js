@@ -5,7 +5,7 @@ const User = require("../models/User");
 const MedicalReport = require("../models/MedicalReport");
 const TravelAssessment = require("../models/TravelAssessment");
 const { predictCrowd } = require("./mlService");
-const { fetchWeatherData } = require("./weatherService");
+const { fetchWeatherData, resolveCoordinates } = require("./weatherService");
 const {
   PSI_WEIGHTS,
   normalizeRiskScore,
@@ -343,30 +343,78 @@ const fetchCrowdAssessment = async (centerName, dateStr) => {
  */
 const fetchWeatherAssessment = async (centerId, lat, lon, centerName, dateStr) => {
   try {
-    if (lat === undefined || lat === null || lon === undefined || lon === null) {
-      return { available: false, error: "Center missing coordinates" };
+    const coordCheck = resolveCoordinates(lat, lon, centerName);
+    if (!coordCheck.valid) {
+      return {
+        available: false,
+        error: `Center missing coordinates: ${coordCheck.error}`,
+      };
     }
 
-    const weatherData = await fetchWeatherData(centerId.toString(), Number(lat), Number(lon), centerName);
+    const weatherData = await fetchWeatherData(
+      centerId.toString(),
+      coordCheck.latitude,
+      coordCheck.longitude,
+      centerName
+    );
 
     let selectedWeather = null;
-    if (dateStr && weatherData.forecast) {
-      selectedWeather = weatherData.forecast.find((f) => f.date === dateStr);
+    let isForecast = false;
+    let diffDays = 0;
+
+    if (dateStr) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(dateStr);
+      targetDate.setHours(0, 0, 0, 0);
+
+      if (!isNaN(targetDate.getTime())) {
+        diffDays = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (weatherData.forecast && weatherData.forecast.length > 0) {
+          selectedWeather = weatherData.forecast.find((f) => f.date === dateStr);
+          if (selectedWeather) {
+            isForecast = true;
+          }
+        }
+
+        // Outside meteorological forecast horizon (> 16 days)
+        if (diffDays > 16) {
+          return {
+            available: false,
+            outsideForecastHorizon: true,
+            diffDays,
+            targetDate: dateStr,
+            error: `Weather forecast for journey date (${dateStr}) is not yet available (${diffDays} days away). Accurate forecasts are supported up to 16 days in advance.`,
+            temperature: weatherData.temperature,
+            condition: weatherData.condition,
+            rainProbability: weatherData.rainProbability,
+            humidity: weatherData.humidity,
+            windSpeed: weatherData.windSpeed,
+            source: weatherData.source,
+          };
+        }
+      }
     }
 
-    const level = weatherData.weatherRisk || "LOW";
+    const activeWeather = selectedWeather || weatherData;
+    const level = activeWeather.weatherRisk || weatherData.weatherRisk || "LOW";
     const score = normalizeRiskScore(level, 20);
 
     return {
       available: true,
       score,
       level: level.toUpperCase(),
-      temperature: selectedWeather ? selectedWeather.temp : weatherData.temperature,
-      condition: selectedWeather ? selectedWeather.condition : weatherData.condition,
-      rainProbability: selectedWeather ? selectedWeather.rainProbability : weatherData.rainProbability,
-      humidity: weatherData.humidity,
-      windSpeed: weatherData.windSpeed,
-      riskReasons: weatherData.riskReasons || [],
+      temperature: activeWeather.temp !== undefined ? activeWeather.temp : weatherData.temperature,
+      condition: activeWeather.condition || weatherData.condition,
+      rainProbability: activeWeather.rainProbability !== undefined ? activeWeather.rainProbability : weatherData.rainProbability,
+      humidity: activeWeather.humidity !== undefined ? activeWeather.humidity : weatherData.humidity,
+      windSpeed: activeWeather.windSpeed !== undefined ? activeWeather.windSpeed : weatherData.windSpeed,
+      riskReasons: activeWeather.riskReasons || weatherData.riskReasons || [],
+      isForecast,
+      date: isForecast ? dateStr : null,
+      source: weatherData.source,
+      coordinates: coordCheck,
     };
   } catch (err) {
     console.warn("Weather assessment failed for PSI:", err.message);
@@ -469,7 +517,13 @@ const calculateJourneyPsi = async (journeyId, userId, forceRefresh = false) => {
     dateStr
   );
   if (!weatherRes.available) {
-    missingInputs.push("Weather Prediction");
+    if (weatherRes.outsideForecastHorizon) {
+      missingInputs.push(
+        `Weather Prediction (Date is ${weatherRes.diffDays} days away; accurate forecasts supported up to 16 days in advance)`
+      );
+    } else {
+      missingInputs.push("Weather Prediction");
+    }
   }
 
   // 5. Handle Incomplete Input Data

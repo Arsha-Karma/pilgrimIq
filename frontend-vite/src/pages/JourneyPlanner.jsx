@@ -177,26 +177,26 @@ function JourneyPlanner() {
   }, [pilgrimageCenterId]);
 
   // Load Weather Information for Pilgrimage Center
-  useEffect(() => {
-    const fetchWeather = async () => {
-      if (!pilgrimageCenterId) return;
-      try {
-        setLoadingWeather(true);
-        setWeatherError("");
-        const data = await apiGetWeatherByCenterId(pilgrimageCenterId, token);
-        setWeatherData(data);
-      } catch (err) {
-        console.error("Error loading weather details:", err);
-        setWeatherError(err.message || "Weather information is temporarily unavailable.");
-      } finally {
-        setLoadingWeather(false);
-      }
-    };
+  const fetchWeather = async (forceRefresh = false) => {
+    if (!pilgrimageCenterId) return;
+    try {
+      setLoadingWeather(true);
+      setWeatherError("");
+      const data = await apiGetWeatherByCenterId(pilgrimageCenterId, journeyDate || null, token, forceRefresh);
+      setWeatherData(data);
+    } catch (err) {
+      console.error("Error loading weather details:", err);
+      setWeatherError(err.message || "Weather information is temporarily unavailable.");
+    } finally {
+      setLoadingWeather(false);
+    }
+  };
 
+  useEffect(() => {
     if (pilgrimageCenterId) {
       fetchWeather();
     }
-  }, [pilgrimageCenterId, token]);
+  }, [pilgrimageCenterId, journeyDate, token]);
 
   // Load User Profile & Family Members
   useEffect(() => {
@@ -722,6 +722,8 @@ function JourneyPlanner() {
               loading={loadingWeather}
               error={weatherError}
               centerName={center?.name}
+              onRetry={() => fetchWeather(true)}
+              selectedJourneyDate={journeyDate}
             />
 
             {/* STEP CONTROLS / TAB HEADERS */}

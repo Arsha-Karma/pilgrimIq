@@ -651,15 +651,39 @@ function TravelAssessment() {
                           <FiSun className="card-icon weather-icon-style" />
                           <div>
                             <h3>Weather Assessment</h3>
-                            <span className="card-subtitle">Corresponding OpenWeather Telemetry</span>
+                            <span className="card-subtitle">
+                              {psiData.weather?.details?.source || "Live Meteorological Telemetry"}
+                              {psiData.weather?.details?.isForecast ? ` • Forecast for ${formatDateString(psiData.journeyDate)}` : " • Live Telemetry"}
+                            </span>
                           </div>
                         </div>
-                        <span className={`weather-risk-badge risk-${(psiData.weather?.level || "LOW").toLowerCase()}`}>
+                        <span className={`weather-risk-badge risk-${(psiData.weather?.level || "LOW").toLowerCase().replace("_", "-")}`}>
                           {psiData.weather?.level} RISK
                         </span>
                       </div>
 
                       <div className="card-body">
+                        {psiData.weather?.details?.outsideForecastHorizon && (
+                          <div
+                            className="weather-forecast-notice"
+                            style={{
+                              background: "#fffbeb",
+                              borderColor: "#fde68a",
+                              color: "#92400e",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            <FiAlertTriangle className="notice-icon" style={{ color: "#d97706" }} />
+                            <div>
+                              <strong>Forecast Window Notice:</strong>
+                              <p style={{ margin: "2px 0 0", fontSize: "0.85rem" }}>
+                                {psiData.weather.details.error ||
+                                  "Accurate forecasts are supported up to 16 days in advance."}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="weather-current-grid">
                           <div className="temp-display">
                             <div className="temp-main">
