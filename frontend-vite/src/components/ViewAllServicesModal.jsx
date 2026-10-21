@@ -12,6 +12,7 @@ const ViewAllServicesModal = ({
   selectedPlaceIds = [],
   onSelectPlace,
   onViewDetails,
+  isAccommodationBooked,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("distance"); // "distance" | "rating"
@@ -191,14 +192,25 @@ const ViewAllServicesModal = ({
                         <FiNavigation size={14} /> Directions
                       </a>
 
-                      {onSelectPlace && (
+                      {category === "accommodation" && isAccommodationBooked && isAccommodationBooked(place) ? (
                         <button
                           type="button"
-                          className={`btn-card-act select ${isSelected ? "selected" : ""}`}
-                          onClick={() => onSelectPlace(place)}
+                          className="btn-card-act select booked"
+                          disabled
+                          style={{ background: "#059669", color: "#ffffff", cursor: "default" }}
                         >
-                          {isSelected ? <><FiCheck size={14} /> Selected</> : "Select"}
+                          ✓ Already Booked
                         </button>
+                      ) : (
+                        onSelectPlace && (
+                          <button
+                            type="button"
+                            className={`btn-card-act select ${isSelected ? "selected" : ""}`}
+                            onClick={() => onSelectPlace(place)}
+                          >
+                            {isSelected ? <><FiCheck size={14} /> Selected</> : "Select"}
+                          </button>
+                        )
                       )}
                     </div>
                   </div>

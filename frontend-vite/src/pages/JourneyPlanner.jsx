@@ -11,6 +11,8 @@ import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyPlanner.css";
 import PlaceDetailsModal from "../components/PlaceDetailsModal";
 import ViewAllServicesModal from "../components/ViewAllServicesModal";
+import AccommodationBookingModal from "../components/AccommodationBookingModal";
+import { apiGetMyAccommodationBookings } from "../services/accommodationBookingService";
 import {
   FiMapPin,
   FiCalendar,
@@ -140,6 +142,7 @@ function JourneyPlanner() {
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [selectedDetailPlace, setSelectedDetailPlace] = useState(null);
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
+  const [bookingTargetPlace, setBookingTargetPlace] = useState(null);
   const [selectedServices, setSelectedServices] = useState({
     accommodation: [],
     restaurants: [],
@@ -155,6 +158,37 @@ function JourneyPlanner() {
   const [currentStep, setCurrentStep] = useState("form");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  // Accommodation Bookings to track confirmed reservations
+  const [userAccommodationBookings, setUserAccommodationBookings] = useState([]);
+
+  // Fetch user confirmed bookings
+  useEffect(() => {
+    const fetchUserAccommodationBookings = async () => {
+      if (!token) return;
+      try {
+        const res = await apiGetMyAccommodationBookings(token);
+        if (res && Array.isArray(res.bookings)) {
+          setUserAccommodationBookings(res.bookings);
+        }
+      } catch (err) {
+        console.warn("Could not load user accommodation bookings:", err);
+      }
+    };
+    fetchUserAccommodationBookings();
+  }, [token]);
+
+  const isAccommodationBooked = useCallback((place) => {
+    if (!place || !userAccommodationBookings || userAccommodationBookings.length === 0) return false;
+    return userAccommodationBookings.some((b) => {
+      if (b.bookingStatus === "CANCELLED") return false;
+      const matchId = b.placeId && place.externalPlaceId && b.placeId === place.externalPlaceId;
+      const bName = (b.accommodationName || "").toLowerCase().trim();
+      const pName = (place.name || "").toLowerCase().trim();
+      const matchName = bName && pName && (bName === pName || bName.includes(pName) || pName.includes(bName));
+      return matchId || matchName;
+    });
+  }, [userAccommodationBookings]);
 
   // Load Pilgrimage Center
   useEffect(() => {
@@ -1439,12 +1473,21 @@ function JourneyPlanner() {
                             ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
                             : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
 
+                          const isBooked = activeCategory === "accommodation" && isAccommodationBooked(place);
+
                           return (
-                            <div key={placeId} className={`place-card ${isSelected ? "selected" : ""}`}>
+                            <div key={placeId} className={`place-card ${isSelected || isBooked ? "selected" : ""}`}>
                               <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
-                                  {place.placeType || place.category}
-                                </span>
+                                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
+                                    {place.placeType || place.category}
+                                  </span>
+                                  {isBooked && (
+                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#065f46", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "6px" }}>
+                                      ✓ Booked
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
                                   📍 {place.distanceKm} km
                                 </span>
@@ -1491,14 +1534,25 @@ function JourneyPlanner() {
                                   <FiNavigation size={13} /> Directions
                                 </a>
 
-                                <button
-                                  type="button"
-                                  className={`btn-select-place ${isSelected ? "selected" : ""}`}
-                                  onClick={() => handleToggleSelectPlace(place)}
-                                  style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
-                                >
-                                  {isSelected ? "✓ Selected" : "+ Select"}
-                                </button>
+                                {isBooked ? (
+                                  <button
+                                    type="button"
+                                    className="btn-select-place booked"
+                                    disabled
+                                    style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "default", border: "none", background: "#059669", color: "#ffffff", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px" }}
+                                  >
+                                    ✓ Already Booked
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className={`btn-select-place ${isSelected ? "selected" : ""}`}
+                                    onClick={() => handleToggleSelectPlace(place)}
+                                    style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
+                                  >
+                                    {isSelected ? "✓ Selected" : "+ Select"}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -1703,6 +1757,34 @@ function JourneyPlanner() {
               originCoords={startLocation.latitude ? startLocation : center?.location}
               onSelectPlace={handleToggleSelectPlace}
               isSelected={(selectedServices[activeCategory] || []).some((s) => s.externalPlaceId === selectedDetailPlace.externalPlaceId)}
+              onBookStay={(place) => setBookingTargetPlace(place)}
+              isBooked={activeCategory === "accommodation" && isAccommodationBooked(selectedDetailPlace)}
+            />
+          )}
+
+          {/* Accommodation Booking Modal */}
+          {bookingTargetPlace && (
+            <AccommodationBookingModal
+              isOpen={!!bookingTargetPlace}
+              onClose={() => setBookingTargetPlace(null)}
+              place={bookingTargetPlace}
+              initialJourneyId={null}
+              onBookingConfirmed={(confirmed) => {
+                // If user confirms booking, ensure it's selected in accommodation list if not already
+                if (confirmed) {
+                  setUserAccommodationBookings((prev) => [confirmed, ...(prev || [])]);
+                  const placeObj = {
+                    externalPlaceId: confirmed.placeId,
+                    name: confirmed.accommodationName,
+                    address: confirmed.accommodationAddress,
+                    category: "accommodation",
+                    placeType: "Hotel / Lodge",
+                    price: confirmed.pricing?.totalAmount,
+                    bookingRef: confirmed.bookingReference,
+                  };
+                  handleToggleSelectPlace(placeObj);
+                }
+              }}
             />
           )}
 
@@ -1718,6 +1800,7 @@ function JourneyPlanner() {
               selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
               onSelectPlace={handleToggleSelectPlace}
               onViewDetails={(place) => setSelectedDetailPlace(place)}
+              isAccommodationBooked={isAccommodationBooked}
             />
           )}
         </div>

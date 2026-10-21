@@ -26,6 +26,8 @@ import AIJourneyAssistant from "./pages/AIJourneyAssistant";
 import Settings from "./pages/Settings";
 import Bookings from "./pages/Bookings";
 import TravelAssessment from "./pages/TravelAssessment";
+import FamilyTracking from "./pages/FamilyTracking";
+import FamilyMemberTrack from "./pages/FamilyMemberTrack";
 
 function App() {
   useEffect(() => {
@@ -39,6 +41,9 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/family-tracking" element={<FamilyTracking />} />
+        <Route path="/track" element={<FamilyMemberTrack />} />
+        <Route path="/track/:token" element={<FamilyMemberTrack />} />
         <Route path="/family" element={<Profile />} />
         <Route path="/my-family" element={<Profile />} />
         <Route path="/emergency-services" element={<Profile />} />

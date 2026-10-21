@@ -98,7 +98,7 @@ function UserSidebar({ activeTab = "" }) {
         <button
           type="button"
           className={`sidebar-link ${activeTab === "family-tracking" ? "active" : ""}`}
-          onClick={() => navigate("/profile")}
+          onClick={() => navigate("/family-tracking")}
         >
           <FiWifi className="nav-icon" />
           <span>Family Tracking</span>

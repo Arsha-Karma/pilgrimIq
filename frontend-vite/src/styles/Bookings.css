@@ -822,3 +822,388 @@ body.pilgrim-dark-mode .modal-info-block {
   color: #cbd5e1 !important;
 }
 
+/* =========================================================
+   Accommodation Bookings Tab & Cards Styles
+   ========================================================= */
+
+.bookings-nav-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.bookings-tab-btn {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.bookings-tab-btn:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.bookings-tab-btn.active {
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.bookings-tab-btn .badge-count {
+  font-size: 11.5px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.bookings-tab-btn.active .badge-count {
+  background: #1d4ed8;
+}
+
+/* Accommodation Bookings Grid */
+.acc-bookings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.acc-booking-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-booking-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.acc-card-top-bar {
+  padding: 14px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acc-ref-number {
+  font-size: 13px;
+  font-weight: 800;
+  color: #2563eb;
+  font-family: monospace;
+}
+
+.acc-status-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.acc-status-pill.confirmed {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.acc-status-pill.pending {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.acc-status-pill.cancelled {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.acc-card-main {
+  padding: 18px;
+  flex: 1;
+}
+
+.acc-card-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.acc-card-room-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #2563eb;
+  margin: 0 0 10px 0;
+}
+
+.acc-card-address {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0 0 14px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.acc-card-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.acc-meta-item .label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  display: block;
+  font-weight: 600;
+}
+
+.acc-meta-item .val {
+  font-size: 13px;
+  color: #0f172a;
+  font-weight: 700;
+  margin: 2px 0 0 0;
+}
+
+.acc-card-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 12px;
+  margin-top: 8px;
+}
+
+.acc-price-total {
+  font-size: 16px;
+  font-weight: 900;
+  color: #047857;
+}
+
+.acc-rzp-tag {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.acc-card-actions {
+  padding: 14px 18px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.acc-btn-act {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.acc-btn-act.voucher {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.acc-btn-act.voucher:hover {
+  background: #dbeafe;
+}
+
+.acc-btn-act.cancel {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.acc-btn-act.cancel:hover {
+  background: #fee2e2;
+}
+
+.acc-btn-act.pay {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.acc-btn-act.pay:hover {
+  background: #1d4ed8;
+}
+
+/* Cancellation Preview Modal */
+.acc-cancel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.acc-cancel-modal-content {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+.acc-cancel-modal-content h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #991b1b;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-cancel-breakdown-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin: 16px 0;
+  font-size: 13.5px;
+}
+
+.acc-cancel-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: #475569;
+}
+
+.acc-cancel-breakdown-row.refund {
+  font-weight: 800;
+  color: #047857;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* Place Detail & Voucher Modal Overlay (Floating in front) */
+.place-detail-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+}
+
+.place-detail-modal-card {
+  background: #ffffff !important;
+  border-radius: 20px !important;
+  max-width: 620px !important;
+  width: 100% !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45) !important;
+  border: 1px solid #e2e8f0 !important;
+  position: relative !important;
+  margin: auto !important;
+  animation: modalPopUp 0.22s ease-out !important;
+}
+
+@keyframes modalPopUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.place-detail-modal-card .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+}
+
+.place-detail-modal-card .btn-close-modal {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.place-detail-modal-card .btn-close-modal:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.place-detail-modal-card .modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.place-detail-modal-card .modal-footer {
+  padding: 16px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+

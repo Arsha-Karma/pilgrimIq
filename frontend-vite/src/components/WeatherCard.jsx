@@ -25,9 +25,11 @@ const WeatherCard = ({
   onRetry,
   selectedJourneyDate,
 }) => {
-  const [selectedDayIndex, setSelectedDayIndex] = useState(null); // null = Live Current Weather; 0..15 = Forecast Day
+  const [selectedDayIndex, setSelectedDayIndex] = useState(null); // null = Live Current Weather; 0..6 = Forecast Day
 
-  const forecast = weatherData?.forecast || [];
+  // Limit meteorological forecast to 7 days
+  const allForecast = weatherData?.forecast || [];
+  const forecast = allForecast.slice(0, 7);
 
   // When selectedJourneyDate changes or weatherData loads, auto-select matching forecast day
   useEffect(() => {
@@ -308,7 +310,7 @@ const WeatherCard = ({
           <div className="forecast-title-row">
             <div className="forecast-title">
               <FiCalendar className="forecast-icon" />
-              <h4>{forecast.length}-Day Meteorological Forecast</h4>
+              <h4>7-Day Meteorological Forecast</h4>
             </div>
             <span style={{ fontSize: "12px", color: "#64748b" }}>
               Click any day to view forecast details

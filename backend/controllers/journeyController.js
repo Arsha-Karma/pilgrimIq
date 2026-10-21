@@ -3,6 +3,7 @@ const PilgrimageCenter = require("../models/PilgrimageCenter");
 const FamilyMember = require("../models/FamilyMember");
 const User = require("../models/User");
 const DoctorReview = require("../models/DoctorReview");
+const AccommodationBooking = require("../models/AccommodationBooking");
 
 // @desc    Create a new journey plan
 // @route   POST /api/journeys
@@ -330,6 +331,53 @@ const deleteJourney = async (req, res, next) => {
     if (journey.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
       res.status(403);
       throw new Error("Unauthorized: You do not have permission to delete this journey.");
+    }
+
+    // Process cancellations for accommodation bookings associated with this journey
+    try {
+      const associatedBookings = await AccommodationBooking.find({
+        journeyId: journey._id,
+        bookingStatus: { $ne: "CANCELLED" },
+      });
+
+      for (const b of associatedBookings) {
+        const checkInTime = new Date(b.checkInDate).getTime();
+        const hoursUntilCheckIn = (checkInTime - Date.now()) / (1000 * 60 * 60);
+        const totalPaid = b.paymentStatus === "PAID" ? b.pricing.totalAmount : 0;
+        let refundAmount = 0;
+        let cancellationFee = 0;
+
+        if (totalPaid > 0) {
+          if (hoursUntilCheckIn >= 24) {
+            refundAmount = totalPaid;
+            cancellationFee = 0;
+          } else if (hoursUntilCheckIn > 0 && hoursUntilCheckIn < 24) {
+            cancellationFee = Math.round(totalPaid * 0.5);
+            refundAmount = totalPaid - cancellationFee;
+          } else {
+            cancellationFee = totalPaid;
+            refundAmount = 0;
+          }
+        }
+
+        b.bookingStatus = "CANCELLED";
+        b.cancelledAt = new Date();
+        b.cancellationReason = "Journey itinerary deleted by user";
+        if (refundAmount > 0) {
+          b.refundStatus = "REFUNDED";
+          b.refundDetails = {
+            refundId: `SIM_REF_${Date.now().toString().slice(-8)}`,
+            amount: refundAmount,
+            cancellationFee,
+            refundReason: "Journey cancelled by user",
+            refundType: "SIMULATED",
+            refundedAt: new Date(),
+          };
+        }
+        await b.save();
+      }
+    } catch (bookingErr) {
+      console.warn("Notice: Error cancelling associated accommodation bookings on journey deletion:", bookingErr.message);
     }
 
     await journey.deleteOne();

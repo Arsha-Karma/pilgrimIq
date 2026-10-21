@@ -2579,7 +2579,7 @@ function Profile() {
               <span>AI Journey Assistant</span>
             </button>
 
-            <button className="sidebar-link" onClick={() => showAlert("info", "Family Tracking active")}>
+            <button className="sidebar-link" onClick={() => navigate("/family-tracking")}>
               <FiWifi className="nav-icon" />
               <span>Family Tracking</span>
             </button>

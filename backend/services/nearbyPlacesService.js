@@ -357,22 +357,38 @@ function generateFallbackServices(lat, lng, radiusKm, category, destinationName 
   } else {
     const defaultTemplates = {
       accommodation: [
-        { name: `${cleanDest} Pilgrim Yatri Niwas`, type: "Guest House / Lodge", rating: 4.6, offsetLat: 0.003, offsetLng: 0.004, address: `Near ${cleanDest}` },
-        { name: `${cleanDest} Heritage Lodge`, type: "Hotel", rating: 4.4, offsetLat: -0.005, offsetLng: 0.006, address: `${cleanDest} Main Road` },
+        {
+          name: `${cleanDest} Pilgrim Yatri Niwas`,
+          type: "Guest House / Lodge",
+          rating: 4.6,
+          offsetLat: 0.003,
+          offsetLng: 0.004,
+          address: `Near ${cleanDest} Main Temple Complex, Sannidhanam Road`,
+          phone: "+91 94471 28900",
+        },
+        {
+          name: `${cleanDest} Heritage Lodge`,
+          type: "Hotel",
+          rating: 4.4,
+          offsetLat: -0.005,
+          offsetLng: 0.006,
+          address: `${cleanDest} Main Road, Transit Base Camp Area`,
+          phone: "+91 94472 55431",
+        },
       ],
       restaurants: [
-        { name: `${cleanDest} Satvik Bhojanalaya`, type: "Pure Veg Restaurant", rating: 4.8, offsetLat: 0.002, offsetLng: 0.002, isVeg: true, address: `Near ${cleanDest} Entrance` },
-        { name: `${cleanDest} Annadhana Canteen`, type: "Canteen", rating: 4.7, offsetLat: -0.003, offsetLng: -0.004, isVeg: true, address: `${cleanDest} Base Camp` },
+        { name: `${cleanDest} Satvik Bhojanalaya`, type: "Pure Veg Restaurant", rating: 4.8, offsetLat: 0.002, offsetLng: 0.002, isVeg: true, address: `Near ${cleanDest} Entrance Gate`, phone: "+91 98460 11223" },
+        { name: `${cleanDest} Annadhana Canteen`, type: "Canteen", rating: 4.7, offsetLat: -0.003, offsetLng: -0.004, isVeg: true, address: `${cleanDest} Base Camp Complex`, phone: "+91 98460 33445" },
       ],
       pharmacies: [
-        { name: `${cleanDest} Medical & Pharmacy Store`, type: "Pharmacy Store", rating: 4.8, offsetLat: 0.002, offsetLng: -0.002, address: `Near ${cleanDest}` },
-        { name: `24x7 Emergency Lifecare Pharmacy`, type: "Pharmacy", rating: 4.5, offsetLat: -0.005, offsetLng: 0.004, address: `${cleanDest} Route` },
+        { name: `${cleanDest} Medical & Pharmacy Store`, type: "Pharmacy Store", rating: 4.8, offsetLat: 0.002, offsetLng: -0.002, address: `Near ${cleanDest} Main Gate`, phone: "+91 98460 55667" },
+        { name: `24x7 Emergency Lifecare Pharmacy`, type: "Pharmacy", rating: 4.5, offsetLat: -0.005, offsetLng: 0.004, address: `${cleanDest} Route Medical Post`, phone: "+91 98460 77889" },
       ],
       restrooms: [
-        { name: `Sanitary Washroom Complex`, type: "Public Toilet", rating: 4.4, offsetLat: 0.001, offsetLng: 0.002, address: `Near ${cleanDest}` },
+        { name: `Sanitary Washroom Complex`, type: "Public Toilet", rating: 4.4, offsetLat: 0.001, offsetLng: 0.002, address: `Near ${cleanDest} Parking Entry` },
       ],
       parking: [
-        { name: `${cleanDest} Main Vehicle Parking Ground`, type: "Parking Lot", rating: 4.5, offsetLat: 0.002, offsetLng: -0.003, address: `${cleanDest} Parking Gate` },
+        { name: `${cleanDest} Main Vehicle Parking Ground`, type: "Parking Lot", rating: 4.5, offsetLat: 0.002, offsetLng: -0.003, address: `${cleanDest} Pilgrim Parking Gate` },
       ],
     };
     categoryTemplates = defaultTemplates[category] || defaultTemplates.accommodation;
@@ -382,6 +398,7 @@ function generateFallbackServices(lat, lng, radiusKm, category, destinationName 
     const itemLat = Math.round((lat + t.offsetLat) * 100000) / 100000;
     const itemLng = Math.round((lng + t.offsetLng) * 100000) / 100000;
     const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
+    const googleMapSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${t.name} ${cleanDest}`)}`;
 
     return {
       externalPlaceId: `fallback-${category}-${idx}`,
@@ -396,7 +413,10 @@ function generateFallbackServices(lat, lng, radiusKm, category, destinationName 
       distanceKm: Math.min(dist, radiusKm),
       isOpen: true,
       openingHours: "Open 24/7",
-      contact: { phone: "Contact at facility", website: "" },
+      contact: {
+        phone: t.phone || "+91 94471 28900",
+        website: googleMapSearchUrl,
+      },
       dietaryInfo: category === "restaurants" ? {
         isVegetarian: !!t.isVeg,
         isVegan: false,
