@@ -168,6 +168,10 @@ void updateBuzzer() {
   }
 }
 
+// Forward declarations
+void acknowledgeAlertDelivery(const char* alertId);
+void sendHeartbeat();
+
 // ==========================================
 // WI-FI CONNECTION MANAGEMENT
 // ==========================================
@@ -196,6 +200,7 @@ void connectWiFi() {
     Serial.println(WiFi.localIP());
     // NOTE: Startup and Wi-Fi connection buzzer chirps have been removed.
     // Buzzer remains strictly OFF during startup and connection.
+    sendHeartbeat();
   } else {
     Serial.println();
     Serial.println("[WIFI] Connection failed. Will retry in background...");
@@ -212,9 +217,6 @@ void setupHttpHeaders(HTTPClient &http) {
   http.addHeader("x-device-token", DEVICE_TOKEN);
 }
 
-// Forward declaration
-void acknowledgeAlertDelivery(const char* alertId);
-
 // ==========================================
 // 1. POLL PENDING BUZZER COMMANDS
 // ==========================================
@@ -224,17 +226,18 @@ void pollPendingCommands() {
   HTTPClient http;
   String url = String(BACKEND_BASE_URL) + "/commands";
 
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+
   // Use WiFiClientSecure if HTTPS, standard WiFiClient if HTTP
   if (url.startsWith("https://")) {
-    WiFiClientSecure client;
-    client.setInsecure(); // For prototype demo; in high-security production, load root CA certificate
-    http.begin(client, url);
+    secureClient.setInsecure(); // For prototype demo; in high-security production, load root CA certificate
+    http.begin(secureClient, url);
   } else {
-    WiFiClient client;
-    http.begin(client, url);
+    http.begin(plainClient, url);
   }
 
-  http.setTimeout(4000);
+  http.setTimeout(10000);
   setupHttpHeaders(http);
 
   int httpCode = http.GET();
@@ -327,16 +330,17 @@ void acknowledgeAlertDelivery(const char* alertId) {
   HTTPClient http;
   String url = String(BACKEND_BASE_URL) + "/acknowledge";
 
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+
   if (url.startsWith("https://")) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    http.begin(client, url);
+    secureClient.setInsecure();
+    http.begin(secureClient, url);
   } else {
-    WiFiClient client;
-    http.begin(client, url);
+    http.begin(plainClient, url);
   }
 
-  http.setTimeout(4000);
+  http.setTimeout(10000);
   setupHttpHeaders(http);
 
   #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
@@ -372,16 +376,17 @@ void sendHeartbeat() {
   HTTPClient http;
   String url = String(BACKEND_BASE_URL) + "/heartbeat";
 
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+
   if (url.startsWith("https://")) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    http.begin(client, url);
+    secureClient.setInsecure();
+    http.begin(secureClient, url);
   } else {
-    WiFiClient client;
-    http.begin(client, url);
+    http.begin(plainClient, url);
   }
 
-  http.setTimeout(4000);
+  http.setTimeout(10000);
   setupHttpHeaders(http);
 
   #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)

@@ -306,6 +306,45 @@
   padding: 20px 8px;
 }
 
+/* SIDEBAR MOBILE TOGGLE BAR */
+.sidebar-mobile-toggle-bar {
+  display: none;
+  width: 100%;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.sidebar-collapse-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sidebar-collapse-toggle-btn:hover,
+.sidebar-collapse-toggle-btn:active {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.sidebar-collapse-toggle-btn .toggle-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -2008,21 +2047,120 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .pilgrim-sidebar {
-    position: fixed;
-    left: -260px;
-    top: 68px;
-    bottom: 0;
-    z-index: 900;
-    box-shadow: 10px 0 25px rgba(0,0,0,0.1);
+  .sidebar-mobile-toggle-bar {
+    display: flex;
   }
 
-  .pilgrim-sidebar.open {
+  .pilgrim-dashboard-container {
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    width: 100%;
+    min-height: calc(100vh - 68px);
+    overflow-x: hidden;
+  }
+
+  .pilgrim-sidebar {
+    position: relative;
     left: 0;
+    top: 0;
+    bottom: auto;
+    z-index: 20;
+    box-shadow: none;
+    border-right: 1px solid var(--border-color, #e2e8f0);
+    width: 220px;
+    min-width: 220px;
+    padding: 14px 8px;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.28s cubic-bezier(0.4, 0, 0.2, 1), padding 0.28s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-shrink: 0;
+  }
+
+  .pilgrim-sidebar.collapsed {
+    width: 58px;
+    min-width: 58px;
+    padding: 14px 4px;
+    cursor: pointer;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-mobile-toggle-bar {
+    justify-content: center;
+    padding-bottom: 6px;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-collapse-toggle-btn {
+    padding: 8px 4px;
+    width: 44px;
+    height: 40px;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-collapse-toggle-btn .toggle-label {
+    display: none;
+  }
+
+  .pilgrim-sidebar .sidebar-nav {
+    gap: 6px;
+  }
+
+  .pilgrim-sidebar .sidebar-link {
+    padding: 10px 10px;
+    font-size: 13px;
+    border-radius: 8px;
+    gap: 10px;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-link {
+    justify-content: center;
+    padding: 11px 0;
+    width: 100%;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-link span {
+    display: none;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-help-card {
+    display: none;
   }
 
   .pilgrim-main-content {
-    padding: 20px 16px;
+    flex: 1;
+    min-width: 0;
+    padding: 18px 14px;
+    transition: padding 0.28s ease;
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 480px) {
+  .pilgrim-sidebar {
+    width: 200px;
+    min-width: 200px;
+    padding: 10px 6px;
+  }
+
+  .pilgrim-sidebar.collapsed {
+    width: 54px;
+    min-width: 54px;
+    padding: 10px 3px;
+  }
+
+  .pilgrim-sidebar .sidebar-link {
+    padding: 9px 8px;
+    font-size: 12px;
+  }
+
+  .pilgrim-sidebar.collapsed .sidebar-link {
+    padding: 10px 0;
+  }
+
+  .pilgrim-sidebar .sidebar-link .nav-icon {
+    font-size: 19px;
+  }
+
+  .pilgrim-main-content {
+    padding: 14px 10px;
   }
 }
 
@@ -2825,6 +2963,26 @@ html.pilgrim-dark-theme .pilgrim-sidebar,
 body.pilgrim-dark-mode .pilgrim-sidebar {
   background-color: #0d1938 !important;
   border-right-color: #27375f !important;
+}
+
+html.pilgrim-dark-theme .sidebar-collapse-toggle-btn,
+body.pilgrim-dark-mode .sidebar-collapse-toggle-btn {
+  background: #1a294d !important;
+  border-color: #27375f !important;
+  color: #cbd5e1 !important;
+}
+
+html.pilgrim-dark-theme .sidebar-collapse-toggle-btn:hover,
+body.pilgrim-dark-mode .sidebar-collapse-toggle-btn:hover,
+html.pilgrim-dark-theme .sidebar-collapse-toggle-btn:active,
+body.pilgrim-dark-mode .sidebar-collapse-toggle-btn:active {
+  background: #27375f !important;
+  color: #38bdf8 !important;
+}
+
+html.pilgrim-dark-theme .sidebar-mobile-toggle-bar,
+body.pilgrim-dark-mode .sidebar-mobile-toggle-bar {
+  border-bottom-color: #27375f !important;
 }
 
 html.pilgrim-dark-theme .sidebar-link,

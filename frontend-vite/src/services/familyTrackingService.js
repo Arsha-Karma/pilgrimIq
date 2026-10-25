@@ -73,7 +73,7 @@ export const getPublicFrontendUrl = () => {
       return window.location.origin;
     }
   }
-  return "https://pilgrimiq.vercel.app";
+  return "https://pilgrim-iq.vercel.app";
 };
 
 // ==========================================
