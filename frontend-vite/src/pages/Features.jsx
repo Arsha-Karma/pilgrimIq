@@ -105,7 +105,7 @@ function Features() {
                 Try our interactive live dashboard simulator to monitor weather, hydration alerts, and crowd forecasts in real-time.
               </p>
             </div>
-            <button className="cta-gold-btn">Launch Live Dashboard Demo →</button>
+            <button className="cta-gold-btn">Launch Live Dashboard →</button>
           </div>
         </div>
       </section>

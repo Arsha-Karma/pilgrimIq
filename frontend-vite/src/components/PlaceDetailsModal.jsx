@@ -2,7 +2,7 @@ import React from "react";
 import { FiX, FiMapPin, FiStar, FiPhone, FiGlobe, FiClock, FiCheck, FiNavigation, FiCreditCard, FiHome, FiShield } from "react-icons/fi";
 import "./PlaceDetailsModal.css";
 
-const PlaceDetailsModal = ({ isOpen, onClose, place, originCoords, onSelectPlace, isSelected, onBookStay, isBooked = false }) => {
+const PlaceDetailsModal = ({ isOpen, onClose, place, originCoords, onSelectPlace, isSelected, onBookStay, isBooked = false, canBookStay = true }) => {
   if (!isOpen || !place) return null;
 
   const lat = place.latitude;
@@ -219,8 +219,19 @@ const PlaceDetailsModal = ({ isOpen, onClose, place, originCoords, onSelectPlace
               <button
                 type="button"
                 className="btn-select-place"
-                style={{ background: "#059669", color: "#ffffff", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                disabled={!canBookStay}
+                style={{
+                  background: canBookStay ? "#059669" : "#94a3b8",
+                  color: "#ffffff",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: canBookStay ? "pointer" : "not-allowed",
+                  opacity: canBookStay ? 1 : 0.7
+                }}
+                title={!canBookStay ? "Please complete journey planner details (dates & mode) above to book accommodation" : "Book accommodation stay"}
                 onClick={() => {
+                  if (!canBookStay) return;
                   onClose();
                   onBookStay(place);
                 }}

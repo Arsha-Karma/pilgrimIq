@@ -62,6 +62,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
+    dutyStatus: {
+      type: String,
+      enum: ["Available", "On Duty", "Busy", "Off Duty"],
+      default: "Available",
+    },
+    availableFrom: {
+      type: String,
+      default: "08:00 AM",
+    },
+    availableTo: {
+      type: String,
+      default: "08:00 PM",
+    },
+    dutyNote: {
+      type: String,
+      default: "",
+    },
     resetPasswordToken: {
       type: String,
       default: null,
@@ -140,7 +161,20 @@ const userSchema = new mongoose.Schema(
     },
     doctorApprovalStatus: {
       type: String,
-      enum: ["none", "pending", "approved", "rejected"],
+      enum: [
+        "none",
+        "pending",
+        "approved",
+        "rejected",
+        "approved_with_conditions",
+        "not_approved",
+        "further_evaluation",
+        "consulted",
+        "APPROVED",
+        "APPROVED_WITH_CONDITIONS",
+        "REJECTED",
+        "PENDING",
+      ],
       default: "none",
     },
     responsibilityAccepted: {

@@ -10,61 +10,62 @@ const PSI_WEIGHTS = {
   weather: 0.25,
 };
 
-// Common 0–100 risk scale mappings (0 = lowest risk, 100 = highest risk)
+// 0–100 safety scale mappings (100 = best/safest, 0 = highest risk)
 const RISK_SCORE_MAPPINGS = {
-  // Low Risk
-  LOW: 20,
-  LOW_RISK: 20,
+  // Low Risk (Safe) -> Above 80
+  LOW: 92,
+  LOW_RISK: 92,
+  FIT_FOR_TRAVEL: 95,
+  APPROVED: 95,
+  PHYSICIAN_APPROVED: 95,
+  SAFE: 92,
 
-  // Moderate Risk / Caution
-  MODERATE: 50,
-  CAUTION: 50,
-  MODERATE_RISK: 50,
+  // Moderate Risk / Caution -> 50 - 79
+  MODERATE: 68,
+  CAUTION: 68,
+  MODERATE_RISK: 68,
+  APPROVED_WITH_CONDITIONS: 72,
+  CONDITIONAL: 72,
 
-  // High Risk & Physician Rejection / Medical Review
-  HIGH: 75,
-  HIGH_RISK: 75,
-  MEDICAL_REVIEW_REQUIRED: 85,
-  PHYSICIAN_NOT_APPROVED: 90,
-  NOT_APPROVED: 90,
-  REJECTED: 90,
-  PHYSICIAN_REJECTED: 90,
-
-  // Very High / Severe / Critical Risk
-  VERY_HIGH: 90,
-  VERY_HIGH_RISK: 90,
-  SEVERE: 90,
-  CRITICAL: 95,
-  CRITICAL_RISK: 95,
+  // High Risk & Critical Risk -> Below 50
+  HIGH: 42,
+  HIGH_RISK: 42,
+  MEDICAL_REVIEW_REQUIRED: 40,
+  PHYSICIAN_NOT_APPROVED: 35,
+  NOT_APPROVED: 35,
+  REJECTED: 30,
+  PHYSICIAN_REJECTED: 30,
+  VERY_HIGH: 30,
+  VERY_HIGH_RISK: 30,
+  SEVERE: 30,
+  CRITICAL: 25,
+  CRITICAL_RISK: 25,
 };
 
-// PSI score thresholds to category mapping
-// PSI 0–24   → LOW RISK
-// PSI 25–49  → MODERATE RISK
-// PSI 50–74  → HIGH RISK
-// PSI 75–100 → CRITICAL RISK
+// PSI score thresholds to category mapping (Safety Index scale out of 100)
+// PSI >= 80 → Low Risk (Safe to Travel)
+// PSI 50–79 → Moderate Risk (Caution Recommended)
+// PSI < 50  → Critical Risk (Doctor Advice / Review Required)
 const PSI_THRESHOLDS = {
-  LOW: { min: 0, max: 24, level: "LOW RISK", color: "#10b981" },
-  MODERATE: { min: 25, max: 49, level: "MODERATE RISK", color: "#f59e0b" },
-  HIGH: { min: 50, max: 74, level: "HIGH RISK", color: "#f97316" },
-  CRITICAL: { min: 75, max: 100, level: "CRITICAL RISK", color: "#ef4444" },
+  LOW: { min: 80, max: 100, level: "Low Risk", color: "#10b981" },
+  MODERATE: { min: 50, max: 79, level: "Moderate Risk", color: "#f59e0b" },
+  CRITICAL: { min: 0, max: 49, level: "Critical Risk", color: "#ef4444" },
 };
 
 /**
- * Maps a numeric score (0-100) to a PSI Risk Level string
+ * Maps a numeric safety score (0-100) to a PSI Risk Level string
  */
 const getPsiRiskLevel = (score) => {
   const rounded = Math.round(score);
-  if (rounded >= 75) return "CRITICAL RISK";
-  if (rounded >= 50) return "HIGH RISK";
-  if (rounded >= 25) return "MODERATE RISK";
-  return "LOW RISK";
+  if (rounded >= 80) return "Low Risk";
+  if (rounded >= 50) return "Moderate Risk";
+  return "Critical Risk";
 };
 
 /**
  * Helper to normalize any input (number or category string) to a 0–100 scale.
  */
-const normalizeRiskScore = (input, fallback = 20) => {
+const normalizeRiskScore = (input, fallback = 90) => {
   if (typeof input === "number" && !isNaN(input)) {
     return Math.max(0, Math.min(100, Math.round(input)));
   }

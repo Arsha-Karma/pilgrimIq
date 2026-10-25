@@ -5,10 +5,117 @@ const User = require("../models/User");
 const DoctorReview = require("../models/DoctorReview");
 const AccommodationBooking = require("../models/AccommodationBooking");
 
+// Active journey statuses that occupy scheduling dates & centres and block duplicate/overlapping bookings
+const ACTIVE_JOURNEY_STATUSES = [
+  "planned",
+  "PLANNED",
+  "scheduled",
+  "SCHEDULED",
+  "confirmed",
+  "CONFIRMED",
+  "ready",
+  "READY",
+  "active",
+  "ACTIVE",
+  "NOT_STARTED",
+  "IN_PROGRESS",
+  "PAUSED",
+];
+
+// Unstarted statuses eligible for expiration when journey start date passes
+// NEVER includes in-progress (IN_PROGRESS, active, PAUSED), completed, or cancelled journeys
+const UNSTARTED_EXPIRABLE_STATUSES = [
+  "planned",
+  "PLANNED",
+  "scheduled",
+  "SCHEDULED",
+  "confirmed",
+  "CONFIRMED",
+  "ready",
+  "READY",
+  "NOT_STARTED",
+];
+
+// Consistent timezone-safe date-only normalization (UTC midnight)
+const normalizeDateOnly = (dateInput) => {
+  if (!dateInput) return null;
+  if (typeof dateInput === "string") {
+    const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1;
+      const day = parseInt(match[3], 10);
+      return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+    }
+  }
+  const d = new Date(dateInput);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+};
+
+const getEndOfDayUTC = (dateInput) => {
+  const d = normalizeDateOnly(dateInput);
+  if (!d) return null;
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
+};
+
+const formatJourneyDateDisplay = (dateInput) => {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+// Automatically mark unstarted journeys whose date has passed as EXPIRED (preserves history)
+// Explicitly protects IN_PROGRESS, active, PAUSED, completed, and cancelled journeys
+const syncExpiredJourneys = async (userId = null) => {
+  try {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStart = normalizeDateOnly(todayStr);
+
+    const query = {
+      status: { $in: UNSTARTED_EXPIRABLE_STATUSES },
+      journeyDate: { $lt: todayStart },
+    };
+    if (userId) {
+      query.userId = userId;
+    }
+
+    await Journey.updateMany(query, {
+      $set: { status: "EXPIRED" },
+    });
+  } catch (err) {
+    console.error("Error syncing expired journeys:", err.message);
+  }
+};
+
+// Concurrency-safe per-user locking to prevent simultaneous booking race conditions
+const userBookingLocks = new Map();
+
+const acquireUserLock = async (userId) => {
+  const key = userId ? userId.toString() : "global";
+  while (userBookingLocks.has(key)) {
+    await userBookingLocks.get(key);
+  }
+  let unlock;
+  const promise = new Promise((resolve) => {
+    unlock = resolve;
+  });
+  userBookingLocks.set(key, promise);
+  return () => {
+    userBookingLocks.delete(key);
+    unlock();
+  };
+};
+
 // @desc    Create a new journey plan
 // @route   POST /api/journeys
 // @access  Private (Authenticated User)
 const createJourney = async (req, res, next) => {
+  let releaseLock;
   try {
     const {
       pilgrimageCenterId,
@@ -38,12 +145,14 @@ const createJourney = async (req, res, next) => {
       throw new Error("Journey start date and expected return date are required");
     }
 
-    const startDateObj = new Date(journeyDate);
-    const returnDateObj = new Date(returnDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const startDateObj = normalizeDateOnly(journeyDate);
+    const returnDateObj = normalizeDateOnly(returnDate);
+    const returnDateEndObj = getEndOfDayUTC(returnDate);
 
-    if (startDateObj < today) {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStart = normalizeDateOnly(todayStr);
+
+    if (startDateObj < todayStart) {
       res.status(400);
       throw new Error("Journey start date cannot be in the past");
     }
@@ -58,14 +167,54 @@ const createJourney = async (req, res, next) => {
       throw new Error("Mode of transport is required");
     }
 
-    // 2. Verify pilgrimage center exists
+    // Acquire lock for this user to ensure concurrent requests are processed sequentially
+    releaseLock = await acquireUserLock(req.user._id);
+
+    // Sync expired journeys so passed dates don't block
+    await syncExpiredJourneys(req.user._id);
+
+    // 2. Prevent Duplicate Scheduling for the Same Centre (Same centre, different dates)
+    const existingCentreJourney = await Journey.findOne({
+      userId: req.user._id,
+      pilgrimageCenterId,
+      status: { $in: ACTIVE_JOURNEY_STATUSES },
+    }).populate("pilgrimageCenterId");
+
+    if (existingCentreJourney) {
+      const formattedDate = formatJourneyDateDisplay(existingCentreJourney.journeyDate);
+      return res.status(409).json({
+        success: false,
+        conflictType: "DUPLICATE_CENTRE",
+        message: `A journey to this pilgrimage centre is already scheduled for ${formattedDate}. Would you like to reschedule it?`,
+        existingJourney: existingCentreJourney,
+      });
+    }
+
+    // 3. Prevent Overlapping Journey Dates (Same date, different centres or any centre)
+    const dateConflictJourney = await Journey.findOne({
+      userId: req.user._id,
+      status: { $in: ACTIVE_JOURNEY_STATUSES },
+      journeyDate: { $lte: returnDateEndObj },
+      returnDate: { $gte: startDateObj },
+    }).populate("pilgrimageCenterId");
+
+    if (dateConflictJourney) {
+      return res.status(409).json({
+        success: false,
+        conflictType: "DATE_CONFLICT",
+        message: "You already have a journey scheduled for this date. Please choose another date or reschedule your existing journey.",
+        conflictingJourney: dateConflictJourney,
+      });
+    }
+
+    // 4. Verify pilgrimage center exists
     const center = await PilgrimageCenter.findById(pilgrimageCenterId);
     if (!center) {
       res.status(404);
       throw new Error("Selected Pilgrimage Center not found");
     }
 
-    // 3. Medical Authorization & Doctor Approval Backend Enforcement
+    // 5. Medical Authorization & Doctor Approval Backend Enforcement
     const currentUser = await User.findById(req.user._id);
     if (currentUser && (currentUser.doctorApprovalStatus === "pending" || currentUser.psiRiskLevel === "High Risk")) {
       if (currentUser.doctorApprovalStatus === "pending" && !currentUser.responsibilityAccepted) {
@@ -78,7 +227,7 @@ const createJourney = async (req, res, next) => {
       }
     }
 
-    // 4. Security check & Medical Risk check on selected family members
+    // 6. Security check & Medical Risk check on selected family members
     let validFamilyMembers = [];
     if (!travelingAlone && Array.isArray(travelingFamilyMembers) && travelingFamilyMembers.length > 0) {
       const ownedMembers = await FamilyMember.find({
@@ -109,10 +258,10 @@ const createJourney = async (req, res, next) => {
       validFamilyMembers = ownedMembers.map((m) => m._id);
     }
 
-    // 4. Calculate total pilgrims (Logged in user + selected family members)
+    // 7. Calculate total pilgrims (Logged in user + selected family members)
     const totalPilgrims = travelingAlone ? 1 : 1 + validFamilyMembers.length;
 
-    // 5. Create journey document
+    // 8. Create journey document
     const journey = await Journey.create({
       userId: req.user._id,
       pilgrimageCenterId,
@@ -152,7 +301,16 @@ const createJourney = async (req, res, next) => {
       journey: populatedJourney,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        conflictType: "DUPLICATE_CENTRE",
+        message: "An active journey to this pilgrimage centre is already scheduled. Would you like to reschedule it?",
+      });
+    }
     next(error);
+  } finally {
+    if (releaseLock) releaseLock();
   }
 };
 
@@ -161,6 +319,8 @@ const createJourney = async (req, res, next) => {
 // @access  Private
 const getMyJourneys = async (req, res, next) => {
   try {
+    await syncExpiredJourneys(req.user._id);
+
     const journeys = await Journey.find({ userId: req.user._id })
       .populate("pilgrimageCenterId")
       .populate("travelingFamilyMembers")
@@ -181,6 +341,12 @@ const getMyJourneys = async (req, res, next) => {
 // @access  Private / Admin
 const getJourneys = async (req, res, next) => {
   try {
+    if (req.user.role !== "admin") {
+      await syncExpiredJourneys(req.user._id);
+    } else {
+      await syncExpiredJourneys();
+    }
+
     let query = {};
     if (req.user.role !== "admin") {
       query.userId = req.user._id;
@@ -207,6 +373,8 @@ const getJourneys = async (req, res, next) => {
 // @access  Private
 const getJourneyById = async (req, res, next) => {
   try {
+    await syncExpiredJourneys(req.user._id);
+
     const journey = await Journey.findById(req.params.id)
       .populate("userId", "name email phone location")
       .populate("pilgrimageCenterId")
@@ -232,10 +400,11 @@ const getJourneyById = async (req, res, next) => {
   }
 };
 
-// @desc    Update journey details
+// @desc    Update journey details (Reschedule Journey)
 // @route   PUT /api/journeys/:id
 // @access  Private
 const updateJourney = async (req, res, next) => {
+  let releaseLock;
   try {
     const journey = await Journey.findById(req.params.id);
 
@@ -249,6 +418,24 @@ const updateJourney = async (req, res, next) => {
       res.status(403);
       throw new Error("Unauthorized: You do not have permission to edit this journey.");
     }
+
+    // Prevent modifying completed or cancelled journeys
+    if (journey.status === "completed" || journey.status === "COMPLETED") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot reschedule a completed journey.",
+      });
+    }
+
+    if (journey.status === "cancelled" || journey.status === "CANCELLED") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot reschedule a cancelled journey. Please plan a new journey instead.",
+      });
+    }
+
+    releaseLock = await acquireUserLock(req.user._id);
+    await syncExpiredJourneys(req.user._id);
 
     const {
       journeyDate,
@@ -267,8 +454,73 @@ const updateJourney = async (req, res, next) => {
       status,
     } = req.body;
 
-    if (journeyDate) journey.journeyDate = new Date(journeyDate);
-    if (returnDate) journey.returnDate = new Date(returnDate);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStart = normalizeDateOnly(todayStr);
+
+    let newStartDate = journey.journeyDate;
+    let newReturnDate = journey.returnDate;
+
+    if (journeyDate) {
+      newStartDate = normalizeDateOnly(journeyDate);
+      if (newStartDate < todayStart) {
+        res.status(400);
+        throw new Error("Journey start date cannot be in the past");
+      }
+    }
+
+    if (returnDate) {
+      newReturnDate = normalizeDateOnly(returnDate);
+    }
+
+    if (newReturnDate < newStartDate) {
+      res.status(400);
+      throw new Error("Return date cannot be earlier than start date");
+    }
+
+    const newReturnDateEnd = getEndOfDayUTC(newReturnDate);
+
+    // Validate new dates against all other active journeys of this user (excluding this journey)
+    const dateConflictJourney = await Journey.findOne({
+      _id: { $ne: journey._id },
+      userId: req.user._id,
+      status: { $in: ACTIVE_JOURNEY_STATUSES },
+      journeyDate: { $lte: newReturnDateEnd },
+      returnDate: { $gte: newStartDate },
+    }).populate("pilgrimageCenterId");
+
+    if (dateConflictJourney) {
+      return res.status(409).json({
+        success: false,
+        conflictType: "DATE_CONFLICT",
+        message: "You already have a journey scheduled for this date. Please choose another date or reschedule your existing journey.",
+        conflictingJourney: dateConflictJourney,
+      });
+    }
+
+    // Validate duplicate centre check against all OTHER active journeys
+    const centreConflict = await Journey.findOne({
+      _id: { $ne: journey._id },
+      userId: req.user._id,
+      pilgrimageCenterId: journey.pilgrimageCenterId,
+      status: { $in: ACTIVE_JOURNEY_STATUSES },
+    }).populate("pilgrimageCenterId");
+
+    if (centreConflict) {
+      return res.status(409).json({
+        success: false,
+        conflictType: "DUPLICATE_CENTRE",
+        message: "Another active journey to this pilgrimage centre already exists.",
+        conflictingJourney: centreConflict,
+      });
+    }
+
+    journey.journeyDate = newStartDate;
+    journey.returnDate = newReturnDate;
+
+    // If journey was previously marked EXPIRED, reset to planned upon valid reschedule
+    if (journey.status === "EXPIRED" || journey.status === "expired") {
+      journey.status = "planned";
+    }
 
     if (travelingFamilyMembers !== undefined) {
       if (!travelingAlone && Array.isArray(travelingFamilyMembers) && travelingFamilyMembers.length > 0) {
@@ -298,9 +550,17 @@ const updateJourney = async (req, res, next) => {
     if (foodPreference) journey.foodPreference = foodPreference;
     if (searchRadius) journey.searchRadius = searchRadius;
     if (selectedServices) journey.selectedServices = selectedServices;
-    if (status) journey.status = status;
+    if (status && status !== "EXPIRED") journey.status = status;
 
     await journey.save();
+
+    // Recalculate or refresh travel assessment data for the rescheduled journey
+    try {
+      const { calculateJourneyPsi } = require("../services/psiService");
+      await calculateJourneyPsi(journey._id, req.user._id, true);
+    } catch (psiErr) {
+      console.warn("Auto PSI calculation warning on journey reschedule:", psiErr.message);
+    }
 
     const updatedJourney = await Journey.findById(journey._id)
       .populate("pilgrimageCenterId")
@@ -308,16 +568,19 @@ const updateJourney = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Journey updated successfully!",
+      message: "Journey rescheduled and updated successfully!",
       journey: updatedJourney,
     });
   } catch (error) {
     next(error);
+  } finally {
+    if (releaseLock) releaseLock();
   }
 };
 
-// @desc    Delete/Cancel journey
+// @desc    Cancel journey booking (Preserves record in history, releases date & centre)
 // @route   DELETE /api/journeys/:id
+// @route   POST /api/journeys/:id/cancel
 // @access  Private
 const deleteJourney = async (req, res, next) => {
   try {
@@ -330,7 +593,21 @@ const deleteJourney = async (req, res, next) => {
 
     if (journey.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
       res.status(403);
-      throw new Error("Unauthorized: You do not have permission to delete this journey.");
+      throw new Error("Unauthorized: You do not have permission to cancel this journey.");
+    }
+
+    if (journey.status === "completed" || journey.status === "COMPLETED") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot cancel a pilgrimage journey that has already been completed.",
+      });
+    }
+
+    if (journey.status === "cancelled" || journey.status === "CANCELLED") {
+      return res.status(400).json({
+        success: false,
+        message: "This journey booking has already been cancelled.",
+      });
     }
 
     // Process cancellations for accommodation bookings associated with this journey
@@ -362,7 +639,7 @@ const deleteJourney = async (req, res, next) => {
 
         b.bookingStatus = "CANCELLED";
         b.cancelledAt = new Date();
-        b.cancellationReason = "Journey itinerary deleted by user";
+        b.cancellationReason = "Journey itinerary cancelled by user";
         if (refundAmount > 0) {
           b.refundStatus = "REFUNDED";
           b.refundDetails = {
@@ -377,19 +654,25 @@ const deleteJourney = async (req, res, next) => {
         await b.save();
       }
     } catch (bookingErr) {
-      console.warn("Notice: Error cancelling associated accommodation bookings on journey deletion:", bookingErr.message);
+      console.warn("Notice: Error cancelling associated accommodation bookings on journey cancellation:", bookingErr.message);
     }
 
-    await journey.deleteOne();
+    // Retain booking record in database & journey history with CANCELLED status
+    journey.status = "CANCELLED";
+    journey.cancelledAt = new Date();
+    await journey.save();
 
     res.status(200).json({
       success: true,
-      message: "Journey plan removed successfully.",
+      message: "Journey booking cancelled successfully.",
+      journey,
     });
   } catch (error) {
     next(error);
   }
 };
+
+const cancelJourney = deleteJourney;
 
 // @desc    Accept responsibility for high risk travel
 // @route   POST /api/journeys/accept-responsibility
@@ -464,14 +747,21 @@ const startJourney = async (req, res, next) => {
       .populate("pilgrimageCenterId")
       .populate("travelingFamilyMembers");
 
-    // If active journey exists and matches requested or no specific ID requested, return it
+    // If active journey exists and matches requested or no specific ID requested, activate and return it
     if (activeJourney && (!journeyId || activeJourney._id.toString() === journeyId)) {
+      if (!activeJourney.startedAt) {
+        activeJourney.startedAt = new Date();
+      }
+      activeJourney.status = "IN_PROGRESS";
+      await activeJourney.save();
       return res.status(200).json({
         success: true,
-        message: "Active journey retrieved.",
+        message: "Journey started and live tracking active.",
         journey: activeJourney,
       });
     }
+
+    await syncExpiredJourneys(userId);
 
     let targetJourney;
     if (journeyId) {
@@ -480,10 +770,20 @@ const startJourney = async (req, res, next) => {
         res.status(404);
         throw new Error("Journey plan not found or unauthorized.");
       }
+      if (targetJourney.status === "EXPIRED" || targetJourney.status === "expired") {
+        res.status(400);
+        throw new Error("This planned journey has expired. Please plan a new journey.");
+      }
+      if (targetJourney.status === "CANCELLED" || targetJourney.status === "cancelled") {
+        res.status(400);
+        throw new Error("This journey plan has been cancelled.");
+      }
     } else {
       // Find latest planned journey
-      targetJourney = await Journey.findOne({ userId, status: { $in: ["planned", "ready", "NOT_STARTED"] } })
-        .sort({ createdAt: -1 });
+      targetJourney = await Journey.findOne({
+        userId,
+        status: { $in: ["PLANNED", "SCHEDULED", "CONFIRMED", "planned", "ready", "NOT_STARTED"] }
+      }).sort({ journeyDate: 1, createdAt: -1 });
     }
 
     if (!targetJourney) {
@@ -553,25 +853,36 @@ const startJourney = async (req, res, next) => {
 // @access  Private
 const getActiveJourney = async (req, res, next) => {
   try {
-    const activeJourney = await Journey.findOne({
+    let activeJourney = await Journey.findOne({
       userId: req.user._id,
       status: { $in: ["IN_PROGRESS", "PAUSED", "active"] },
     })
       .populate("pilgrimageCenterId")
       .populate("travelingFamilyMembers");
 
+    // If no in-progress journey exists, check for upcoming planned/scheduled journey
+    if (!activeJourney) {
+      activeJourney = await Journey.findOne({
+        userId: req.user._id,
+        status: { $in: ["PLANNED", "SCHEDULED", "CONFIRMED", "planned", "ready", "NOT_STARTED"] },
+      })
+        .sort({ journeyDate: 1, createdAt: -1 })
+        .populate("pilgrimageCenterId")
+        .populate("travelingFamilyMembers");
+    }
+
     if (!activeJourney) {
       return res.status(200).json({
         success: true,
         active: false,
         journey: null,
-        message: "No active journey found.",
+        message: "No active or planned journey found.",
       });
     }
 
     res.status(200).json({
       success: true,
-      active: true,
+      active: ["IN_PROGRESS", "PAUSED", "active"].includes(activeJourney.status),
       journey: activeJourney,
     });
   } catch (error) {
@@ -1041,6 +1352,7 @@ module.exports = {
   getJourneyById,
   updateJourney,
   deleteJourney,
+  cancelJourney,
   acceptResponsibility,
   startJourney,
   getActiveJourney,
@@ -1049,4 +1361,7 @@ module.exports = {
   getJourneyProgress,
   completeJourney,
   getJourneyBookings,
+  syncExpiredJourneys,
+  normalizeDateOnly,
+  getEndOfDayUTC,
 };

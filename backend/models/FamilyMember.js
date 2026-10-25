@@ -189,7 +189,20 @@ const familyMemberSchema = new mongoose.Schema(
     },
     doctorApprovalStatus: {
       type: String,
-      enum: ["none", "pending", "approved", "rejected"],
+      enum: [
+        "none",
+        "pending",
+        "approved",
+        "rejected",
+        "approved_with_conditions",
+        "not_approved",
+        "further_evaluation",
+        "consulted",
+        "APPROVED",
+        "APPROVED_WITH_CONDITIONS",
+        "REJECTED",
+        "PENDING",
+      ],
       default: "none",
     },
     responsibilityAccepted: {

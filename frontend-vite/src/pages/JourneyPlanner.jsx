@@ -1,18 +1,28 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import UserSidebar from "../components/UserSidebar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
 import { apiGetPilgrimageCenterById, apiGetProfile } from "../services/api";
-import { apiCreateJourney, apiGetNearbyServices, apiAcceptResponsibility } from "../services/journeyService";
+import {
+  apiCreateJourney,
+  apiUpdateJourney,
+  apiGetMyJourneys,
+  apiGetJourneyById,
+  apiGetNearbyServices,
+  apiAcceptResponsibility,
+} from "../services/journeyService";
 import { apiGetWeatherByCenterId } from "../services/weatherService";
 import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyPlanner.css";
 import PlaceDetailsModal from "../components/PlaceDetailsModal";
 import ViewAllServicesModal from "../components/ViewAllServicesModal";
 import AccommodationBookingModal from "../components/AccommodationBookingModal";
-import { apiGetMyAccommodationBookings } from "../services/accommodationBookingService";
+import {
+  apiGetMyAccommodationBookings,
+  apiModifyAccommodationBookingDates,
+} from "../services/accommodationBookingService";
 import {
   FiMapPin,
   FiCalendar,
@@ -159,8 +169,22 @@ function JourneyPlanner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  // Reschedule & Duplicate Conflict States
+  const [searchParams] = useSearchParams();
+  const queryRescheduleId = searchParams.get("rescheduleJourneyId");
+  const [rescheduleJourneyId, setRescheduleJourneyId] = useState(queryRescheduleId || null);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(Boolean(queryRescheduleId));
+  const [userJourneys, setUserJourneys] = useState([]);
+  const [existingCenterJourney, setExistingCenterJourney] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
   // Accommodation Bookings to track confirmed reservations
   const [userAccommodationBookings, setUserAccommodationBookings] = useState([]);
+  const [showAccommodationModal, setShowAccommodationModal] = useState(false);
+  const [accommodationActionLoading, setAccommodationActionLoading] = useState(false);
+  const [accommodationActionSuccess, setAccommodationActionSuccess] = useState("");
+  const [accommodationActionError, setAccommodationActionError] = useState("");
+  const [accommodationChoice, setAccommodationChoice] = useState(""); // 'retained' | 'modified' | 'alternative'
 
   // Fetch user confirmed bookings
   useEffect(() => {
@@ -178,6 +202,216 @@ function JourneyPlanner() {
     fetchUserAccommodationBookings();
   }, [token]);
 
+  // Check if an accommodation booking exists for this journey
+  const getLinkedAccommodationBooking = useCallback(() => {
+    if (!userAccommodationBookings || userAccommodationBookings.length === 0) return null;
+    return userAccommodationBookings.find((b) => {
+      if (b.bookingStatus === "CANCELLED") return false;
+      if (rescheduleJourneyId && b.journeyId) {
+        const bJid = b.journeyId._id ? b.journeyId._id.toString() : b.journeyId.toString();
+        if (bJid === rescheduleJourneyId.toString()) return true;
+      }
+      return false;
+    });
+  }, [userAccommodationBookings, rescheduleJourneyId]);
+
+  // Compare existing accommodation reservation dates with proposed journey dates
+  const hasAccommodationDatesMismatch = useCallback(() => {
+    const booking = getLinkedAccommodationBooking();
+    if (!booking || !journeyDate || !returnDate) return false;
+    const bIn = typeof booking.checkInDate === "string"
+      ? booking.checkInDate.split("T")[0]
+      : new Date(booking.checkInDate).toISOString().split("T")[0];
+    const bOut = typeof booking.checkOutDate === "string"
+      ? booking.checkOutDate.split("T")[0]
+      : new Date(booking.checkOutDate).toISOString().split("T")[0];
+    return bIn !== journeyDate || bOut !== returnDate;
+  }, [getLinkedAccommodationBooking, journeyDate, returnDate]);
+
+  const handleRetainAccommodation = () => {
+    setAccommodationChoice("retained");
+    setShowAccommodationModal(false);
+    setAccommodationActionSuccess("Kept existing accommodation booking dates unchanged.");
+    setAccommodationActionError("");
+  };
+
+  const handleModifyAccommodationDates = async () => {
+    const booking = getLinkedAccommodationBooking();
+    if (!booking) return;
+
+    if (
+      !window.confirm(
+        `Are you sure you want to update your accommodation booking at "${booking.accommodationName}" to check in on ${journeyDate} and check out on ${returnDate}?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setAccommodationActionLoading(true);
+      setAccommodationActionError("");
+      const res = await apiModifyAccommodationBookingDates(
+        booking._id,
+        { checkInDate: journeyDate, checkOutDate: returnDate },
+        token
+      );
+      if (res && res.success) {
+        setAccommodationChoice("modified");
+        setShowAccommodationModal(false);
+        setAccommodationActionSuccess(
+          `Accommodation reservation at ${booking.accommodationName} updated to ${journeyDate} – ${returnDate}!`
+        );
+        // Refresh accommodation bookings list
+        const fresh = await apiGetMyAccommodationBookings(token);
+        if (fresh && Array.isArray(fresh.bookings)) {
+          setUserAccommodationBookings(fresh.bookings);
+        }
+      } else {
+        throw new Error(res.message || "Failed to update accommodation reservation dates.");
+      }
+    } catch (err) {
+      setAccommodationActionError(err.message || "Failed to update accommodation reservation.");
+    } finally {
+      setAccommodationActionLoading(false);
+    }
+  };
+
+  const handleFindAlternativeAccommodation = () => {
+    setAccommodationChoice("alternative");
+    setShowAccommodationModal(false);
+    setAccommodationRequired(true);
+    setActiveCategory("accommodation");
+    const section = document.getElementById("nearby-services-section");
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  // Handler to enter reschedule mode and prefill journey details
+  const handleStartReschedule = useCallback((targetJourney) => {
+    if (!targetJourney) return;
+    setIsRescheduleMode(true);
+    setRescheduleJourneyId(targetJourney._id);
+    setShowDuplicateModal(false);
+
+    if (targetJourney.journeyDate) {
+      const dStr = typeof targetJourney.journeyDate === "string"
+        ? targetJourney.journeyDate.split("T")[0]
+        : new Date(targetJourney.journeyDate).toISOString().split("T")[0];
+      setJourneyDate(dStr);
+    }
+    if (targetJourney.returnDate) {
+      const rStr = typeof targetJourney.returnDate === "string"
+        ? targetJourney.returnDate.split("T")[0]
+        : new Date(targetJourney.returnDate).toISOString().split("T")[0];
+      setReturnDate(rStr);
+    }
+    if (targetJourney.transportMode) {
+      setTransportMode(targetJourney.transportMode);
+    }
+    if (targetJourney.walkingLevel) {
+      setWalkingLevel(targetJourney.walkingLevel);
+    }
+    if (targetJourney.budget) {
+      setBudgetType(targetJourney.budget.type || "Moderate");
+      if (targetJourney.budget.amount) {
+        setCustomBudgetAmount(targetJourney.budget.amount.toString());
+      }
+    }
+    if (targetJourney.startLocation) {
+      setStartLocation({
+        address: targetJourney.startLocation.address || "",
+        city: targetJourney.startLocation.city || "",
+        state: targetJourney.startLocation.state || "",
+        country: targetJourney.startLocation.country || "India",
+        latitude: targetJourney.startLocation.latitude || null,
+        longitude: targetJourney.startLocation.longitude || null,
+      });
+      if (targetJourney.startLocation.type) {
+        setLocationType(targetJourney.startLocation.type);
+      }
+    }
+    if (targetJourney.travelingAlone !== undefined) {
+      setTravelingAlone(targetJourney.travelingAlone);
+    }
+    if (Array.isArray(targetJourney.travelingFamilyMembers)) {
+      setSelectedFamilyMemberIds(
+        targetJourney.travelingFamilyMembers.map((m) => (typeof m === "object" ? m._id : m))
+      );
+    }
+    if (targetJourney.accommodationRequired !== undefined) {
+      setAccommodationRequired(targetJourney.accommodationRequired);
+    }
+    if (targetJourney.foodRequired !== undefined) {
+      setFoodRequired(targetJourney.foodRequired);
+    }
+    if (targetJourney.foodPreference) {
+      setFoodPreference(targetJourney.foodPreference);
+    }
+    if (targetJourney.searchRadius) {
+      setSearchRadius(targetJourney.searchRadius);
+    }
+    if (targetJourney.selectedServices) {
+      setSelectedServices(targetJourney.selectedServices);
+    }
+  }, []);
+
+  const handleKeepExistingJourney = () => {
+    setShowDuplicateModal(false);
+    if (existingCenterJourney?._id) {
+      navigate(`/journey/${existingCenterJourney._id}`);
+    } else {
+      navigate("/my-journeys");
+    }
+  };
+
+  // Fetch user journeys to check for conflicts and duplicate centre
+  useEffect(() => {
+    const fetchUserJourneys = async () => {
+      if (!token) return;
+      try {
+        const res = await apiGetMyJourneys(token);
+        if (res && Array.isArray(res.journeys)) {
+          setUserJourneys(res.journeys);
+
+          // If query param specifies rescheduleJourneyId, load target
+          if (queryRescheduleId) {
+            const target = res.journeys.find((j) => j._id === queryRescheduleId);
+            if (target) {
+              handleStartReschedule(target);
+            } else {
+              try {
+                const singleRes = await apiGetJourneyById(queryRescheduleId, token);
+                if (singleRes && singleRes.journey) {
+                  handleStartReschedule(singleRes.journey);
+                }
+              } catch (singleErr) {
+                console.warn("Could not load journey by queryRescheduleId:", singleErr);
+              }
+            }
+          } else {
+            // Check for active journey to the same centre
+            const activeCenterJourney = res.journeys.find((j) => {
+              const inactive = ["cancelled", "CANCELLED", "completed", "COMPLETED", "expired", "EXPIRED"];
+              if (inactive.includes(j.status)) return false;
+              const cId = j.pilgrimageCenterId?._id || j.pilgrimageCenterId;
+              return cId && cId.toString() === pilgrimageCenterId?.toString();
+            });
+
+            if (activeCenterJourney) {
+              setExistingCenterJourney(activeCenterJourney);
+              setShowDuplicateModal(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load user journeys for duplicate check:", err);
+      }
+    };
+
+    fetchUserJourneys();
+  }, [token, pilgrimageCenterId, queryRescheduleId, handleStartReschedule]);
+
   const isAccommodationBooked = useCallback((place) => {
     if (!place || !userAccommodationBookings || userAccommodationBookings.length === 0) return false;
     return userAccommodationBookings.some((b) => {
@@ -189,6 +423,17 @@ function JourneyPlanner() {
       return matchId || matchName;
     });
   }, [userAccommodationBookings]);
+
+  // Check if planning journey details (dates and travel mode) are filled
+  const isJourneyPlannerSectionFilled = Boolean(
+    journeyDate &&
+    returnDate &&
+    transportMode
+  );
+
+  const isCurrentCategoryDisabled =
+    (activeCategory === "accommodation" && !accommodationRequired) ||
+    (activeCategory === "restaurants" && !foodRequired);
 
   // Load Pilgrimage Center
   useEffect(() => {
@@ -489,6 +734,36 @@ function JourneyPlanner() {
       }
     }
 
+    // Overlapping Journey Date Validation (Rule 1: Same date, different centres or any other active journey)
+    if (journeyDate && !errs.journeyDate && userJourneys && userJourneys.length > 0) {
+      const selectedStart = new Date(journeyDate);
+      selectedStart.setHours(0, 0, 0, 0);
+      const selectedEnd = returnDate ? new Date(returnDate) : new Date(journeyDate);
+      selectedEnd.setHours(23, 59, 59, 999);
+
+      const hasConflict = userJourneys.some((j) => {
+        // Exclude the journey currently being rescheduled
+        if (rescheduleJourneyId && (j._id === rescheduleJourneyId || j._id?.toString() === rescheduleJourneyId.toString())) {
+          return false;
+        }
+        const inactive = ["cancelled", "CANCELLED", "completed", "COMPLETED", "expired", "EXPIRED"];
+        if (inactive.includes(j.status)) {
+          return false;
+        }
+
+        const jStart = new Date(j.journeyDate);
+        jStart.setHours(0, 0, 0, 0);
+        const jEnd = j.returnDate ? new Date(j.returnDate) : new Date(j.journeyDate);
+        jEnd.setHours(23, 59, 59, 999);
+
+        return selectedStart <= jEnd && jStart <= selectedEnd;
+      });
+
+      if (hasConflict) {
+        errs.journeyDate = "You already have a journey scheduled for this date. Please choose another date or reschedule your existing journey.";
+      }
+    }
+
     if (locationType === "manual") {
       if (!startLocation.city || !startLocation.city.trim()) {
         errs.city = "City / Origin is required.";
@@ -537,6 +812,8 @@ function JourneyPlanner() {
   }, [
     journeyDate,
     returnDate,
+    userJourneys,
+    rescheduleJourneyId,
     locationType,
     startLocation.city,
     startLocation.state,
@@ -614,8 +891,10 @@ function JourneyPlanner() {
     }
   };
 
-  // Submit & Start Journey
+  // Submit & Start Journey (handles both new booking and reschedule)
   const handleConfirmSaveJourney = async () => {
+    if (submitting) return;
+
     try {
       setSubmitting(true);
       setSubmitError("");
@@ -648,15 +927,43 @@ function JourneyPlanner() {
         selectedServices,
       };
 
-      const result = await apiCreateJourney(payload, token);
-      if (result && result.journey) {
-        // Navigate directly to Travel Readiness Assessment page
-        navigate(`/travel-assessment/${result.journey._id}`);
+      if (isRescheduleMode && rescheduleJourneyId) {
+        const linkedBooking = getLinkedAccommodationBooking();
+        if (linkedBooking && hasAccommodationDatesMismatch() && !accommodationChoice) {
+          setShowAccommodationModal(true);
+          setSubmitting(false);
+          return;
+        }
+
+        // Update existing record
+        const result = await apiUpdateJourney(rescheduleJourneyId, payload, token);
+        if (result && result.journey) {
+          navigate(`/travel-assessment/${result.journey._id}`);
+        } else {
+          throw new Error("Failed to reschedule journey record.");
+        }
       } else {
-        throw new Error("Failed to create journey record");
+        // Create new journey plan
+        const result = await apiCreateJourney(payload, token);
+        if (result && result.journey) {
+          navigate(`/travel-assessment/${result.journey._id}`);
+        } else {
+          throw new Error("Failed to create journey record");
+        }
       }
     } catch (err) {
       console.error("Save journey error:", err);
+      if (err.conflictType === "DUPLICATE_CENTRE" || (err.message && err.message.includes("already scheduled for"))) {
+        if (err.existingJourney) {
+          setExistingCenterJourney(err.existingJourney);
+        }
+        setShowDuplicateModal(true);
+      } else if (err.conflictType === "DATE_CONFLICT" || (err.message && err.message.includes("already have a journey scheduled for this date"))) {
+        setErrors((prev) => ({
+          ...prev,
+          journeyDate: "You already have a journey scheduled for this date. Please choose another date or reschedule your existing journey.",
+        }));
+      }
       setSubmitError(err.message || "Failed to save journey.");
     } finally {
       setSubmitting(false);
@@ -718,6 +1025,387 @@ function JourneyPlanner() {
           </div>
 
           <div className="planner-container">
+            {/* DUPLICATE JOURNEY SCHEDULING MODAL (Rule 2) */}
+            {showDuplicateModal && existingCenterJourney && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: "rgba(15, 23, 42, 0.75)",
+                  backdropFilter: "blur(4px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9999,
+                  padding: "20px",
+                }}
+              >
+                <div
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: "16px",
+                    maxWidth: "520px",
+                    width: "100%",
+                    padding: "30px",
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                    border: "1px solid #e2e8f0",
+                    textAlign: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      background: "#eff6ff",
+                      color: "#2563eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 16px",
+                      fontSize: "28px",
+                    }}
+                  >
+                    <FiCalendar />
+                  </div>
+
+                  <h3 style={{ fontSize: "21px", fontWeight: "800", color: "#0f172a", marginBottom: "10px" }}>
+                    Journey Already Scheduled
+                  </h3>
+
+                  <p style={{ fontSize: "15px", color: "#475569", lineHeight: "1.6", marginBottom: "20px" }}>
+                    A journey to this pilgrimage centre is already scheduled for{" "}
+                    <strong style={{ color: "#0f172a" }}>
+                      {new Date(existingCenterJourney.journeyDate).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </strong>
+                    . Would you like to reschedule it?
+                  </p>
+
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "16px 20px",
+                      marginBottom: "24px",
+                      textAlign: "left",
+                      fontSize: "14px",
+                      color: "#334155",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div>
+                      <strong>Centre:</strong> {center?.name || existingCenterJourney.pilgrimageCenterId?.name || "Pilgrimage Centre"}
+                    </div>
+                    <div>
+                      <strong>Scheduled Date:</strong>{" "}
+                      {new Date(existingCenterJourney.journeyDate).toLocaleDateString()}
+                      {existingCenterJourney.returnDate
+                        ? ` – ${new Date(existingCenterJourney.returnDate).toLocaleDateString()}`
+                        : ""}
+                    </div>
+                    <div>
+                      <strong>Pilgrims:</strong> {existingCenterJourney.totalPilgrims} Person(s)
+                    </div>
+                    <div>
+                      <strong>Transport:</strong> {existingCenterJourney.transportMode}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                    <button
+                      type="button"
+                      onClick={handleKeepExistingJourney}
+                      style={{
+                        flex: 1,
+                        padding: "12px 18px",
+                        borderRadius: "10px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#475569",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Keep Existing Journey
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStartReschedule(existingCenterJourney)}
+                      style={{
+                        flex: 1,
+                        padding: "12px 18px",
+                        borderRadius: "10px",
+                        border: "none",
+                        background: "#2563eb",
+                        color: "#ffffff",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)",
+                      }}
+                    >
+                      Reschedule Journey
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ACCOMMODATION RESCHEDULING OPTIONS MODAL (Section 11) */}
+            {showAccommodationModal && (() => {
+              const linked = getLinkedAccommodationBooking();
+              if (!linked) return null;
+              const bInStr = linked.checkInDate
+                ? new Date(linked.checkInDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
+              const bOutStr = linked.checkOutDate
+                ? new Date(linked.checkOutDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
+              const newStartStr = journeyDate
+                ? new Date(journeyDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
+              const newReturnStr = returnDate
+                ? new Date(returnDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
+
+              return (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: "rgba(15, 23, 42, 0.75)",
+                    backdropFilter: "blur(4px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 9999,
+                    padding: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "16px",
+                      maxWidth: "540px",
+                      width: "100%",
+                      padding: "28px",
+                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                      border: "1px solid #e2e8f0",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                      <div
+                        style={{
+                          width: "48px",
+                          height: "48px",
+                          borderRadius: "50%",
+                          background: "#fef3c7",
+                          color: "#d97706",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "24px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FiHome />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: "19px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
+                          Existing Accommodation Booking
+                        </h3>
+                        <span style={{ fontSize: "13px", color: "#64748b" }}>
+                          Reservation dates differ from new journey dates
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: "14px", color: "#334155", lineHeight: "1.6", marginBottom: "16px" }}>
+                      You have an existing booking at <strong>{linked.accommodationName}</strong> reserved for{" "}
+                      <strong style={{ color: "#0f172a" }}>{bInStr} – {bOutStr}</strong>. Your new journey is scheduled for{" "}
+                      <strong style={{ color: "#2563eb" }}>{newStartStr} – {newReturnStr}</strong>.
+                      <br /><br />
+                      PilgrimIQ does not automatically alter your reservation. Please choose how you would like to handle this booking:
+                    </p>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          handleRetainAccommodation();
+                          await handleConfirmSaveJourney();
+                        }}
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: "10px",
+                          border: "1px solid #cbd5e1",
+                          background: "#f8fafc",
+                          color: "#1e293b",
+                          fontWeight: "700",
+                          fontSize: "14px",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
+                        <span style={{ color: "#0f172a" }}>1. Retain Current Booking</span>
+                        <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "normal" }}>
+                          Keep existing reservation dates ({bInStr} – {bOutStr}) and proceed with journey rescheduling.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleModifyAccommodationDates();
+                          await handleConfirmSaveJourney();
+                        }}
+                        disabled={accommodationActionLoading}
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: "10px",
+                          border: "1px solid #3b82f6",
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontWeight: "700",
+                          fontSize: "14px",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
+                        <span style={{ color: "#1d4ed8" }}>
+                          {accommodationActionLoading ? "Updating Accommodation Dates..." : "2. Request Booking Modification"}
+                        </span>
+                        <span style={{ fontSize: "12px", color: "#3b82f6", fontWeight: "normal" }}>
+                          Update accommodation dates to match your new journey dates ({newStartStr} – {newReturnStr}) upon your confirmation.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleFindAlternativeAccommodation}
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: "10px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#334155",
+                          fontWeight: "700",
+                          fontSize: "14px",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
+                        <span style={{ color: "#0f172a" }}>3. Find Alternative Accommodation</span>
+                        <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "normal" }}>
+                          Browse and choose alternative accommodations available for your new journey dates.
+                        </span>
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAccommodationModal(false)}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#64748b",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Close & Review
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* RESCHEDULE MODE ACTIVE BANNER */}
+            {isRescheduleMode && (
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "12px",
+                  padding: "14px 20px",
+                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  color: "#1e40af",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <FiInfo size={22} color="#2563eb" />
+                  <div>
+                    <strong style={{ display: "block", fontSize: "14.5px" }}>Reschedule Journey Mode Active</strong>
+                    <span style={{ fontSize: "13px", color: "#3b82f6" }}>
+                      Modifying your scheduled journey for {center?.name}. Update your dates and details below.
+                    </span>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "800",
+                    background: "#dbeafe",
+                    padding: "4px 12px",
+                    borderRadius: "6px",
+                    color: "#1d4ed8",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  RESCHEDULING
+                </span>
+              </div>
+            )}
+
             {/* PILGRIMAGE CENTER HEADER CARD */}
             <div className="center-summary-header-card">
               <div className="center-thumb-box">
@@ -826,6 +1514,124 @@ function JourneyPlanner() {
                       />
                       {renderSingleFieldMessage("returnDate")}
                     </div>
+
+                    {/* SECTION 11: ACCOMMODATION RESCHEDULING DATE COMPARISON NOTICE */}
+                    {isRescheduleMode && (() => {
+                      const linked = getLinkedAccommodationBooking();
+                      if (!linked) return null;
+                      const isMismatch = hasAccommodationDatesMismatch();
+                      const bInStr = linked.checkInDate
+                        ? new Date(linked.checkInDate).toLocaleDateString()
+                        : "";
+                      const bOutStr = linked.checkOutDate
+                        ? new Date(linked.checkOutDate).toLocaleDateString()
+                        : "";
+
+                      return (
+                        <div
+                          style={{
+                            gridColumn: "1 / -1",
+                            marginTop: "16px",
+                            padding: "16px 20px",
+                            borderRadius: "12px",
+                            border: isMismatch ? "1px solid #f59e0b" : "1px solid #86efac",
+                            background: isMismatch ? "#fffbeb" : "#f0fdf4",
+                            color: isMismatch ? "#92400e" : "#166534",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                            <FiHome size={22} style={{ marginTop: "2px", flexShrink: 0 }} />
+                            <div style={{ flex: 1 }}>
+                              <strong style={{ fontSize: "14.5px", display: "block", marginBottom: "4px" }}>
+                                {isMismatch ? "Accommodation Booking Notice: Dates Differ" : "Accommodation Booking Confirmed"}
+                              </strong>
+                              <p style={{ margin: "0 0 10px 0", fontSize: "13.5px", lineHeight: "1.5" }}>
+                                {isMismatch ? (
+                                  <>
+                                    You have an existing accommodation booking at <strong>{linked.accommodationName}</strong> reserved for <strong>{bInStr} – {bOutStr}</strong>. Your proposed journey dates are <strong>{journeyDate ? new Date(journeyDate).toLocaleDateString() : ""} – {returnDate ? new Date(returnDate).toLocaleDateString() : ""}</strong>.
+                                  </>
+                                ) : (
+                                  <>
+                                    Your accommodation booking at <strong>{linked.accommodationName}</strong> matches your journey dates ({bInStr} – {bOutStr}).
+                                  </>
+                                )}
+                              </p>
+
+                              {isMismatch && (
+                                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "8px" }}>
+                                  <button
+                                    type="button"
+                                    onClick={handleRetainAccommodation}
+                                    style={{
+                                      padding: "8px 14px",
+                                      borderRadius: "8px",
+                                      border: "1px solid #d97706",
+                                      background: accommodationChoice === "retained" ? "#d97706" : "#ffffff",
+                                      color: accommodationChoice === "retained" ? "#ffffff" : "#92400e",
+                                      fontWeight: "700",
+                                      fontSize: "12.5px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {accommodationChoice === "retained" ? "✓ Keeping Current Booking" : "1. Retain Current Booking"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleModifyAccommodationDates}
+                                    disabled={accommodationActionLoading}
+                                    style={{
+                                      padding: "8px 14px",
+                                      borderRadius: "8px",
+                                      border: "none",
+                                      background: accommodationChoice === "modified" ? "#059669" : "#2563eb",
+                                      color: "#ffffff",
+                                      fontWeight: "700",
+                                      fontSize: "12.5px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {accommodationActionLoading
+                                      ? "Updating Accommodation..."
+                                      : accommodationChoice === "modified"
+                                      ? "✓ Dates Updated"
+                                      : "2. Request Booking Modification"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleFindAlternativeAccommodation}
+                                    style={{
+                                      padding: "8px 14px",
+                                      borderRadius: "8px",
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#475569",
+                                      fontWeight: "700",
+                                      fontSize: "12.5px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    3. Find Alternative Accommodation
+                                  </button>
+                                </div>
+                              )}
+
+                              {accommodationActionSuccess && (
+                                <div style={{ marginTop: "10px", fontSize: "13px", color: "#166534", fontWeight: "600" }}>
+                                  ✓ {accommodationActionSuccess}
+                                </div>
+                              )}
+                              {accommodationActionError && (
+                                <div style={{ marginTop: "10px", fontSize: "13px", color: "#dc2626", fontWeight: "600" }}>
+                                  ✕ {accommodationActionError}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1300,6 +2106,15 @@ function JourneyPlanner() {
                     </div>
                   </div>
 
+                  {!isJourneyPlannerSectionFilled && (
+                    <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px", color: "#92400e", fontSize: "13px" }}>
+                      <FiAlertCircle size={18} style={{ color: "#d97706", flexShrink: 0 }} />
+                      <span>
+                        Please complete your journey travel dates (Section 1) and travel mode (Section 3) above. These details are needed before choosing and booking accommodation.
+                      </span>
+                    </div>
+                  )}
+
                   <div className="form-grid-3">
                     <div className="form-group">
                       <label>Need Nearby Accommodation? *</label>
@@ -1390,11 +2205,20 @@ function JourneyPlanner() {
                     </div>
                   </div>
 
+                  {!isJourneyPlannerSectionFilled && (
+                    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px", color: "#1e40af", fontSize: "13px" }}>
+                      <FiInfo size={18} style={{ color: "#2563eb", flexShrink: 0 }} />
+                      <span>
+                        <strong>Journey Setup Required:</strong> Please complete your travel dates (Section 1) and travel mode (Section 3) above. Only after completing the journey planner section will accommodation selecting and booking be enabled.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Category Filter Pills */}
                   <div className="nearby-category-pills">
                     {[
-                      { id: "accommodation", label: "🏨 Accommodation" },
-                      { id: "restaurants", label: "🍽️ Restaurants/Food" },
+                      { id: "accommodation", label: `🏨 Accommodation${!accommodationRequired ? " (No)" : ""}` },
+                      { id: "restaurants", label: `🍽️ Restaurants/Food${!foodRequired ? " (No)" : ""}` },
                       { id: "parking", label: "🅿️ Parking" },
                       { id: "hospitals", label: "🏥 Hospitals" },
                       { id: "pharmacies", label: "💊 Pharmacies" },
@@ -1418,152 +2242,216 @@ function JourneyPlanner() {
                     <JourneyMap
                       centerCoords={center.location}
                       centerName={center.name}
-                      places={nearbyPlaces}
+                      places={isCurrentCategoryDisabled ? [] : nearbyPlaces}
                       selectedPlaceIds={(selectedServices[activeCategory] || []).map((s) => s.externalPlaceId)}
-                      onSelectPlace={handleToggleSelectPlace}
+                      onSelectPlace={isCurrentCategoryDisabled ? () => {} : handleToggleSelectPlace}
                     />
                   </div>
 
                   {/* Places List Cards */}
                   <div className="nearby-places-list">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-                      <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
-                        Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
-                      </h4>
-                      {nearbyPlaces.length > 0 && (
+                    {activeCategory === "accommodation" && !accommodationRequired ? (
+                      <div style={{ padding: "36px 20px", background: "#f8fafc", borderRadius: "14px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                        <div style={{ fontSize: "32px", marginBottom: "8px" }}>🏨</div>
+                        <h4 style={{ margin: "0 0 6px 0", fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                          Nearby Accommodation Not Needed
+                        </h4>
+                        <p style={{ margin: "0 0 16px 0", fontSize: "13.5px", color: "#64748b" }}>
+                          You selected <strong>NO</strong> for "Need Nearby Accommodation?" in Section 5. Accommodation places and booking options are hidden.
+                        </p>
                         <button
                           type="button"
-                          className="btn-view-all-services"
-                          onClick={() => setIsViewAllOpen(true)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "7px 14px",
-                            borderRadius: "8px",
-                            background: "#eff6ff",
-                            color: "#2563eb",
-                            border: "1px solid #bfdbfe",
-                            fontSize: "13px",
-                            fontWeight: "700",
-                            cursor: "pointer",
-                          }}
+                          onClick={() => setAccommodationRequired(true)}
+                          style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "8px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}
                         >
-                          <FiInfo size={14} /> View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} ({nearbyPlaces.length})
+                          Enable Nearby Accommodation (Select YES)
                         </button>
-                      )}
-                    </div>
-
-                    {loadingNearby ? (
-                      <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
-                        <p style={{ margin: 0, fontSize: "14px", color: "#2563eb", fontWeight: "600" }}>Searching nearby services...</p>
                       </div>
-                    ) : nearbyPlaces.length > 0 ? (
-                      <div className="places-cards-grid">
-                        {nearbyPlaces.slice(0, 6).map((place, idx) => {
-                          const selectedList = selectedServices[activeCategory] || [];
-                          const placeId = place.externalPlaceId || idx;
-                          const isSelected = selectedList.some(
-                            (item) => item.externalPlaceId === place.externalPlaceId
-                          );
-
-                          const originLat = startLocation.latitude || center.location?.latitude;
-                          const originLng = startLocation.longitude || center.location?.longitude;
-                          const directionsUrl = originLat && originLng
-                            ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
-                            : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
-
-                          const isBooked = activeCategory === "accommodation" && isAccommodationBooked(place);
-
-                          return (
-                            <div key={placeId} className={`place-card ${isSelected || isBooked ? "selected" : ""}`}>
-                              <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
-                                    {place.placeType || place.category}
-                                  </span>
-                                  {isBooked && (
-                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#065f46", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "6px" }}>
-                                      ✓ Booked
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
-                                  📍 {place.distanceKm} km
-                                </span>
-                              </div>
-
-                              <h5 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h5>
-
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "8px" }}>
-                                <span style={{ color: "#b45309", fontWeight: "700" }}>
-                                  {place.rating ? `⭐ ${place.rating} / 5` : "Rating N/A"}
-                                </span>
-                                {place.isOpen !== null && place.isOpen !== undefined && (
-                                  <span style={{ fontSize: "11px", fontWeight: "700", color: place.isOpen ? "#047857" : "#b91c1c", background: place.isOpen ? "#ecfdf5" : "#fef2f2", padding: "2px 6px", borderRadius: "4px" }}>
-                                    {place.isOpen ? "Open Now" : "Closed"}
-                                  </span>
-                                )}
-                              </div>
-
-                              <p className="place-address" style={{ margin: "0 0 10px 0", fontSize: "12.5px", color: "#64748b", lineHeight: "1.35" }}>{place.address}</p>
-
-                              {place.dietaryInfo && place.dietaryInfo.isVegetarian && (
-                                <div style={{ marginBottom: "10px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "3px 8px", borderRadius: "6px" }}>
-                                    🌱 {place.dietaryInfo.label}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="place-card-actions" style={{ display: "flex", gap: "6px", marginTop: "auto" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedDetailPlace(place)}
-                                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
-                                >
-                                  <FiInfo size={13} /> Details
-                                </button>
-
-                                <a
-                                  href={directionsUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: "700", textDecoration: "none" }}
-                                >
-                                  <FiNavigation size={13} /> Directions
-                                </a>
-
-                                {isBooked ? (
-                                  <button
-                                    type="button"
-                                    className="btn-select-place booked"
-                                    disabled
-                                    style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "default", border: "none", background: "#059669", color: "#ffffff", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px" }}
-                                  >
-                                    ✓ Already Booked
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className={`btn-select-place ${isSelected ? "selected" : ""}`}
-                                    onClick={() => handleToggleSelectPlace(place)}
-                                    style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
-                                  >
-                                    {isSelected ? "✓ Selected" : "+ Select"}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                    ) : activeCategory === "restaurants" && !foodRequired ? (
+                      <div style={{ padding: "36px 20px", background: "#f8fafc", borderRadius: "14px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                        <div style={{ fontSize: "32px", marginBottom: "8px" }}>🍽️</div>
+                        <h4 style={{ margin: "0 0 6px 0", fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                          Food Recommendations Not Needed
+                        </h4>
+                        <p style={{ margin: "0 0 16px 0", fontSize: "13.5px", color: "#64748b" }}>
+                          You selected <strong>NO</strong> for "Need Nearby Food Recommendations?" in Section 5. Restaurant places are hidden.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setFoodRequired(true)}
+                          style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "8px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}
+                        >
+                          Enable Food Recommendations (Select YES)
+                        </button>
                       </div>
                     ) : (
-                      <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
-                        <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
-                          No services found within {searchRadius} km.
-                        </p>
-                      </div>
+                      <>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                          <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                            Found {nearbyPlaces.length} {activeCategory} service(s) within {searchRadius} km
+                          </h4>
+                          {nearbyPlaces.length > 0 && (
+                            <button
+                              type="button"
+                              className="btn-view-all-services"
+                              onClick={() => setIsViewAllOpen(true)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "7px 14px",
+                                borderRadius: "8px",
+                                background: "#eff6ff",
+                                color: "#2563eb",
+                                border: "1px solid #bfdbfe",
+                                fontSize: "13px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <FiInfo size={14} /> View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} ({nearbyPlaces.length})
+                            </button>
+                          )}
+                        </div>
+
+                        {loadingNearby ? (
+                          <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                            <p style={{ margin: 0, fontSize: "14px", color: "#2563eb", fontWeight: "600" }}>Searching nearby services...</p>
+                          </div>
+                        ) : nearbyPlaces.length > 0 ? (
+                          <div className="places-cards-grid">
+                            {nearbyPlaces.slice(0, 6).map((place, idx) => {
+                              const selectedList = selectedServices[activeCategory] || [];
+                              const placeId = place.externalPlaceId || idx;
+                              const isSelected = selectedList.some(
+                                (item) => item.externalPlaceId === place.externalPlaceId
+                              );
+
+                              const originLat = startLocation.latitude || center.location?.latitude;
+                              const originLng = startLocation.longitude || center.location?.longitude;
+                              const directionsUrl = originLat && originLng
+                                ? `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${place.latitude},${place.longitude}`
+                                : `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+
+                              const isBooked = activeCategory === "accommodation" && isAccommodationBooked(place);
+
+                              return (
+                                <div key={placeId} className={`place-card ${isSelected || isBooked ? "selected" : ""}`}>
+                                  <div className="place-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase" }}>
+                                        {place.placeType || place.category}
+                                      </span>
+                                      {isBooked && (
+                                        <span style={{ fontSize: "11px", fontWeight: "700", color: "#065f46", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "6px" }}>
+                                          ✓ Booked
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="distance-badge" style={{ fontSize: "11.5px", fontWeight: "700", color: "#047857", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px" }}>
+                                      📍 {place.distanceKm} km
+                                    </span>
+                                  </div>
+
+                                  <h5 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>{place.name}</h5>
+
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "8px" }}>
+                                    <span style={{ color: "#b45309", fontWeight: "700" }}>
+                                      {place.rating ? `⭐ ${place.rating} / 5` : "Rating N/A"}
+                                    </span>
+                                    {place.isOpen !== null && place.isOpen !== undefined && (
+                                      <span style={{ fontSize: "11px", fontWeight: "700", color: place.isOpen ? "#047857" : "#b91c1c", background: place.isOpen ? "#ecfdf5" : "#fef2f2", padding: "2px 6px", borderRadius: "4px" }}>
+                                        {place.isOpen ? "Open Now" : "Closed"}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <p className="place-address" style={{ margin: "0 0 10px 0", fontSize: "12.5px", color: "#64748b", lineHeight: "1.35" }}>{place.address}</p>
+
+                                  {place.dietaryInfo && place.dietaryInfo.isVegetarian && (
+                                    <div style={{ marginBottom: "10px" }}>
+                                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "3px 8px", borderRadius: "6px" }}>
+                                        🌱 {place.dietaryInfo.label}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <div className="place-card-actions" style={{ display: "flex", gap: "6px", marginTop: "auto" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedDetailPlace(place)}
+                                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                    >
+                                      <FiInfo size={13} /> Details
+                                    </button>
+
+                                    <a
+                                      href={directionsUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "6px 8px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: "700", textDecoration: "none" }}
+                                    >
+                                      <FiNavigation size={13} /> Directions
+                                    </a>
+
+                                    {isBooked ? (
+                                      <button
+                                        type="button"
+                                        className="btn-select-place booked"
+                                        disabled
+                                        style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "default", border: "none", background: "#059669", color: "#ffffff", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px" }}
+                                      >
+                                        ✓ Already Booked
+                                      </button>
+                                    ) : activeCategory === "accommodation" ? (
+                                      <button
+                                        type="button"
+                                        className="btn-select-place"
+                                        disabled={!isJourneyPlannerSectionFilled}
+                                        onClick={() => setBookingTargetPlace(place)}
+                                        style={{
+                                          flex: 1,
+                                          padding: "6px 8px",
+                                          borderRadius: "6px",
+                                          fontSize: "12px",
+                                          fontWeight: "700",
+                                          cursor: isJourneyPlannerSectionFilled ? "pointer" : "not-allowed",
+                                          border: "none",
+                                          background: isJourneyPlannerSectionFilled ? "#2563eb" : "#94a3b8",
+                                          color: "#ffffff",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "4px",
+                                          opacity: isJourneyPlannerSectionFilled ? 1 : 0.7
+                                        }}
+                                        title={!isJourneyPlannerSectionFilled ? "Please fill travel dates (Section 1) and travel mode (Section 3) above to enable accommodation booking" : "Book accommodation stay"}
+                                      >
+                                        <FiHome size={13} /> Book Stay
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className={`btn-select-place ${isSelected ? "selected" : ""}`}
+                                        onClick={() => handleToggleSelectPlace(place)}
+                                        style={{ flex: 1, padding: "6px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", border: "none", background: isSelected ? "#10b981" : "#2563eb", color: "#ffffff" }}
+                                      >
+                                        {isSelected ? "✓ Selected" : "+ Select"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{ padding: "28px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px dashed #cbd5e1" }}>
+                            <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                              No services found within {searchRadius} km.
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1683,7 +2571,13 @@ function JourneyPlanner() {
                     onClick={handleConfirmSaveJourney}
                     disabled={submitting}
                   >
-                    {submitting ? "Confirming Journey..." : "Confirm Journey"}
+                    {submitting
+                      ? isRescheduleMode
+                        ? "Rescheduling Journey..."
+                        : "Confirming Journey..."
+                      : isRescheduleMode
+                      ? "Confirm & Reschedule Journey"
+                      : "Confirm Journey"}
                   </button>
                 </div>
               </div>
@@ -1759,6 +2653,7 @@ function JourneyPlanner() {
               isSelected={(selectedServices[activeCategory] || []).some((s) => s.externalPlaceId === selectedDetailPlace.externalPlaceId)}
               onBookStay={(place) => setBookingTargetPlace(place)}
               isBooked={activeCategory === "accommodation" && isAccommodationBooked(selectedDetailPlace)}
+              canBookStay={isJourneyPlannerSectionFilled}
             />
           )}
 
@@ -1769,6 +2664,8 @@ function JourneyPlanner() {
               onClose={() => setBookingTargetPlace(null)}
               place={bookingTargetPlace}
               initialJourneyId={null}
+              initialCheckInDate={journeyDate}
+              initialCheckOutDate={returnDate}
               onBookingConfirmed={(confirmed) => {
                 // If user confirms booking, ensure it's selected in accommodation list if not already
                 if (confirmed) {

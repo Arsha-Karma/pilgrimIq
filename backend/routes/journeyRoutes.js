@@ -15,6 +15,7 @@ const {
   getJourneyProgress,
   completeJourney,
   getJourneyBookings,
+  cancelJourney,
 } = require("../controllers/journeyController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -26,6 +27,7 @@ router.post("/start", startJourney);
 router.get("/active", getActiveJourney);
 router.route("/user/my-journeys").get(getMyJourneys);
 
+router.post("/:id/cancel", cancelJourney);
 router.get("/:id/bookings", getJourneyBookings);
 router.patch("/:id/location", updateJourneyLocation);
 router.patch("/:id/status", updateJourneyStatus);

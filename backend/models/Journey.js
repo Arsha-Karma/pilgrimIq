@@ -140,12 +140,33 @@ const journeySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["planned", "ready", "active", "completed", "cancelled", "NOT_STARTED", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"],
+      enum: [
+        "planned",
+        "PLANNED",
+        "scheduled",
+        "SCHEDULED",
+        "confirmed",
+        "CONFIRMED",
+        "ready",
+        "READY",
+        "active",
+        "ACTIVE",
+        "completed",
+        "COMPLETED",
+        "cancelled",
+        "CANCELLED",
+        "expired",
+        "EXPIRED",
+        "NOT_STARTED",
+        "IN_PROGRESS",
+        "PAUSED",
+      ],
       default: "planned",
     },
     startedAt: { type: Date },
     pausedAt: { type: Date },
     completedAt: { type: Date },
+    cancelledAt: { type: Date },
     currentLocation: {
       address: { type: String, default: "" },
       city: { type: String, default: "" },
@@ -175,5 +196,35 @@ const journeySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Concurrency-safe index preventing duplicate active journeys for the same user and center
+journeySchema.index(
+  { userId: 1, pilgrimageCenterId: 1 },
+  {
+    unique: true,
+    name: "unique_active_user_center",
+    partialFilterExpression: {
+      status: {
+        $in: [
+          "planned",
+          "PLANNED",
+          "scheduled",
+          "SCHEDULED",
+          "confirmed",
+          "CONFIRMED",
+          "ready",
+          "READY",
+          "active",
+          "ACTIVE",
+          "NOT_STARTED",
+          "IN_PROGRESS",
+          "PAUSED",
+        ],
+      },
+    },
+  }
+);
+
+journeySchema.index({ userId: 1, status: 1, journeyDate: 1, returnDate: 1 });
 
 module.exports = mongoose.model("Journey", journeySchema);

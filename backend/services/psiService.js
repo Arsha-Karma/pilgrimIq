@@ -36,17 +36,18 @@ const getFallbackCrowdScore = (centerName, dateStr) => {
 
 /**
  * Helper to compute health risk score from profile medical conditions & vitals
+ * (Safety scale: 100 = best/safest)
  */
 const computeMedicalConditionScore = (personDoc) => {
-  if (!personDoc) return 20;
+  if (!personDoc) return 90;
 
-  let score = 20; // Base low risk
+  let score = 95; // Base high safety
   const age = Number(personDoc.age || 0);
 
   // Age risk factors
-  if (age > 70) score += 20;
-  else if (age > 60) score += 10;
-  else if (age > 50) score += 5;
+  if (age > 70) score -= 15;
+  else if (age > 60) score -= 10;
+  else if (age > 50) score -= 5;
 
   // Medical conditions & chronic diseases
   const conditionsStr = [
@@ -57,41 +58,41 @@ const computeMedicalConditionScore = (personDoc) => {
     personDoc.medicalInfo?.otherCondition,
   ].filter(Boolean).join(" ").toLowerCase();
 
-  if (/cardiac|heart|attack|stroke/i.test(conditionsStr)) score += 30;
-  if (/asthma|copd|respiratory|breathing/i.test(conditionsStr)) score += 25;
-  if (/kidney|renal|dialysis/i.test(conditionsStr)) score += 25;
-  if (/diabetes|hypertension|bp|sugar/i.test(conditionsStr)) score += 15;
+  if (/cardiac|heart|attack|stroke/i.test(conditionsStr)) score -= 30;
+  if (/asthma|copd|respiratory|breathing/i.test(conditionsStr)) score -= 15;
+  if (/kidney|renal|dialysis/i.test(conditionsStr)) score -= 15;
+  if (/diabetes|hypertension|bp|sugar/i.test(conditionsStr)) score -= 10;
 
   // Health Vitals
   const spo2 = Number(
     personDoc.spo2 || personDoc.healthMeasurements?.spo2 || 0
   );
-  if (spo2 > 0 && spo2 < 92) score += 25;
-  else if (spo2 > 0 && spo2 < 95) score += 15;
+  if (spo2 > 0 && spo2 < 92) score -= 25;
+  else if (spo2 > 0 && spo2 < 95) score -= 10;
 
   const bloodSugar = Number(
     personDoc.bloodSugar || personDoc.healthMeasurements?.bloodSugar || 0
   );
-  if (bloodSugar > 200) score += 15;
-  else if (bloodSugar > 140) score += 10;
+  if (bloodSugar > 200) score -= 20;
+  else if (bloodSugar > 140) score -= 10;
 
   // Fitness & Mobility
   const usesAssistance = personDoc.usesAssistance || personDoc.fitnessInfo?.usesAssistance || "";
   if (usesAssistance && usesAssistance !== "No" && usesAssistance !== "None" && usesAssistance !== false) {
-    score += 15;
+    score -= 10;
   }
 
   const stairClimbing = personDoc.stairClimbing || personDoc.fitnessInfo?.stairClimbing || "";
-  if (stairClimbing === "Unable") score += 15;
-  else if (stairClimbing === "With Difficulty") score += 10;
+  if (stairClimbing === "Unable") score -= 15;
+  else if (stairClimbing === "With Difficulty") score -= 10;
 
   const walking = personDoc.walkingCapacity || personDoc.fitnessInfo?.continuousWalking || "";
-  if (walking === "Less than 1 km") score += 10;
+  if (walking === "Less than 1 km") score -= 10;
 
   const smoking = personDoc.smokingStatus || personDoc.medicalInfo?.smokingStatus || "";
-  if (smoking === "Smoker") score += 10;
+  if (smoking === "Smoker") score -= 5;
 
-  return Math.min(score, 90);
+  return Math.max(25, Math.min(score, 98));
 };
 
 /**
@@ -129,9 +130,32 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
       rawStatus === "CRITICAL" ||
       rawStatus === "CRITICAL_RISK";
 
-    let reportScore = isRejectedOrCritical ? 90 : normalizeRiskScore(rawStatus, 20);
-    let finalScore = Math.max(reportScore, conditionScore);
-    let level = isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : getPsiRiskLevel(finalScore);
+    const isLowRiskReport =
+      physicianStatus === "approved" ||
+      physicianStatus === "approved_with_conditions" ||
+      rawStatus === "PHYSICIAN_APPROVED" ||
+      rawStatus === "LOW" ||
+      rawStatus === "LOW_RISK";
+
+    let reportSafetyScore = isRejectedOrCritical
+      ? 35 // Critical risk must be below 50
+      : isLowRiskReport
+      ? 94 // Low risk must be above 80
+      : normalizeRiskScore(rawStatus, 70);
+
+    let finalScore = isRejectedOrCritical
+      ? Math.min(reportSafetyScore, conditionScore)
+      : isLowRiskReport
+      ? Math.max(reportSafetyScore, conditionScore)
+      : reportSafetyScore;
+
+    if (isLowRiskReport) {
+      finalScore = Math.max(85, Math.min(98, finalScore));
+    } else if (isRejectedOrCritical) {
+      finalScore = Math.min(45, Math.max(15, finalScore));
+    }
+
+    let level = getPsiRiskLevel(finalScore);
 
     return {
       available: true,
@@ -141,6 +165,7 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
       physicianRequired: physicianRequired || isRejectedOrCritical,
       physicianStatus,
       isRejectedOrCritical,
+      isLowRisk: isLowRiskReport,
       reportId: latestReport._id,
       extractedMedicalData: latestReport.extractedMedicalData,
     };
@@ -158,26 +183,45 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
       personDoc.psiRiskLevel === "High Risk" ||
       personDoc.psiRiskLevel === "CRITICAL";
 
-    let finalScore = isRejectedOrCritical ? 90 : Math.max(conditionScore, normalizeRiskScore(personDoc.aiRiskLevel || personDoc.psiRiskLevel || "LOW_RISK", 20));
+    const isLowRisk =
+      personDoc.doctorApprovalStatus === "approved" ||
+      personDoc.doctorApprovalStatus === "approved_with_conditions" ||
+      personDoc.aiRiskLevel === "LOW_RISK" ||
+      personDoc.psiRiskLevel === "Low Risk";
+
+    let finalScore = isRejectedOrCritical
+      ? 35
+      : isLowRisk
+      ? Math.max(90, conditionScore)
+      : Math.min(conditionScore, normalizeRiskScore(personDoc.aiRiskLevel || personDoc.psiRiskLevel || "LOW_RISK", 88));
+
+    if (isLowRisk) {
+      finalScore = Math.max(85, Math.min(98, finalScore));
+    } else if (isRejectedOrCritical) {
+      finalScore = Math.min(45, Math.max(15, finalScore));
+    }
+
     let physicianRequired = personDoc.doctorApprovalStatus === "pending" || personDoc.doctorApprovalStatus === "rejected" || isRejectedOrCritical;
 
     return {
       available: true,
       score: finalScore,
-      level: isRejectedOrCritical ? "PHYSICIAN_NOT_APPROVED" : getPsiRiskLevel(finalScore),
+      level: getPsiRiskLevel(finalScore),
       physicianRequired,
       physicianStatus: personDoc.doctorApprovalStatus || "none",
       isRejectedOrCritical,
+      isLowRisk,
       responsibilityAccepted: personDoc.responsibilityAccepted || false,
     };
   }
 
   return {
     available: false,
-    score: 20,
-    level: "LOW RISK",
+    score: 88,
+    level: "Low Risk",
     physicianRequired: false,
     physicianStatus: "none",
+    isLowRisk: true,
   };
 };
 
@@ -187,7 +231,14 @@ const fetchMedicalAssessment = async (userId, familyMemberId = null) => {
  */
 const calculateMedicalOnlyPsi = async (userId, familyMemberId = null) => {
   const medAssessment = await fetchMedicalAssessment(userId, familyMemberId);
-  const score = medAssessment.score !== null && medAssessment.score !== undefined ? medAssessment.score : 20;
+  let score = medAssessment.score !== null && medAssessment.score !== undefined ? medAssessment.score : 88;
+
+  if (medAssessment.isLowRisk || score >= 80) {
+    score = Math.max(85, Math.min(98, Math.round(score)));
+  } else if (medAssessment.isRejectedOrCritical || score < 50) {
+    score = Math.min(48, Math.max(15, Math.round(score)));
+  }
+
   const level = getPsiRiskLevel(score);
 
   return {
@@ -237,10 +288,19 @@ const getLatestUserAndFamilyPsi = async (userId) => {
 
   // 2. Determine Main User PSI
   let mainUserPsi = null;
+  const medAssessment = await fetchMedicalAssessment(userId, null);
+
   if (hasSelectedCenter) {
+    let score = latestAssessment.psiScore;
+    if (medAssessment.isLowRisk || medAssessment.score >= 80) {
+      score = Math.max(85, Math.min(98, score < 50 ? 90 : score));
+    } else if (medAssessment.isRejectedOrCritical || medAssessment.score < 50) {
+      score = Math.min(48, Math.max(15, score > 50 ? 40 : score));
+    }
+
     mainUserPsi = {
-      score: latestAssessment.psiScore,
-      level: latestAssessment.psiLevel,
+      score,
+      level: getPsiRiskLevel(score),
       hasSelectedCenter: true,
       selectedCenterName,
       journeyDate: latestAssessment.journeyDate,
@@ -271,9 +331,16 @@ const getLatestUserAndFamilyPsi = async (userId) => {
         (a) => a.familyMemberId && a.familyMemberId.toString() === fm._id.toString()
       );
       if (match && match.psiScore !== undefined) {
+        let fScore = match.psiScore;
+        const fmMed = await fetchMedicalAssessment(userId, fm._id);
+        if (fmMed.isLowRisk || fmMed.score >= 80) {
+          fScore = Math.max(85, Math.min(98, fScore < 50 ? 90 : fScore));
+        } else if (fmMed.isRejectedOrCritical || fmMed.score < 50) {
+          fScore = Math.min(48, Math.max(15, fScore > 50 ? 40 : fScore));
+        }
         fmPsi = {
-          score: match.psiScore,
-          level: match.psiLevel,
+          score: fScore,
+          level: getPsiRiskLevel(fScore),
           hasSelectedCenter: true,
           selectedCenterName,
         };
@@ -567,15 +634,16 @@ const calculateJourneyPsi = async (journeyId, userId, forceRefresh = false) => {
   const weatherContrib = Math.round(weatherScore * PSI_WEIGHTS.weather * 100) / 100;
 
   let rawPsi = healthContrib + crowdContrib + weatherContrib;
-  const isMainUserRejected =
-    healthRes.isRejectedOrCritical ||
-    healthScore >= 80 ||
-    healthRes.physicianStatus === "rejected" ||
-    healthRes.physicianStatus === "not_approved" ||
-    healthRes.physicianStatus === "Not_approved";
 
-  if (isMainUserRejected) {
-    rawPsi = Math.max(rawPsi, 80);
+  // Enforce specific rules from requirements:
+  // "person which have low risk in medical report then there psi index must above 80 by analzing the report werther crwowd"
+  if (healthRes.isLowRisk || healthScore >= 80) {
+    rawPsi = Math.max(82, Math.min(98, Math.round(rawPsi)));
+  }
+
+  // "if critical risk psi must below 50"
+  if (healthRes.isRejectedOrCritical || healthScore < 50) {
+    rawPsi = Math.min(48, Math.max(15, Math.round(rawPsi)));
   }
 
   const psiScore = Math.max(0, Math.min(100, Math.round(rawPsi)));
@@ -618,7 +686,7 @@ const calculateJourneyPsi = async (journeyId, userId, forceRefresh = false) => {
 
       const isFmRejected =
         fmMed.isRejectedOrCritical ||
-        fmHealthScore >= 80 ||
+        fmHealthScore < 50 ||
         fmMed.physicianStatus === "rejected" ||
         fmMed.physicianStatus === "not_approved" ||
         fmMed.physicianStatus === "Not_approved" ||
@@ -626,8 +694,11 @@ const calculateJourneyPsi = async (journeyId, userId, forceRefresh = false) => {
         fm.doctorApprovalStatus === "not_approved" ||
         fm.doctorApprovalStatus === "Not_approved";
 
+      if (fmMed.isLowRisk || fmHealthScore >= 80) {
+        fmRawPsi = Math.max(82, Math.min(98, Math.round(fmRawPsi)));
+      }
       if (isFmRejected) {
-        fmRawPsi = Math.max(fmRawPsi, 80);
+        fmRawPsi = Math.min(48, Math.max(15, Math.round(fmRawPsi)));
       }
 
       const fmPsiScore = Math.round(fmRawPsi);
@@ -659,10 +730,14 @@ const calculateJourneyPsi = async (journeyId, userId, forceRefresh = false) => {
   const mainUserBlocked =
     healthRes.physicianRequired &&
     healthRes.physicianStatus !== "approved" &&
+    healthRes.physicianStatus !== "approved_with_conditions" &&
     !healthRes.responsibilityAccepted;
 
   const familyMemberBlocked = familyAssessments.some(
-    (fm) => fm.medicalReviewRequired && fm.doctorApprovalStatus !== "approved"
+    (fm) =>
+      fm.medicalReviewRequired &&
+      fm.doctorApprovalStatus !== "approved" &&
+      fm.doctorApprovalStatus !== "approved_with_conditions"
   );
 
   const isBlockedByPhysician = mainUserBlocked || familyMemberBlocked;

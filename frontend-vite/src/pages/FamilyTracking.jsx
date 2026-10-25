@@ -1239,11 +1239,10 @@ function FamilyTracking() {
                   </div>
                 </div>
 
-                {/* 4. College Evaluation Simulation */}
+                {/* 4. Live Proximity Distance Tester */}
                 <div className="demo-mode-card">
                   <div className="demo-mode-header">
-                    <h4>🎓 College Evaluation Simulation</h4>
-                    <span className="demo-badge">Demo Mode</span>
+                    <h4>📡 Live Proximity Distance Tester</h4>
                   </div>
                   <p
                     style={{
@@ -1253,7 +1252,7 @@ function FamilyTracking() {
                       lineHeight: "1.4",
                     }}
                   >
-                    Test separation triggers and ESP32 buzzer firing indoors without physical walking:
+                    Test separation triggers and alert firing in real-time:
                   </p>
 
                   <div className="demo-buttons-row">

@@ -80,9 +80,22 @@ const travelAssessmentSchema = new mongoose.Schema(
     },
     psiLevel: {
       type: String,
-      enum: ["LOW RISK", "MODERATE RISK", "HIGH RISK", "CRITICAL RISK"],
+      enum: [
+        "LOW RISK",
+        "MODERATE RISK",
+        "HIGH RISK",
+        "CRITICAL RISK",
+        "Low Risk",
+        "Moderate Risk",
+        "High Risk",
+        "Critical Risk",
+        "LOW",
+        "MODERATE",
+        "HIGH",
+        "CRITICAL",
+      ],
       required: true,
-      default: "LOW RISK",
+      default: "Low Risk",
     },
 
     // Factor Breakdown (Explainable weights & contributions)
@@ -128,7 +141,20 @@ const travelAssessmentSchema = new mongoose.Schema(
     },
     doctorApprovalStatus: {
       type: String,
-      enum: ["none", "pending", "approved", "rejected"],
+      enum: [
+        "none",
+        "pending",
+        "approved",
+        "rejected",
+        "approved_with_conditions",
+        "not_approved",
+        "further_evaluation",
+        "consulted",
+        "APPROVED",
+        "APPROVED_WITH_CONDITIONS",
+        "REJECTED",
+        "PENDING",
+      ],
       default: "none",
     },
     isBlockedByPhysician: {

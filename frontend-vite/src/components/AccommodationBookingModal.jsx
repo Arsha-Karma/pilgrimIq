@@ -30,6 +30,8 @@ const AccommodationBookingModal = ({
   onClose,
   place,
   initialJourneyId = null,
+  initialCheckInDate = null,
+  initialCheckOutDate = null,
   onBookingConfirmed,
 }) => {
   const { user, token } = useAuth();
@@ -61,6 +63,19 @@ const AccommodationBookingModal = ({
   const [leadPhone, setLeadPhone] = useState(user?.phone || user?.phoneNumber || "");
   const [leadEmail, setLeadEmail] = useState(user?.email || "");
   const [specialRequests, setSpecialRequests] = useState("");
+  const [isSpecialRequestFocused, setIsSpecialRequestFocused] = useState(false);
+
+  // Sync planned journey dates when passed
+  useEffect(() => {
+    if (initialCheckInDate) {
+      const formattedIn = initialCheckInDate.includes("T") ? initialCheckInDate.split("T")[0] : initialCheckInDate;
+      setCheckInDate(formattedIn);
+    }
+    if (initialCheckOutDate) {
+      const formattedOut = initialCheckOutDate.includes("T") ? initialCheckOutDate.split("T")[0] : initialCheckOutDate;
+      setCheckOutDate(formattedOut);
+    }
+  }, [initialCheckInDate, initialCheckOutDate, isOpen]);
 
   // Validation field tracking onFocus/onBlur
   const [touchedFields, setTouchedFields] = useState({});
@@ -230,6 +245,18 @@ const AccommodationBookingModal = ({
     if (new Date(checkOutDate) <= new Date(checkInDate)) {
       setErrorMessage("Check-out date must be after the check-in date.");
       return;
+    }
+
+    if (specialRequests.trim().length > 0) {
+      if (!/^[a-zA-Z\s]+$/.test(specialRequests.trim())) {
+        setErrorMessage("Special requests must contain only letters and spaces.");
+        return;
+      }
+      const lettersOnly = specialRequests.replace(/[^a-zA-Z]/g, "");
+      if (lettersOnly.length < 5) {
+        setErrorMessage("Special requests must contain at least 5 letters.");
+        return;
+      }
     }
 
     try {
@@ -663,8 +690,27 @@ const AccommodationBookingModal = ({
                     type="text"
                     placeholder="Ground floor, early check-in, etc."
                     value={specialRequests}
+                    onFocus={() => {
+                      handleFieldFocus("specialRequests");
+                      setIsSpecialRequestFocused(true);
+                    }}
+                    onBlur={() => {
+                      handleFieldBlur("specialRequests");
+                      setIsSpecialRequestFocused(false);
+                    }}
                     onChange={(e) => setSpecialRequests(e.target.value)}
                   />
+                  {isSpecialRequestFocused && (
+                    <span style={{ fontSize: "12px", color: "#2563eb", marginTop: "4px", display: "block", fontWeight: "600" }}>
+                      ℹ️ Only letters and spaces are allowed (minimum 5 letters required).
+                    </span>
+                  )}
+                  {specialRequests.trim().length > 0 && !/^[a-zA-Z\s]+$/.test(specialRequests.trim()) && (
+                    <span className="acc-field-error-msg">* Only letters and spaces are allowed</span>
+                  )}
+                  {specialRequests.trim().length > 0 && /^[a-zA-Z\s]+$/.test(specialRequests.trim()) && specialRequests.replace(/[^a-zA-Z]/g, "").length < 5 && (
+                    <span className="acc-field-error-msg">* At least 5 letters are required</span>
+                  )}
                 </div>
               </div>
 

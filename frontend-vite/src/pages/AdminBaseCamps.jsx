@@ -635,10 +635,10 @@ function AdminBaseCamps({ token, showAlert }) {
               boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
             }}
           >
-            <FiPlus size={18} />  Add New Base Camp
+            <FiPlus size={18} /> Add New Base Camp
           </button>
         </div>
-      </div>a
+      </div>
 
       {/* KPI Dynamic Summary Cards */}
       <div className="kpi-grid" style={{ marginBottom: "24px" }}>
@@ -689,7 +689,7 @@ function AdminBaseCamps({ token, showAlert }) {
 
       {/* Registered Base Camps Table Panel */}
       <div className="admin-panel main-panel">
-        <div className="panel-header" style={{ flexWrap: "wrap", gap: "16px" }}>
+        <div className="panel-header" style={{ flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
           <div>
             <h3 style={{ fontSize: "18px", fontWeight: "800", color: "#f8fafc", margin: 0 }}>
               Registered Base Camps
@@ -699,7 +699,7 @@ function AdminBaseCamps({ token, showAlert }) {
             </p>
           </div>
 
-          <div className="table-controls" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <div className="table-controls" style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
             <div className="search-box">
               <FiSearch className="search-icon" />
               <input
@@ -721,6 +721,29 @@ function AdminBaseCamps({ token, showAlert }) {
               <option value="Under Maintenance">Under Maintenance</option>
               <option value="Inactive">Inactive</option>
             </select>
+
+            {/* Direct Add Base Camp Action Button */}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={openAddModal}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#2563eb",
+                color: "#ffffff",
+                padding: "10px 18px",
+                borderRadius: "8px",
+                fontWeight: 700,
+                fontSize: "13.5px",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.4)",
+              }}
+            >
+              <FiPlus size={16} /> Add Base Camp
+            </button>
           </div>
         </div>
 
@@ -885,10 +908,10 @@ function AdminBaseCamps({ token, showAlert }) {
       {/* ADD / EDIT BASE CAMP MODAL */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "880px", width: "95%" }}>
+          <div className="modal-card base-camp-modal-card dark-modal" style={{ maxWidth: "880px", width: "95%" }}>
             <div className="modal-header">
-              <h3 style={{ color: "#f8fafc", display: "flex", alignItems: "center", gap: "8px" }}>
-                <FiMapPin style={{ color: "#3b82f6" }} />
+              <h3 style={{ color: "#ffffff", display: "flex", alignItems: "center", gap: "8px" }}>
+                <FiMapPin style={{ color: "#38bdf8" }} />
                 {editingCamp ? `Edit Base Camp: ${editingCamp.name}` : "Register New Base Camp"}
               </h3>
               <button className="btn-close-modal" onClick={() => setShowAddModal(false)}>
@@ -897,17 +920,17 @@ function AdminBaseCamps({ token, showAlert }) {
             </div>
 
             <form onSubmit={handleSubmitForm} noValidate>
-              <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto", paddingRight: "10px" }}>
+              <div className="modal-body dark-modal-body" style={{ maxHeight: "75vh", overflowY: "auto", paddingRight: "10px" }}>
                 
                 {/* SECTION A — BASIC INFORMATION */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION A — BASIC INFORMATION
                   </h4>
                   
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Base Camp Name *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Base Camp Name *</label>
                       <input
                         type="text"
                         name="name"
@@ -926,7 +949,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Camp ID (Auto-Generated)</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Camp ID (Auto-Generated)</label>
                       <input
                         type="text"
                         disabled
@@ -934,11 +957,11 @@ function AdminBaseCamps({ token, showAlert }) {
                         value={editingCamp ? editingCamp.baseCampId : "BC-AC-AUTO"}
                         style={{ background: "#1e293b", color: "#60a5fa", fontWeight: "700" }}
                       />
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Unique system ID automatically generated</span>
+                      <span className="sub-text" style={{ fontSize: "11px", color: "#cbd5e1" }}>Unique system ID automatically generated</span>
                     </div>
 
                     <div className="form-group" style={{ gridColumn: "span 2" }}>
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Camp Type *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Camp Type *</label>
                       <select
                         name="campType"
                         className={`filter-dropdown ${touchedFields.campType && fieldErrors.campType ? "input-error" : ""}`}
@@ -959,13 +982,13 @@ function AdminBaseCamps({ token, showAlert }) {
                 </div>
 
                 {/* SECTION B — LOCATION INFORMATION */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION B — LOCATION INFORMATION
                   </h4>
 
                   <div className="form-group" style={{ marginBottom: "16px" }}>
-                    <label style={{ color: "#f8fafc", fontWeight: "700" }}>Complete Address *</label>
+                    <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Complete Address *</label>
                     <textarea
                       name="address"
                       className={`form-input ${touchedFields.address && fieldErrors.address ? "input-error" : ""}`}
@@ -985,7 +1008,7 @@ function AdminBaseCamps({ token, showAlert }) {
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>State *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>State *</label>
                       <select
                         name="state"
                         className={`filter-dropdown ${touchedFields.state && fieldErrors.state ? "input-error" : ""}`}
@@ -1008,7 +1031,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>District *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>District *</label>
                       <select
                         name="district"
                         className={`filter-dropdown ${touchedFields.district && fieldErrors.district ? "input-error" : ""}`}
@@ -1035,7 +1058,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Village / Locality *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Village / Locality *</label>
                       <input
                         type="text"
                         name="locality"
@@ -1054,7 +1077,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>PIN Code *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>PIN Code *</label>
                       <input
                         type="text"
                         name="pinCode"
@@ -1074,7 +1097,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Latitude *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Latitude *</label>
                       <input
                         type="number"
                         step="any"
@@ -1094,7 +1117,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Longitude *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Longitude *</label>
                       <input
                         type="number"
                         step="any"
@@ -1114,7 +1137,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group" style={{ gridColumn: "span 3", marginTop: "10px" }}>
-                      <label style={{ color: "#ffffff", fontWeight: "700" }}>Google Maps Direction Link (Optional)</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Google Maps Direction Link (Optional)</label>
                       <input
                         type="text"
                         name="googleMapLink"
@@ -1125,7 +1148,7 @@ function AdminBaseCamps({ token, showAlert }) {
                         onChange={handleFieldChange}
                         onBlur={() => handleFieldBlur("googleMapLink")}
                       />
-                      <span style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", display: "block" }}>
+                      <span className="sub-text" style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "4px", display: "block" }}>
                         Direct Google Maps location URL for pilgrims in Emergency Services tab.
                       </span>
                     </div>
@@ -1133,14 +1156,14 @@ function AdminBaseCamps({ token, showAlert }) {
                 </div>
 
                 {/* SECTION C — CAMP CAPACITY */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION C — CAMP CAPACITY & OCCUPANCY
                   </h4>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Maximum Capacity *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Maximum Capacity *</label>
                       <input
                         type="number"
                         name="maximumCapacity"
@@ -1159,7 +1182,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Current Occupancy</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Current Occupancy</label>
                       <input
                         type="number"
                         name="currentOccupancy"
@@ -1180,30 +1203,32 @@ function AdminBaseCamps({ token, showAlert }) {
                 </div>
 
                 {/* SECTION D — FACILITIES & MEDICAL DETAILS */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION D — AVAILABLE FACILITIES
                   </h4>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#f8fafc", fontSize: "13.5px", cursor: "pointer" }}>
+                    <label className="base-camp-checkbox-label" style={{ display: "flex", alignItems: "center", gap: "8px", color: "#ffffff", fontSize: "13.5px", fontWeight: "600", cursor: "pointer" }}>
                       <input
                         type="checkbox"
                         name="medicalFacility"
                         checked={formData.medicalFacility}
                         onChange={handleFieldChange}
                       />
-                      🏥 Medical Facility
+                      <span style={{ color: "#ffffff", fontWeight: "600" }}>🏥 Medical Facility</span>
                     </label>
 
                     {Object.keys(formData.facilities).map((facKey) => (
-                      <label key={facKey} style={{ display: "flex", alignItems: "center", gap: "8px", color: "#cbd5e1", fontSize: "13px", cursor: "pointer" }}>
+                      <label key={facKey} className="base-camp-checkbox-label" style={{ display: "flex", alignItems: "center", gap: "8px", color: "#ffffff", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
                         <input
                           type="checkbox"
                           checked={formData.facilities[facKey]}
                           onChange={() => handleFacilityToggle(facKey)}
                         />
-                        {facKey.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
+                        <span style={{ color: "#ffffff", fontWeight: "600" }}>
+                          {facKey.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -1211,13 +1236,13 @@ function AdminBaseCamps({ token, showAlert }) {
                   {/* Dynamic Medical Details Sub-Section */}
                   {formData.medicalFacility && (
                     <div style={{ background: "#1e293b", padding: "14px", borderRadius: "10px", marginTop: "12px", border: "1px solid #334155" }}>
-                      <h5 style={{ margin: "0 0 10px 0", color: "#34d399", fontSize: "13.5px", fontWeight: "700" }}>
+                      <h5 style={{ margin: "0 0 10px 0", color: "#ffffff", fontSize: "13.5px", fontWeight: "700" }}>
                         Medical Unit & Staff Configuration
                       </h5>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                         <div className="form-group" style={{ gridColumn: "span 2" }}>
-                          <label style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "700" }}>Medical Facility Name *</label>
+                          <label className="base-camp-label" style={{ color: "#ffffff", fontSize: "12px", fontWeight: "700" }}>Medical Facility Name *</label>
                           <input
                             type="text"
                             name="medicalFacilityName"
@@ -1236,7 +1261,7 @@ function AdminBaseCamps({ token, showAlert }) {
                         </div>
 
                         <div className="form-group">
-                          <label style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "700" }}>Doctors Count</label>
+                          <label className="base-camp-label" style={{ color: "#ffffff", fontSize: "12px", fontWeight: "700" }}>Doctors Count</label>
                           <input
                             type="number"
                             name="numberOfDoctors"
@@ -1247,7 +1272,7 @@ function AdminBaseCamps({ token, showAlert }) {
                         </div>
 
                         <div className="form-group">
-                          <label style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "700" }}>Nurses Count</label>
+                          <label className="base-camp-label" style={{ color: "#ffffff", fontSize: "12px", fontWeight: "700" }}>Nurses Count</label>
                           <input
                             type="number"
                             name="numberOfNurses"
@@ -1258,7 +1283,7 @@ function AdminBaseCamps({ token, showAlert }) {
                         </div>
 
                         <div className="form-group">
-                          <label style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "700" }}>Trauma Beds Count</label>
+                          <label className="base-camp-label" style={{ color: "#ffffff", fontSize: "12px", fontWeight: "700" }}>Trauma Beds Count</label>
                           <input
                             type="number"
                             name="numberOfBeds"
@@ -1269,7 +1294,7 @@ function AdminBaseCamps({ token, showAlert }) {
                         </div>
 
                         <div className="form-group">
-                          <label style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "700" }}>Emergency Medical Support</label>
+                          <label className="base-camp-label" style={{ color: "#ffffff", fontSize: "12px", fontWeight: "700" }}>Emergency Medical Support</label>
                           <select
                             name="emergencyMedicalSupport"
                             className="filter-dropdown"
@@ -1288,14 +1313,14 @@ function AdminBaseCamps({ token, showAlert }) {
                 </div>
 
                 {/* SECTION E — CONTACT & OPERATIONAL INFO */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION E — CONTACT & OPERATIONAL TIMINGS
                   </h4>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Camp Contact Person *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Camp Contact Person *</label>
                       <input
                         type="text"
                         name="contactPerson"
@@ -1314,7 +1339,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Primary Contact Number *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Primary Contact Number *</label>
                       <input
                         type="text"
                         name="contactNumber"
@@ -1333,7 +1358,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Alternate Contact Number</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Alternate Contact Number</label>
                       <input
                         type="text"
                         name="alternateContact"
@@ -1352,7 +1377,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Email Address</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Email Address</label>
                       <input
                         type="email"
                         name="email"
@@ -1371,7 +1396,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Operational Status *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Operational Status *</label>
                       <select
                         name="status"
                         className="filter-dropdown"
@@ -1387,7 +1412,7 @@ function AdminBaseCamps({ token, showAlert }) {
                     </div>
 
                     <div className="form-group">
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Opening Date *</label>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Opening Date *</label>
                       <input
                         type="date"
                         name="openingDate"
@@ -1400,15 +1425,15 @@ function AdminBaseCamps({ token, showAlert }) {
                 </div>
 
                 {/* SECTION F — ADDITIONAL DETAILS & DESCRIPTION */}
-                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
-                  <h4 style={{ margin: "0 0 14px 0", color: "#38bdf8", fontSize: "15px", fontWeight: "800" }}>
+                <div className="base-camp-section-card" style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "18px", border: "1px solid #1e293b" }}>
+                  <h4 className="base-camp-section-title" style={{ margin: "0 0 14px 0", color: "#ffffff", fontSize: "15px", fontWeight: "800" }}>
                     SECTION F — ADDITIONAL INFORMATION
                   </h4>
 
                   <div className="form-group" style={{ marginBottom: "14px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <label style={{ color: "#f8fafc", fontWeight: "700" }}>Camp Description</label>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                      <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Camp Description</label>
+                      <span className="section-counter" style={{ fontSize: "12px", color: "#ffffff", fontWeight: "600" }}>
                         {formData.description.length} / 500 characters
                       </span>
                     </div>
@@ -1424,7 +1449,7 @@ function AdminBaseCamps({ token, showAlert }) {
                   </div>
 
                   <div className="form-group">
-                    <label style={{ color: "#f8fafc", fontWeight: "700" }}>Special Instructions</label>
+                    <label className="base-camp-label" style={{ color: "#ffffff", fontWeight: "700" }}>Special Instructions</label>
                     <textarea
                       name="specialInstructions"
                       className="form-input"
@@ -1436,8 +1461,69 @@ function AdminBaseCamps({ token, showAlert }) {
                   </div>
                 </div>
 
-                <div style={{ fontSize: "12px", color: "#94a3b8", textAlign: "right" }}>
+                <div className="required-notice" style={{ fontSize: "12px", color: "#ffffff", fontWeight: "600", textAlign: "right", marginTop: "8px" }}>
                   * Required fields
+                </div>
+
+                {/* ACTION BUTTONS DIRECTLY AFTER SECTION F COMPLETED */}
+                <div
+                  className="section-f-save-actions"
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    alignItems: "center",
+                    gap: "14px",
+                    marginTop: "20px",
+                    paddingTop: "16px",
+                    borderTop: "1.5px solid #334155",
+                    position: "sticky",
+                    bottom: "-10px",
+                    background: "rgba(11, 19, 41, 0.95)",
+                    backdropFilter: "blur(8px)",
+                    paddingBottom: "10px",
+                    zIndex: 10
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => setShowAddModal(false)}
+                    disabled={submitting}
+                    style={{
+                      background: "#1e293b",
+                      color: "#f1f5f9",
+                      border: "1px solid #475569",
+                      padding: "10px 22px",
+                      borderRadius: "8px",
+                      fontWeight: "700",
+                      fontSize: "14px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-submit-doctor"
+                    disabled={submitting}
+                    style={{
+                      background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                      color: "#ffffff",
+                      fontWeight: "800",
+                      fontSize: "14px",
+                      padding: "11px 26px",
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    <span>💾</span>
+                    <span>{submitting ? "Saving Base Camp..." : editingCamp ? "Update Base Camp" : "Save Base Camp"}</span>
+                  </button>
                 </div>
 
               </div>
@@ -1468,7 +1554,7 @@ function AdminBaseCamps({ token, showAlert }) {
       {/* VIEW BASE CAMP DETAILS MODAL */}
       {viewingCamp && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "720px", width: "92%" }}>
+          <div className="modal-card base-camp-modal-card dark-modal" style={{ maxWidth: "720px", width: "92%" }}>
             <div className="modal-header">
               <h3 style={{ color: "#38bdf8", display: "flex", alignItems: "center", gap: "8px" }}>
                 <FiMapPin /> Base Camp Profile & Telemetry Details
@@ -1478,7 +1564,7 @@ function AdminBaseCamps({ token, showAlert }) {
               </button>
             </div>
 
-            <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+            <div className="modal-body dark-modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
               <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", marginBottom: "16px", border: "1px solid #334155" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>

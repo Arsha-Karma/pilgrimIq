@@ -178,7 +178,7 @@ function Home() {
         <div className="home-container">
           <div className="simulator-box">
             <div className="simulator-info">
-              <span className="home-badge">LIVE DEMO SIMULATOR</span>
+              <span className="home-badge">LIVE PSI SIMULATOR</span>
               <h2>Interactive Pilgrim Safety Index (PSI) Calculator</h2>
               <p>Adjust vitals below to see how PilgrimIQ calculates your real-time travel safety score.</p>
 

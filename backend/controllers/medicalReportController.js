@@ -7,16 +7,36 @@ const { parseMedicalEntities } = require("../services/medicalNLPService");
 const { assessTravelRisk } = require("../services/medicalRiskService");
 const { generateMedicalSummary } = require("../services/medicalSummaryService");
 
-// Helper to calculate estimated PSI Score (100 - risk factors)
+// Helper to calculate estimated PSI Score (Safety Scale: 100 is best, >80 for Low Risk, <50 for Critical Risk)
 const calculatePsiScore = (riskAssessment, nlpData) => {
-  let score = 95;
-  if (riskAssessment?.overallStatus === "MEDICAL_REVIEW_REQUIRED") score -= 35;
-  else if (riskAssessment?.overallStatus === "CAUTION") score -= 15;
+  const isCritical =
+    riskAssessment?.overallStatus === "MEDICAL_REVIEW_REQUIRED" ||
+    riskAssessment?.overallRisk === "CRITICAL" ||
+    riskAssessment?.overallRisk === "HIGH";
 
-  if (nlpData?.conditions?.length > 0) score -= nlpData.conditions.length * 5;
-  if (nlpData?.abnormalFindings?.length > 0) score -= nlpData.abnormalFindings.length * 5;
+  const isModerate =
+    riskAssessment?.overallStatus === "CAUTION" ||
+    riskAssessment?.overallRisk === "MODERATE";
 
-  return Math.max(15, Math.min(100, score));
+  if (isCritical) {
+    let score = 40;
+    if (nlpData?.conditions?.length > 0) score -= nlpData.conditions.length * 2;
+    if (nlpData?.abnormalFindings?.length > 0) score -= nlpData.abnormalFindings.length * 2;
+    return Math.min(48, Math.max(15, score)); // Strictly below 50
+  }
+
+  if (isModerate) {
+    let score = 68;
+    if (nlpData?.conditions?.length > 0) score -= nlpData.conditions.length * 3;
+    if (nlpData?.abnormalFindings?.length > 0) score -= nlpData.abnormalFindings.length * 3;
+    return Math.max(50, Math.min(79, score)); // Moderate: 50 - 79
+  }
+
+  // Low Risk: Must be above 80
+  let score = 94;
+  if (nlpData?.conditions?.length > 0) score -= Math.min(8, nlpData.conditions.length * 2);
+  if (nlpData?.abnormalFindings?.length > 0) score -= Math.min(8, nlpData.abnormalFindings.length * 2);
+  return Math.max(82, Math.min(99, score)); // Strictly above 80
 };
 
 // @desc    Upload and analyze a new medical report

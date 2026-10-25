@@ -1209,5 +1209,104 @@ input::-webkit-credentials-auto-fill-button {
   color: #000000 !important;
 }
 
+/* Base Camp Register / Edit Modal - High Contrast White Content (Image 3 fix) */
+.base-camp-modal-card {
+  background: #0b1329 !important;
+  border: 1px solid #1e293b !important;
+}
+
+.base-camp-modal-card .modal-body {
+  background: #0b1329 !important;
+}
+
+.base-camp-modal-card .base-camp-section-card {
+  background: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.base-camp-modal-card h4,
+.base-camp-modal-card .base-camp-section-title {
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.6px !important;
+  margin: 0 0 14px 0 !important;
+  display: block !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.base-camp-modal-card h5 {
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+}
+
+.base-camp-modal-card label.base-camp-label,
+.base-camp-modal-card .form-group > label {
+  color: #ffffff !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px !important;
+  text-transform: uppercase !important;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Facility & Checkbox Labels under Section D - Explicit White & inline-flex */
+.base-camp-modal-card .base-camp-checkbox-label,
+.base-camp-modal-card .facility-checkbox-label,
+.base-camp-modal-card label:has(input[type="checkbox"]),
+.base-camp-modal-card div[style*="gridTemplateColumns"] label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  margin-bottom: 0 !important;
+  text-transform: none !important;
+}
+
+.base-camp-modal-card .base-camp-checkbox-label span,
+.base-camp-modal-card .facility-checkbox-label span,
+.base-camp-modal-card label input[type="checkbox"] + span {
+  color: #ffffff !important;
+}
+
+.base-camp-modal-card span.sub-text,
+.base-camp-modal-card .helper-text,
+.base-camp-modal-card .section-counter,
+.base-camp-modal-card .required-notice,
+.base-camp-modal-card span[style*="color: #64748b"],
+.base-camp-modal-card span[style*="color: #94a3b8"] {
+  color: #ffffff !important;
+  font-size: 12px !important;
+}
+
+.base-camp-modal-card input.form-input,
+.base-camp-modal-card select.filter-dropdown,
+.base-camp-modal-card textarea.form-input {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #cbd5e1 !important;
+  font-weight: 600 !important;
+}
+
+.base-camp-modal-card select.filter-dropdown option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.base-camp-modal-card input.form-input:disabled {
+  background-color: #1e293b !important;
+  color: #60a5fa !important;
+  border-color: #334155 !important;
+}
+
+
 
 

@@ -8,7 +8,14 @@ const {
   submitPhysicianDecision,
   acknowledgeEmergencyAlert,
   getMyConsultationRecords,
+  updateDoctorAvailability,
+  getAvailableDoctors,
 } = require("../controllers/physicianReviewController");
+
+// Doctor availability endpoints
+router.get("/available", getAvailableDoctors);
+router.patch("/availability", protect, updateDoctorAvailability);
+router.put("/availability", protect, updateDoctorAvailability);
 
 router.get("/my-consultations", protect, getMyConsultationRecords);
 router.get("/", protect, getPhysicianReviews);

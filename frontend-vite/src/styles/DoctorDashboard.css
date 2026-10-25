@@ -460,23 +460,23 @@
   font-size: 14px;
 }
 
-.modal-body h1,
-.modal-body h2,
-.modal-body h3,
-.modal-body h4,
-.modal-body h5,
-.modal-body h6,
-.modal-body p,
-.modal-body span,
-.modal-body label,
-.modal-body td,
-.modal-body th,
-.modal-body strong,
-.modal-body b {
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h1,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h2,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h3,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h4,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h5,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) h6,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) p,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) span,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) label,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) td,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) th,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) strong,
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) b {
   color: #000000 !important;
 }
 
-.modal-body label {
+.modal-body:not(.dark-modal-body):not(.base-camp-modal-card .modal-body) label {
   display: block;
   font-size: 13px !important;
   font-weight: 800 !important;

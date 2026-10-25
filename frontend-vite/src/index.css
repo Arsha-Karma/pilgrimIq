@@ -173,27 +173,69 @@ html.pilgrim-dark-theme .pilgrim-settings-wrapper textarea {
 }
 
 /* WHITE BACKGROUND CONTAINERS & MODAL BODIES -> PURE BLACK TEXT */
-.modal-card,
-.modal-body {
+.modal-card:not(.dark-modal):not(.base-camp-modal-card),
+.modal-body:not(.dark-modal-body) {
   background-color: #ffffff !important;
   color: #000000 !important;
 }
 
-.modal-body label,
-.modal-body p,
-.modal-body span:not([class*="badge"]):not([class*="status"]):not([class*="pill"]),
-.modal-body h1,
-.modal-body h2,
-.modal-body h3,
-.modal-body h4,
-.modal-body h5,
-.modal-body h6,
-.modal-body strong,
-.modal-body b,
-.modal-body td,
-.modal-body th {
+.modal-body:not(.dark-modal-body) label:not(.base-camp-label):not(.text-white),
+.modal-body:not(.dark-modal-body) p:not(.text-white),
+.modal-body:not(.dark-modal-body) span:not([class*="badge"]):not([class*="status"]):not([class*="pill"]):not(.text-white):not(.sub-text),
+.modal-body:not(.dark-modal-body) h1:not(.text-white),
+.modal-body:not(.dark-modal-body) h2:not(.text-white),
+.modal-body:not(.dark-modal-body) h3:not(.text-white),
+.modal-body:not(.dark-modal-body) h4:not(.base-camp-section-title):not(.text-white),
+.modal-body:not(.dark-modal-body) h5:not(.text-white),
+.modal-body:not(.dark-modal-body) h6:not(.text-white),
+.modal-body:not(.dark-modal-body) strong:not(.text-white),
+.modal-body:not(.dark-modal-body) b:not(.text-white),
+.modal-body:not(.dark-modal-body) td,
+.modal-body:not(.dark-modal-body) th {
   color: #000000;
 }
+
+/* EXPLICIT DARK / BASE CAMP MODAL WHITE TEXT STYLING (Image 3 fix) */
+.modal-card.base-camp-modal-card,
+.base-camp-modal-card,
+.base-camp-modal-card .modal-body,
+.dark-modal-body {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+.base-camp-modal-card h4,
+.base-camp-modal-card h5,
+.base-camp-modal-card .base-camp-section-title,
+.base-camp-modal-card .modal-body h4,
+.base-camp-modal-card .modal-body h5,
+.base-camp-modal-card label,
+.base-camp-modal-card .form-group label,
+.base-camp-modal-card .base-camp-label,
+.base-camp-modal-card strong,
+.base-camp-modal-card b,
+.dark-modal-body label,
+.dark-modal-body h4,
+.dark-modal-body h5,
+.dark-modal-body strong {
+  color: #ffffff !important;
+}
+
+.base-camp-modal-card span.sub-text,
+.base-camp-modal-card .helper-text,
+.base-camp-modal-card .section-counter,
+.base-camp-modal-card .required-notice,
+.base-camp-modal-card .base-camp-checkbox-label,
+.base-camp-modal-card .facility-checkbox-label,
+.base-camp-modal-card label:has(input[type="checkbox"]),
+.base-camp-modal-card div[style*="gridTemplateColumns"] label,
+.base-camp-modal-card .base-camp-checkbox-label span,
+.base-camp-modal-card .facility-checkbox-label span,
+.base-camp-modal-card div[style*="gridTemplateColumns"] label span,
+.dark-modal-body span.sub-text {
+  color: #ffffff !important;
+}
+
 
 
 

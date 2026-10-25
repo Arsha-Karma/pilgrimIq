@@ -166,10 +166,9 @@ function TravelAssessment() {
   // Color helper based on risk level or score
   const getRiskColor = (levelOrScore) => {
     if (typeof levelOrScore === "number" && !isNaN(levelOrScore)) {
-      if (levelOrScore >= 75) return "#ef4444"; // Red (Critical)
-      if (levelOrScore >= 50) return "#f97316"; // Orange (High)
-      if (levelOrScore >= 25) return "#f59e0b"; // Yellow/Amber (Moderate)
-      return "#10b981"; // Green (Low)
+      if (levelOrScore >= 80) return "#10b981"; // Green (Low Risk / Safe)
+      if (levelOrScore >= 50) return "#f59e0b"; // Yellow/Amber (Moderate Risk)
+      return "#ef4444"; // Red (Critical Risk)
     }
     const str = String(levelOrScore).toUpperCase();
     if (

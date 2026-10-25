@@ -1,5 +1,7 @@
 const User = require("../models/User");
 const FamilyMember = require("../models/FamilyMember");
+const Journey = require("../models/Journey");
+const PilgrimageCenter = require("../models/PilgrimageCenter");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
 const crypto = require("crypto");
@@ -283,10 +285,10 @@ const calculatePsiRisk = (user) => {
   if (user.fitnessInfo?.stairClimbing === "With Difficulty") score -= 10;
   if (user.fitnessInfo?.usesAssistance === "Yes") score -= 10;
 
-  const finalScore = Math.max(score, 35);
+  const finalScore = Math.max(score, 20);
   let riskLevel = "Low Risk";
-  if (finalScore < 70) riskLevel = "High Risk";
-  else if (finalScore < 85) riskLevel = "Moderate Risk";
+  if (finalScore < 50) riskLevel = "Critical Risk";
+  else if (finalScore < 80) riskLevel = "Moderate Risk";
 
   return { psiScore: finalScore, psiRiskLevel: riskLevel };
 };
@@ -305,24 +307,24 @@ const getUserProfile = async (req, res, next) => {
       const isCompleted = user.profileCompleted || completionPercentage > 0;
 
       // Fetch latest valid PSI from Travel Assessment (or Medical-only fallback)
-      let psiData = { hasSelectedCenter: false, selectedCenterName: null, mainUserPsi: { score: 20, level: "Low Risk" }, familyMembersPsiMap: {} };
+      let psiData = { hasSelectedCenter: false, selectedCenterName: null, mainUserPsi: { score: 85, level: "Low Risk" }, familyMembersPsiMap: {} };
       try {
         psiData = await getLatestUserAndFamilyPsi(user._id);
       } catch (err) {
         console.warn("Failed to get latest PSI for profile:", err.message);
       }
 
-      const mainUserPsi = psiData.mainUserPsi || { score: 20, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+      const mainUserPsi = psiData.mainUserPsi || { score: 85, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
       const familyMembersPsiMap = psiData.familyMembersPsiMap || {};
 
       const formattedFamilyMembers = familyMembers.map((fm) => {
         const fmId = fm._id.toString();
-        const fmPsi = familyMembersPsiMap[fmId] || { score: 20, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+        const fmPsi = familyMembersPsiMap[fmId] || { score: 85, level: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
         return {
           ...fm.toObject(),
           psiScore: fmPsi.score,
           psiRiskLevel: fmPsi.level,
-          aiRiskLevel: fmPsi.level === "LOW RISK" ? "LOW_RISK" : fmPsi.level === "HIGH RISK" ? "HIGH_RISK" : fmPsi.level === "CRITICAL RISK" ? "CRITICAL_RISK" : "MODERATE_RISK",
+          aiRiskLevel: fmPsi.level === "LOW RISK" || fmPsi.level === "Low Risk" ? "LOW_RISK" : fmPsi.level === "CRITICAL RISK" || fmPsi.level === "Critical Risk" ? "CRITICAL_RISK" : "MODERATE_RISK",
           hasSelectedCenter: fmPsi.hasSelectedCenter,
           selectedCenterName: fmPsi.selectedCenterName,
         };
@@ -767,16 +769,30 @@ const verifyResetCode = async (req, res, next) => {
 // @access  Public
 const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find({}).select("-password").sort({ createdAt: -1 }).lean();
+    const users = await User.find({
+      email: { $not: /^test_pilgrim_/i },
+    }).select("-password").sort({ createdAt: -1 }).lean();
     const familyMembers = await FamilyMember.find({}).sort({ createdAt: -1 }).lean();
+    const journeys = await Journey.find({})
+      .sort({ createdAt: -1 })
+      .populate("pilgrimageCenterId", "name location")
+      .lean();
 
     const usersWithFamily = users.map((u) => {
       const members = familyMembers.filter(
         (fm) => fm.user && fm.user.toString() === u._id.toString()
       );
+      const userJourneys = journeys.filter(
+        (j) => j.userId && j.userId.toString() === u._id.toString()
+      );
+      const activeJourney = userJourneys.find(
+        (j) => j.status === "IN_PROGRESS" || j.status === "active"
+      ) || userJourneys[0] || null;
+
       return {
         ...u,
         familyMembers: members,
+        activeJourney,
       };
     });
 

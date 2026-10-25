@@ -71,7 +71,7 @@ const familyTrackingRoutes = require("./routes/familyTrackingRoutes");
 app.use("/api/family-tracking", familyTrackingRoutes);
 app.use("/api/accommodation-bookings", accommodationBookingRoutes);
 
-
+const { syncExpiredJourneys } = require("./controllers/journeyController");
 
 // Error Handling Middleware
 app.use(notFound);
@@ -81,4 +81,14 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`);
+
+  // Automatic journey expiration background task: initial run + periodic hourly sweep
+  setTimeout(() => {
+    syncExpiredJourneys().catch((err) => console.warn("Notice: Initial syncExpiredJourneys run:", err.message));
+  }, 3000);
+
+  const EXPIRATION_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+  setInterval(() => {
+    syncExpiredJourneys().catch((err) => console.warn("Notice: Periodic syncExpiredJourneys run:", err.message));
+  }, EXPIRATION_INTERVAL_MS);
 });

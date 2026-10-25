@@ -20,10 +20,10 @@ function JourneyProgressCard({
   estimatedArrivalTime = "ETA unavailable",
   status = "IN_PROGRESS",
   lastUpdatedText = "Just now",
+  onStart,
   onPause,
   onResume,
   onEnd,
-  isDemoMode = false,
 }) {
   const getStatusBadge = () => {
     switch (status) {
@@ -41,14 +41,13 @@ function JourneyProgressCard({
     }
   };
 
-  const currAddr = currentLocation?.address || (currentLocation?.latitude && currentLocation?.longitude ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}` : "Tracking active location...");
+  const currAddr = currentLocation?.address || (currentLocation?.latitude && currentLocation?.longitude ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}` : (startLocationName || "Tracking active location..."));
 
   return (
     <div className="journey-progress-card">
       <div className="card-header-row">
         <div>
           <h3 className="card-title">Journey in Progress</h3>
-          {isDemoMode && <span className="demo-badge">🎮 DEMO MODE</span>}
         </div>
         {getStatusBadge()}
       </div>
@@ -114,18 +113,38 @@ function JourneyProgressCard({
       </div>
 
       {status !== "COMPLETED" && (
-        <div className="journey-card-actions">
-          {status === "PAUSED" ? (
-            <button type="button" className="btn-action resume" onClick={onResume}>
-              <FiPlayCircle /> Resume Journey
-            </button>
-          ) : (
-            <button type="button" className="btn-action pause" onClick={onPause}>
-              <FiPauseCircle /> Pause Journey
+        <div className="journey-card-actions" style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+          {/* Start Journey Button: Shown only when journey is not yet active */}
+          {status !== "IN_PROGRESS" && status !== "PAUSED" && (
+            <button
+              type="button"
+              className="btn-action start"
+              onClick={onStart}
+              style={{
+                flex: "1 1 140px",
+                background: "#10b981",
+                color: "#ffffff",
+                boxShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
+                fontWeight: 700,
+              }}
+            >
+              <FiPlayCircle size={18} /> Start Journey
             </button>
           )}
 
-          <button type="button" className="btn-action end" onClick={onEnd}>
+          {status === "PAUSED" ? (
+            <button type="button" className="btn-action resume" onClick={onResume} style={{ flex: "1 1 120px" }}>
+              <FiPlayCircle /> Resume Journey
+            </button>
+          ) : (
+            status === "IN_PROGRESS" && (
+              <button type="button" className="btn-action pause" onClick={onPause} style={{ flex: "1 1 120px" }}>
+                <FiPauseCircle /> Pause Journey
+              </button>
+            )
+          )}
+
+          <button type="button" className="btn-action end" onClick={onEnd} style={{ flex: "1 1 120px" }}>
             <FiCheckCircle /> End Journey
           </button>
         </div>

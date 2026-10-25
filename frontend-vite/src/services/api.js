@@ -296,6 +296,11 @@ export const apiGetMyConsultations = async (token) => {
   });
 };
 
+export {
+  apiUpdateDoctorAvailability,
+  apiGetAvailableDoctors,
+} from "./medicalReportService";
+
 
 
 export {

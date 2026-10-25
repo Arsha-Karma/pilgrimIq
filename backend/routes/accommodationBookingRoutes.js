@@ -9,6 +9,7 @@ const {
   verifyPayment,
   getCancellationPreview,
   cancelBooking,
+  modifyBookingDates,
   getMyBookings,
   getBookingById,
   handleRazorpayWebhook,
@@ -23,6 +24,7 @@ router.post("/webhook", handleRazorpayWebhook);
 router.get("/my-bookings", protect, getMyBookings);
 router.post("/", protect, createBookingDraft);
 router.get("/:bookingId", protect, getBookingById);
+router.patch("/:bookingId/dates", protect, modifyBookingDates);
 router.get("/:bookingId/cancellation-preview", protect, getCancellationPreview);
 router.post("/:bookingId/create-order", protect, createRazorpayOrder);
 router.post("/:bookingId/verify-payment", protect, verifyPayment);

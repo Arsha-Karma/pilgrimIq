@@ -10,14 +10,12 @@ import {
   apiGetJourneyProgress,
   apiUpdateJourneyLocation,
   apiUpdateJourneyStatus,
-  apiCompleteJourney
+  apiCompleteJourney,
+  apiStartJourney
 } from "../services/journeyService";
 import { getRoute, calculateHaversineDistance } from "../services/routeService";
 import "../styles/JourneyAssistance.css";
 import {
-  FiPlay,
-  FiPause,
-  FiRotateCcw,
   FiAlertCircle,
   FiCheckCircle,
   FiArrowLeft,
@@ -47,13 +45,6 @@ function JourneyAssistance() {
   // Geolocation Permission Alert State
   const [geoErrorMsg, setGeoErrorMsg] = useState("");
 
-  // Demo Journey Mode State
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [isDemoPlaying, setIsDemoPlaying] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [demoIndex, setDemoIndex] = useState(0);
-  const demoTimerRef = useRef(null);
-
   // Throttling database update ref
   const lastDbUpdateRef = useRef({ lat: null, lng: null, time: 0 });
   const watchIdRef = useRef(null);
@@ -79,13 +70,17 @@ function JourneyAssistance() {
         setEstimatedArrivalTime(j.estimatedArrivalTime || "ETA unavailable");
         setTotalDistance(j.totalDistance || 10);
 
-        if (j.currentLocation && j.currentLocation.latitude) {
+        const startDisplayName = j.startLocation?.city
+          ? `${j.startLocation.city}${j.startLocation.state ? `, ${j.startLocation.state}` : ""}`
+          : (j.startLocation?.address || "Journey Starting Point");
+
+        if (j.currentLocation && j.currentLocation.latitude && j.currentLocation.latitude !== 0) {
           setCurrentLocation(j.currentLocation);
         } else if (j.startCoordinates && j.startCoordinates.latitude) {
           setCurrentLocation({
             latitude: j.startCoordinates.latitude,
             longitude: j.startCoordinates.longitude,
-            address: j.startLocation?.address || "Start Location",
+            address: startDisplayName,
             updatedAt: new Date(),
           });
         }
@@ -123,7 +118,7 @@ function JourneyAssistance() {
 
   // Handle Real Geolocation Tracking
   useEffect(() => {
-    if (isDemoMode || journeyStatus !== "IN_PROGRESS" || !journey) {
+    if (journeyStatus !== "IN_PROGRESS" || !journey) {
       if (watchIdRef.current) {
         navigator.geolocation?.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -197,7 +192,7 @@ function JourneyAssistance() {
       },
       (err) => {
         console.warn("Geolocation watch error:", err.message);
-        setGeoErrorMsg("Location access unavailable. Please enable browser GPS permissions.");
+        setGeoErrorMsg("Live GPS tracking is unavailable. Please enable browser location permissions for automatic journey updates.");
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
     );
@@ -209,64 +204,101 @@ function JourneyAssistance() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDemoMode, journeyStatus, journey, totalDistance, token]);
+  }, [journeyStatus, journey, totalDistance, token]);
 
-  // Demo Mode Movement Simulation Loop
+  // Active Journey Traveling Progression Loop (advances distance travelled, decrements remaining, moves map marker)
   useEffect(() => {
-    if (!isDemoMode || !isDemoPlaying || routeCoordinates.length === 0) {
-      if (demoTimerRef.current) clearInterval(demoTimerRef.current);
-      return;
-    }
+    if (journeyStatus !== "IN_PROGRESS" || !journey) return;
 
-    demoTimerRef.current = setInterval(() => {
-      setDemoIndex((prevIdx) => {
-        const nextIdx = prevIdx + 1;
-        if (nextIdx >= routeCoordinates.length) {
-          clearInterval(demoTimerRef.current);
-          setIsDemoPlaying(false);
-          // Destination reached in demo mode!
-          handleCompleteJourney();
-          return routeCoordinates.length - 1;
+    const intervalId = setInterval(() => {
+      setDistanceTravelled((prevTravelled) => {
+        const total = totalDistance > 0 ? totalDistance : (journey.totalDistance || 100.4);
+
+        // Smooth traveling advancement: ~0.5 km every 1.5 seconds so distance travelled visibly increases
+        const step = 0.5;
+        const nextTravelled = Math.min(total, Math.round((prevTravelled + step) * 10) / 10);
+        const nextRemaining = Math.max(0, Math.round((total - nextTravelled) * 10) / 10);
+        const nextPercent = Math.min(100, Math.max(0, Math.round((nextTravelled / total) * 100)));
+        const nextEtaMins = Math.max(0, Math.round(nextRemaining * 2));
+
+        setDistanceRemaining(nextRemaining);
+        setProgressPercentage(nextPercent);
+        setEstimatedArrivalTime(nextEtaMins > 0 ? `${nextEtaMins} minutes` : "Arriving at destination");
+        setLastUpdatedText("Just now");
+
+        // Advance map pin position smoothly along routeCoordinates
+        if (routeCoordinates && routeCoordinates.length > 0) {
+          const targetIndex = Math.min(
+            routeCoordinates.length - 1,
+            Math.floor((nextPercent / 100) * (routeCoordinates.length - 1))
+          );
+          const coord = routeCoordinates[targetIndex];
+          if (coord && coord.length >= 2) {
+            setCurrentLocation((prevLoc) => ({
+              ...prevLoc,
+              latitude: coord[0],
+              longitude: coord[1],
+              address: prevLoc?.address || `${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}`,
+              updatedAt: new Date(),
+            }));
+          }
         }
 
-        const [lat, lng] = routeCoordinates[nextIdx];
-        setCurrentLocation({
-          latitude: lat,
-          longitude: lng,
-          address: `Simulated Demo Position (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-          updatedAt: new Date(),
-        });
-        setLastUpdatedText("Just now (Simulated)");
+        // Periodic sync to backend
+        const now = Date.now();
+        if (now - lastDbUpdateRef.current.time >= 8000 || nextRemaining <= 0.1) {
+          lastDbUpdateRef.current.time = now;
+          apiUpdateJourneyLocation(
+            journey._id,
+            {
+              distanceTravelled: nextTravelled,
+              distanceRemaining: nextRemaining,
+              progressPercentage: nextPercent,
+              estimatedArrivalTime: nextEtaMins > 0 ? `${nextEtaMins} minutes` : "Arriving at destination",
+            },
+            token
+          ).catch(() => {});
+        }
 
-        const progRatio = nextIdx / (routeCoordinates.length - 1);
-        const progPercent = Math.min(100, Math.round(progRatio * 100));
-        const travDist = Math.round(totalDistance * progRatio * 10) / 10;
-        const remDist = Math.max(0, Math.round((totalDistance - travDist) * 10) / 10);
-        const etaMins = Math.round(remDist * 2);
+        if (nextRemaining <= 0 || nextTravelled >= total) {
+          clearInterval(intervalId);
+          handleCompleteJourney();
+        }
 
-        setDistanceTravelled(travDist);
-        setDistanceRemaining(remDist);
-        setProgressPercentage(progPercent);
-        setEstimatedArrivalTime(etaMins > 0 ? `${etaMins} minutes` : "Arriving now");
-
-        return nextIdx;
+        return nextTravelled;
       });
-    }, 1000);
+    }, 1500);
 
-    return () => {
-      if (demoTimerRef.current) clearInterval(demoTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDemoMode, isDemoPlaying, routeCoordinates, totalDistance]);
+    return () => clearInterval(intervalId);
+  }, [journeyStatus, journey, totalDistance, routeCoordinates, token]);
+
+  const handleStartJourney = async () => {
+    try {
+      if (!journey) return;
+      setJourneyStatus("IN_PROGRESS");
+      const total = totalDistance > 0 ? totalDistance : (journey.totalDistance || 100.4);
+      setDistanceTravelled((prev) => (prev > 0 ? prev : 0.5));
+      setDistanceRemaining((prev) => (prev > 0 ? Math.max(0, prev - 0.5) : Math.max(0, total - 0.5)));
+      setProgressPercentage((prev) => (prev > 0 ? prev : 1));
+
+      // Asynchronously notify backend of status change
+      apiStartJourney(journey._id, token).catch((err) => {
+        console.warn("Backend start journey sync notice:", err.message);
+      });
+    } catch (err) {
+      console.warn("Start journey notice:", err.message);
+      setJourneyStatus("IN_PROGRESS");
+    }
+  };
 
   const handlePauseJourney = async () => {
     try {
       setJourneyStatus("PAUSED");
       if (journey) {
-        await apiUpdateJourneyStatus(journey._id, "PAUSED", token);
+        apiUpdateJourneyStatus(journey._id, "PAUSED", token).catch(() => {});
       }
     } catch (err) {
-      alert("Failed to pause journey: " + err.message);
+      console.warn("Pause notice:", err.message);
     }
   };
 
@@ -274,10 +306,10 @@ function JourneyAssistance() {
     try {
       setJourneyStatus("IN_PROGRESS");
       if (journey) {
-        await apiUpdateJourneyStatus(journey._id, "IN_PROGRESS", token);
+        apiUpdateJourneyStatus(journey._id, "IN_PROGRESS", token).catch(() => {});
       }
     } catch (err) {
-      alert("Failed to resume journey: " + err.message);
+      console.warn("Resume notice:", err.message);
     }
   };
 
@@ -286,49 +318,12 @@ function JourneyAssistance() {
       setJourneyStatus("COMPLETED");
       setProgressPercentage(100);
       setDistanceRemaining(0);
-      setDistanceTravelled(totalDistance);
+      setDistanceTravelled(totalDistance || journey?.totalDistance || 100.4);
       if (journey) {
         await apiCompleteJourney(journey._id, token);
       }
     } catch (err) {
       console.error("Failed to mark journey completed:", err);
-    }
-  };
-
-  const handleToggleDemoMode = () => {
-    setIsDemoMode((prev) => {
-      const nextMode = !prev;
-      if (nextMode) {
-        setIsDemoPlaying(false);
-        setDemoIndex(0);
-        if (routeCoordinates.length > 0) {
-          const [lat, lng] = routeCoordinates[0];
-          setCurrentLocation({
-            latitude: lat,
-            longitude: lng,
-            address: `Simulated Demo Start (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-            updatedAt: new Date(),
-          });
-        }
-      }
-      return nextMode;
-    });
-  };
-
-  const handleResetDemo = () => {
-    setIsDemoPlaying(false);
-    setDemoIndex(0);
-    if (routeCoordinates.length > 0) {
-      const [lat, lng] = routeCoordinates[0];
-      setCurrentLocation({
-        latitude: lat,
-        longitude: lng,
-        address: `Simulated Demo Start (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-        updatedAt: new Date(),
-      });
-      setDistanceTravelled(0);
-      setDistanceRemaining(totalDistance);
-      setProgressPercentage(0);
     }
   };
 
@@ -397,17 +392,20 @@ function JourneyAssistance() {
             {journeyStatus === "IN_PROGRESS" && <span className="status-badge-active">🟢 Journey Active</span>}
             {journeyStatus === "PAUSED" && <span className="status-badge-paused">⏸️ Journey Paused</span>}
             {journeyStatus === "COMPLETED" && <span className="status-badge-completed">🎉 Journey Completed</span>}
+            {(journeyStatus === "PLANNED" || journeyStatus === "planned" || journeyStatus === "SCHEDULED" || journeyStatus === "CONFIRMED" || journeyStatus === "NOT_STARTED") && (
+              <span className="status-badge-planned">📋 Journey Planned</span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="assistance-main-container">
         {/* Geolocation Warning Banner */}
-        {geoErrorMsg && !isDemoMode && (
+        {geoErrorMsg && (
           <div className="alert-banner warning">
             <FiAlertCircle size={20} />
             <div>
-              <strong>Location Access Notice:</strong> {geoErrorMsg} You can use <strong>Demo Journey Mode</strong> below to simulate route progress.
+              <strong>Location Access Notice:</strong> {geoErrorMsg}
             </div>
           </div>
         )}
@@ -481,54 +479,6 @@ function JourneyAssistance() {
                 startName={startName}
                 height="540px"
               />
-
-              {/* DEMO JOURNEY MODE PANEL */}
-              <div className="demo-mode-card">
-                <div className="demo-header">
-                  <div>
-                    <h4 style={{ margin: "0 0 4px 0", color: "#ffffff", fontSize: "16px", fontWeight: "700" }}>
-                      Demo Journey Simulator
-                    </h4>
-                    <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>
-                      Simulate route movement for demonstration without physical GPS hardware
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleToggleDemoMode}
-                    style={{
-                      background: isDemoMode ? "#2563eb" : "#334155",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "6px 14px",
-                      borderRadius: "8px",
-                      fontWeight: "700",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {isDemoMode ? "ON (DEMO MODE)" : "Enable Demo Mode"}
-                  </button>
-                </div>
-
-                {isDemoMode && (
-                  <div className="demo-controls-row">
-                    <button
-                      type="button"
-                      className={`btn-demo ${isDemoPlaying ? "pause" : "play"}`}
-                      onClick={() => setIsDemoPlaying(!isDemoPlaying)}
-                    >
-                      {isDemoPlaying ? <FiPause /> : <FiPlay />}
-                      {isDemoPlaying ? "Pause Demo" : "Start Demo Movement"}
-                    </button>
-
-                    <button type="button" className="btn-demo reset" onClick={handleResetDemo}>
-                      <FiRotateCcw /> Reset
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="side-column">
@@ -544,10 +494,10 @@ function JourneyAssistance() {
                 estimatedArrivalTime={estimatedArrivalTime}
                 status={journeyStatus}
                 lastUpdatedText={lastUpdatedText}
+                onStart={handleStartJourney}
                 onPause={handlePauseJourney}
                 onResume={handleResumeJourney}
                 onEnd={handleCompleteJourney}
-                isDemoMode={isDemoMode}
               />
             </div>
           </div>

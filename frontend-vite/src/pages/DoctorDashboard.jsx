@@ -24,6 +24,7 @@ import {
   apiGetDoctorPilgrims,
   apiSubmitDoctorConsultation,
   apiAcknowledgeEmergencyAlert,
+  apiUpdateDoctorAvailability,
 } from "../services/medicalReportService";
 import { apiGetBaseCamps } from "../services/baseCampService";
 
@@ -45,6 +46,49 @@ function DoctorDashboard() {
   // System Notifications
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState("");
+
+  // Doctor Availability & Duty Status State
+  const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || "Available");
+  const [isAvailable, setIsAvailable] = useState(user?.isAvailable !== false && user?.dutyStatus !== "Off Duty");
+  const [assignedCamp, setAssignedCamp] = useState(user?.assignedCamp || "Pamba Base Camp • Field Medical Unit #04");
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  useEffect(() => {
+    if (user?.dutyStatus) {
+      setDutyStatus(user.dutyStatus);
+      setIsAvailable(user.dutyStatus !== "Off Duty" && user.isAvailable !== false);
+    }
+    if (user?.assignedCamp) {
+      setAssignedCamp(user.assignedCamp);
+    }
+  }, [user]);
+
+  const handleToggleAvailability = async (newStatus) => {
+    try {
+      setSavingStatus(true);
+      const willBeAvailable = newStatus !== "Off Duty";
+      setDutyStatus(newStatus);
+      setIsAvailable(willBeAvailable);
+
+      const res = await apiUpdateDoctorAvailability(
+        {
+          dutyStatus: newStatus,
+          isAvailable: willBeAvailable,
+          assignedCamp: assignedCamp,
+        },
+        token
+      );
+
+      if (res && res.success) {
+        triggerToast(`Doctor duty status updated to "${newStatus}". Pilgrims can now see your live availability.`);
+      }
+    } catch (err) {
+      console.error("Failed to update doctor availability:", err);
+      triggerToast(`Error updating status: ${err.message}`);
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   // Backend Data States
   const [loading, setLoading] = useState(true);
@@ -687,6 +731,24 @@ function DoctorDashboard() {
             <h4>Dr. {user?.name || "Medical Officer"}</h4>
             <span className="doc-spec">{user?.specialization || "General Physician"}</span>
             <span className="doc-id-tag">ID: {user?.doctorCode || "DOC-8492"}</span>
+            <div style={{ marginTop: "6px" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "800",
+                  padding: "3px 8px",
+                  borderRadius: "12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "rgba(5, 150, 105, 0.25)" : dutyStatus === "Busy" ? "rgba(217, 119, 6, 0.25)" : "rgba(100, 116, 139, 0.25)",
+                  color: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "#34d399" : dutyStatus === "Busy" ? "#fbbf24" : "#cbd5e1",
+                  border: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "1px solid rgba(5, 150, 105, 0.4)" : dutyStatus === "Busy" ? "1px solid rgba(217, 119, 6, 0.4)" : "1px solid rgba(100, 116, 139, 0.4)"
+                }}
+              >
+                ● {dutyStatus === "Available" || dutyStatus === "On Duty" ? "Available (On Duty)" : dutyStatus}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -768,9 +830,88 @@ function DoctorDashboard() {
             <span className="top-bar-subtitle">Pamba Base Camp • Field Medical Unit #04</span>
           </div>
 
-          <div className="top-bar-right">
-            <div className="duty-status-badge">
-              <span className="dot-green"></span> On Duty • Authenticated Doctor Session
+          <div className="top-bar-right" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(15, 23, 42, 0.8)", border: "1.5px solid #334155", borderRadius: "10px", padding: "4px 8px" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                My Availability:
+              </span>
+              <div style={{ display: "inline-flex", gap: "4px" }}>
+                <button
+                  type="button"
+                  id="doctor-status-available-btn"
+                  onClick={() => handleToggleAvailability("Available")}
+                  disabled={savingStatus}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "5px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "#059669" : "transparent",
+                    color: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "#ffffff" : "#94a3b8",
+                    fontWeight: "800",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    boxShadow: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "0 2px 8px rgba(5, 150, 105, 0.4)" : "none",
+                    transition: "all 0.2s"
+                  }}
+                  title="Mark yourself as Available on duty"
+                >
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: (dutyStatus === "Available" || dutyStatus === "On Duty") ? "#ffffff" : "#4ade80", display: "inline-block" }}></span>
+                  Available (On Duty)
+                </button>
+                <button
+                  type="button"
+                  id="doctor-status-busy-btn"
+                  onClick={() => handleToggleAvailability("Busy")}
+                  disabled={savingStatus}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "5px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: dutyStatus === "Busy" ? "#d97706" : "transparent",
+                    color: dutyStatus === "Busy" ? "#ffffff" : "#94a3b8",
+                    fontWeight: "800",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    boxShadow: dutyStatus === "Busy" ? "0 2px 8px rgba(217, 119, 6, 0.4)" : "none",
+                    transition: "all 0.2s"
+                  }}
+                  title="Mark yourself as Busy"
+                >
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: dutyStatus === "Busy" ? "#ffffff" : "#fbbf24", display: "inline-block" }}></span>
+                  Busy
+                </button>
+                <button
+                  type="button"
+                  id="doctor-status-offduty-btn"
+                  onClick={() => handleToggleAvailability("Off Duty")}
+                  disabled={savingStatus}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "5px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: dutyStatus === "Off Duty" ? "#475569" : "transparent",
+                    color: dutyStatus === "Off Duty" ? "#ffffff" : "#94a3b8",
+                    fontWeight: "800",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    boxShadow: dutyStatus === "Off Duty" ? "0 2px 8px rgba(71, 85, 105, 0.4)" : "none",
+                    transition: "all 0.2s"
+                  }}
+                  title="Mark yourself as Off Duty"
+                >
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: dutyStatus === "Off Duty" ? "#ffffff" : "#94a3b8", display: "inline-block" }}></span>
+                  Off Duty
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -1351,8 +1492,8 @@ function DoctorDashboard() {
                   <div key={`hist_${item.id}`} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "12px", padding: "18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                       <div>
-                        <h4 style={{ margin: 0, fontSize: "16px", color: "#ffffff" }}>{item.personName} ({item.relationship})</h4>
-                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>{item.centerName} • PSI: {item.psiScore}</span>
+                        <h4 style={{ margin: 0, fontSize: "16px", color: "#ffffff" }}>{safeRenderString(item.personName, "Pilgrim")} ({safeRenderString(item.relationship, "Self")})</h4>
+                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>{safeRenderString(item.centerName, "Base Camp")} • PSI: {safeRenderString(item.psiScore, "--")}</span>
                       </div>
                       {renderStatusBadge(item)}
                     </div>
@@ -1360,27 +1501,43 @@ function DoctorDashboard() {
                     {item.consultationsHistory && item.consultationsHistory.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
                         <div style={{ fontSize: "12px", fontWeight: "700", color: "#60a5fa" }}>CONSULTATION HISTORY ({item.consultationsHistory.length})</div>
-                        {item.consultationsHistory.map((c, idx) => (
-                          <div key={c._id || idx} style={{ background: "#0f172a", borderLeft: "4px solid #2563eb", padding: "12px", borderRadius: "6px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "700", color: "#f8fafc" }}>
-                              <span>Dr. {c.doctorName || "Duty Physician"} (ID: {c.doctorCode || c.doctorId})</span>
-                              <span style={{ color: "#94a3b8", fontSize: "11px" }}>{new Date(c.consultedAt || c.createdAt).toLocaleString()}</span>
-                            </div>
-                            <div style={{ marginTop: "4px", fontSize: "12px", color: "#34d399", fontWeight: "700" }}>
-                              Decision: {c.decision}
-                            </div>
-                            {c.decisionReason && (
-                              <div style={{ marginTop: "4px", fontSize: "12px", color: "#cbd5e1" }}>
-                                <strong>Reason:</strong> {c.decisionReason}
+                        {item.consultationsHistory.map((c, idx) => {
+                          const docName = (typeof c.doctorName === "string" && c.doctorName.trim() ? c.doctorName : null) ||
+                            (typeof c.doctorId === "object" && c.doctorId?.name ? c.doctorId.name : null) ||
+                            "Duty Physician";
+
+                          const docCode = (typeof c.doctorCode === "string" && c.doctorCode.trim() ? c.doctorCode : null) ||
+                            (typeof c.doctorId === "object" && c.doctorId?.doctorCode ? c.doctorId.doctorCode : null) ||
+                            (typeof c.doctorId === "object" && c.doctorId?._id ? `DOC-${String(c.doctorId._id).slice(-4).toUpperCase()}` : null) ||
+                            (typeof c.doctorId === "string" && c.doctorId.trim() ? c.doctorId : "DOC-8492");
+
+                          const decText = typeof c.decision === "string" ? c.decision : safeRenderString(c.decision, "APPROVED");
+                          const reasonText = typeof c.decisionReason === "string" ? c.decisionReason : safeRenderString(c.decisionReason, "");
+                          const precautionsText = typeof c.precautions === "string" ? c.precautions : safeRenderString(c.precautions, "");
+                          const consultDate = c.consultedAt || c.createdAt ? new Date(c.consultedAt || c.createdAt).toLocaleString() : new Date().toLocaleString();
+
+                          return (
+                            <div key={c._id || idx} style={{ background: "#0f172a", borderLeft: "4px solid #2563eb", padding: "12px", borderRadius: "6px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "700", color: "#f8fafc" }}>
+                                <span>Dr. {docName} (ID: {docCode})</span>
+                                <span style={{ color: "#94a3b8", fontSize: "11px" }}>{consultDate}</span>
                               </div>
-                            )}
-                            {c.precautions && (
-                              <div style={{ marginTop: "4px", fontSize: "12px", color: "#a7f3d0" }}>
-                                <strong>Precautions:</strong> {c.precautions}
+                              <div style={{ marginTop: "4px", fontSize: "12px", color: "#34d399", fontWeight: "700" }}>
+                                Decision: {decText}
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              {reasonText && (
+                                <div style={{ marginTop: "4px", fontSize: "12px", color: "#cbd5e1" }}>
+                                  <strong>Reason:</strong> {reasonText}
+                                </div>
+                              )}
+                              {precautionsText && (
+                                <div style={{ marginTop: "4px", fontSize: "12px", color: "#a7f3d0" }}>
+                                  <strong>Precautions:</strong> {precautionsText}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic", marginTop: "8px" }}>

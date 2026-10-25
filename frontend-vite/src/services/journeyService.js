@@ -110,6 +110,14 @@ export const apiDeleteJourney = async (id, token) => {
   });
 };
 
+// Cancel journey booking explicitly
+export const apiCancelJourney = async (id, token) => {
+  return fetchAPI(`/journeys/${id}/cancel`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+};
+
 // Get nearby services (hotels, restaurants, hospitals, ATMs, etc.)
 export const apiGetNearbyServices = async (latitude, longitude, radius = 5, category = "accommodation", dietaryPreference = "No preference", token = null) => {
   const queryParams = {

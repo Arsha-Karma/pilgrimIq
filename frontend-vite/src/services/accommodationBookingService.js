@@ -122,3 +122,14 @@ export const apiCancelAccommodationBooking = async (bookingId, reason, token) =>
     body: JSON.stringify({ reason }),
   });
 };
+
+/**
+ * Modify Accommodation Booking Dates (User confirmed date change during rescheduling)
+ */
+export const apiModifyAccommodationBookingDates = async (bookingId, dates, token) => {
+  return fetchAPI(`/accommodation-bookings/${bookingId}/dates`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify(dates),
+  });
+};

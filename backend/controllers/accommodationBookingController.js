@@ -763,6 +763,93 @@ const getBookingById = async (req, res, next) => {
   }
 };
 
+// @desc    Modify Accommodation Booking Dates (User confirmed date change during journey rescheduling)
+// @route   PATCH /api/accommodation-bookings/:bookingId/dates
+// @access  Private (Authenticated User)
+const modifyBookingDates = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { bookingId } = req.params;
+    const { checkInDate, checkOutDate } = req.body;
+
+    if (!checkInDate || !checkOutDate) {
+      res.status(400);
+      throw new Error("New check-in date and check-out date are required.");
+    }
+
+    const booking = await AccommodationBooking.findById(bookingId);
+    if (!booking) {
+      res.status(404);
+      throw new Error("Accommodation booking not found.");
+    }
+
+    if (booking.userId.toString() !== userId.toString() && req.user.role !== "admin") {
+      res.status(403);
+      throw new Error("Unauthorized: You do not have permission to modify this booking.");
+    }
+
+    if (booking.bookingStatus === "CANCELLED") {
+      res.status(400);
+      throw new Error("Cannot modify dates for a cancelled accommodation booking.");
+    }
+
+    const newCheckIn = new Date(checkInDate);
+    const newCheckOut = new Date(checkOutDate);
+
+    if (isNaN(newCheckIn.getTime()) || isNaN(newCheckOut.getTime())) {
+      res.status(400);
+      throw new Error("Invalid check-in or check-out date format.");
+    }
+
+    newCheckIn.setHours(12, 0, 0, 0);
+    newCheckOut.setHours(11, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (newCheckIn < today) {
+      res.status(400);
+      throw new Error("Check-in date cannot be in the past.");
+    }
+
+    if (newCheckOut <= newCheckIn) {
+      res.status(400);
+      throw new Error("Check-out date must be strictly after the check-in date.");
+    }
+
+    const diffMs = newCheckOut.getTime() - newCheckIn.getTime();
+    const numberOfNights = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+    // Recalculate authoritative room pricing
+    const pricePerNight = booking.pricing?.pricePerNight || 950;
+    const numberOfRooms = booking.numberOfRooms || 1;
+    const roomSubtotal = pricePerNight * numberOfRooms * numberOfNights;
+    const taxAmount = Math.round(roomSubtotal * 0.12);
+    const totalAmount = roomSubtotal + taxAmount;
+
+    booking.checkInDate = newCheckIn;
+    booking.checkOutDate = newCheckOut;
+    booking.numberOfNights = numberOfNights;
+    booking.pricing = {
+      pricePerNight,
+      roomSubtotal,
+      taxAmount,
+      totalAmount,
+      currency: booking.pricing?.currency || "INR",
+    };
+
+    await booking.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Accommodation booking dates updated successfully.",
+      booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Razorpay Webhook Handler
 // @route   POST /api/accommodation-bookings/webhook
 // @access  Public (Validated by Webhook HMAC Signature)
@@ -851,6 +938,7 @@ module.exports = {
   verifyPayment,
   getCancellationPreview,
   cancelBooking,
+  modifyBookingDates,
   getMyBookings,
   getBookingById,
   handleRazorpayWebhook,

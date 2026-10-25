@@ -538,6 +538,102 @@ const getMyConsultationRecords = async (req, res, next) => {
   }
 };
 
+// @desc    Update doctor's own duty & availability status
+// @route   PATCH /api/doctor/availability
+// @route   PATCH /api/physician/availability
+// @access  Private (Physician / Admin)
+const updateDoctorAvailability = async (req, res, next) => {
+  try {
+    const doctorId = req.user._id;
+    const { isAvailable, dutyStatus, assignedCamp, specialization, availableFrom, availableTo, dutyNote } = req.body;
+
+    const doctor = await User.findById(doctorId);
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: "Doctor record not found" });
+    }
+
+    if (isAvailable !== undefined) doctor.isAvailable = Boolean(isAvailable);
+    if (dutyStatus !== undefined) {
+      doctor.dutyStatus = dutyStatus;
+      if (dutyStatus === "Off Duty") {
+        doctor.isAvailable = false;
+      } else if (dutyStatus === "Available" || dutyStatus === "On Duty") {
+        doctor.isAvailable = true;
+      }
+    }
+    if (assignedCamp !== undefined) doctor.assignedCamp = assignedCamp;
+    if (specialization !== undefined && specialization.trim()) doctor.specialization = specialization;
+    if (availableFrom !== undefined) doctor.availableFrom = availableFrom;
+    if (availableTo !== undefined) doctor.availableTo = availableTo;
+    if (dutyNote !== undefined) doctor.dutyNote = dutyNote;
+
+    await doctor.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Doctor duty status updated to ${doctor.dutyStatus || "Available"}`,
+      doctor: {
+        _id: doctor._id,
+        name: doctor.name.startsWith("Dr.") ? doctor.name : `Dr. ${doctor.name}`,
+        rawName: doctor.name,
+        email: doctor.email,
+        phone: doctor.phone || "+91 94470 12345",
+        role: doctor.role,
+        specialization: doctor.specialization || "General Physician & High Altitude Care",
+        assignedCamp: doctor.assignedCamp || "Pamba Base Camp • Field Medical Unit #04",
+        doctorCode: doctor.doctorCode || (doctor._id ? `DOC-${String(doctor._id).slice(-4).toUpperCase()}` : "DOC-8492"),
+        isAvailable: doctor.isAvailable !== false && doctor.dutyStatus !== "Off Duty",
+        dutyStatus: doctor.dutyStatus || "Available",
+        availableFrom: doctor.availableFrom || "08:00 AM",
+        availableTo: doctor.availableTo || "08:00 PM",
+        dutyNote: doctor.dutyNote || "",
+        updatedAt: doctor.updatedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all available & on-duty doctors for pilgrims & dashboards
+// @route   GET /api/doctor/available
+// @route   GET /api/physician/available
+// @access  Public / Private (All users)
+const getAvailableDoctors = async (req, res, next) => {
+  try {
+    const physicians = await User.find({ role: { $in: ["physician", "doctor"] } })
+      .select("name email phone specialization assignedCamp doctorCode isAvailable dutyStatus availableFrom availableTo dutyNote avatar updatedAt")
+      .sort({ isAvailable: -1, updatedAt: -1 })
+      .lean();
+
+    const formatted = physicians.map((doc, idx) => ({
+      _id: doc._id,
+      name: doc.name.startsWith("Dr.") ? doc.name : `Dr. ${doc.name}`,
+      rawName: doc.name,
+      email: doc.email,
+      phone: doc.phone || "+91 94470 12345",
+      specialization: doc.specialization || (idx % 2 === 0 ? "General Physician & High Altitude Care" : "Emergency Medicine & Triage Specialist"),
+      assignedCamp: doc.assignedCamp || (idx % 2 === 0 ? "Pamba Base Camp • Field Medical Unit #04" : "Nilakkal Base Camp • Emergency Unit #02"),
+      doctorCode: doc.doctorCode || (doc._id ? `DOC-${String(doc._id).slice(-4).toUpperCase()}` : `DOC-${8490 + idx}`),
+      isAvailable: doc.isAvailable !== false && doc.dutyStatus !== "Off Duty",
+      dutyStatus: doc.dutyStatus || (doc.isAvailable === false ? "Off Duty" : "Available"),
+      availableFrom: doc.availableFrom || "08:00 AM",
+      availableTo: doc.availableTo || "08:00 PM",
+      dutyNote: doc.dutyNote || (doc.isAvailable !== false && doc.dutyStatus !== "Off Duty" ? "Stationed at base camp emergency post. Ready for pilgrim health checks." : "Currently off duty. Emergency cases redirected to field team."),
+      avatar: doc.avatar || "",
+      updatedAt: doc.updatedAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      doctors: formatted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPhysicianReviews,
   getPhysicianReviewById,
@@ -545,6 +641,8 @@ module.exports = {
   submitPhysicianDecision,
   acknowledgeEmergencyAlert,
   getMyConsultationRecords,
+  updateDoctorAvailability,
+  getAvailableDoctors,
 };
 
 

@@ -392,9 +392,10 @@ async function runTests() {
   const foundInList = myBookingsResult.bookings.find((b) => b._id.toString() === createdBooking._id.toString());
   assert(Boolean(foundInList), "Newly created booking is persistently retrieved from database");
 
-  // Clean up test booking
+  // Clean up test booking and temporary test users
   await AccommodationBooking.deleteOne({ _id: createdBooking._id });
-  console.log("\n  ✓ Test accommodation booking cleaned up from database");
+  await User.deleteMany({ email: { $in: ["test_pilgrim_a@pilgrimiq.com", "test_pilgrim_b@pilgrimiq.com"] } });
+  console.log("\n  ✓ Test accommodation booking and test users cleaned up from database");
 
   console.log("\n========================================================");
   console.log(`✅ ALL ${passedTests} / ${totalTests} TESTS PASSED SUCCESSFULLY!`);

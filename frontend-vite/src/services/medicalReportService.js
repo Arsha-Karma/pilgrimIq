@@ -127,3 +127,19 @@ export const apiGetAllMedicalReports = async (token) => {
     headers: getHeaders(token),
   });
 };
+
+// Doctor Availability APIs
+export const apiUpdateDoctorAvailability = async (data, token) => {
+  return fetchAPI("/doctor/availability", {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify(data),
+  });
+};
+
+export const apiGetAvailableDoctors = async (token) => {
+  return fetchAPI("/doctor/available", {
+    method: "GET",
+    headers: token ? getHeaders(token) : { "Content-Type": "application/json" },
+  });
+};

@@ -1075,8 +1075,46 @@ function Bookings() {
               MODAL 2: BOOKING VOUCHER / RECEIPT (Requirement 11)
              ========================================================= */}
           {selectedVoucherBooking && (
-            <div className="place-detail-modal-overlay" onClick={() => setSelectedVoucherBooking(null)}>
-              <div className="place-detail-modal-card" style={{ maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
+            <div
+              className="place-detail-modal-overlay"
+              style={{
+                position: "fixed",
+                inset: 0,
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: "100vw",
+                height: "100vh",
+                zIndex: 99999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(15, 23, 42, 0.75)",
+                backdropFilter: "blur(8px)",
+                padding: "20px",
+                boxSizing: "border-box"
+              }}
+              onClick={() => setSelectedVoucherBooking(null)}
+            >
+              <div
+                className="place-detail-modal-card"
+                style={{
+                  maxWidth: "600px",
+                  width: "100%",
+                  maxHeight: "90vh",
+                  background: "#ffffff",
+                  borderRadius: "20px",
+                  overflow: "hidden",
+                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                  display: "flex",
+                  flexDirection: "column",
+                  margin: "auto",
+                  position: "relative",
+                  zIndex: 100000
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="modal-header" style={{ background: "#0f172a", color: "#ffffff" }}>
                   <div>
                     <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase" }}>Accommodation Receipt</span>

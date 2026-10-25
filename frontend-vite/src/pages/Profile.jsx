@@ -11,6 +11,7 @@ import {
   apiMarkNotificationRead,
   apiGetBaseCamps,
   apiGetMyConsultations,
+  apiGetAvailableDoctors,
 } from "../services/api";
 import {
   apiUploadMedicalReport,
@@ -58,6 +59,7 @@ import {
   FiFilter,
   FiClock
 } from "react-icons/fi";
+import { FaStethoscope } from "react-icons/fa";
 
 const RELATIONSHIPS = [
   "Father",
@@ -547,8 +549,8 @@ const calculateBmiString = (h, w) => {
 };
 
 const getMemberPsi = (member) => {
-  if (!member) return { psiScore: 20, psiRiskLevel: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
-  const score = member.psiScore !== undefined && member.psiScore !== null ? member.psiScore : 20;
+  if (!member) return { psiScore: 85, psiRiskLevel: "Low Risk", hasSelectedCenter: false, selectedCenterName: null };
+  const score = member.psiScore !== undefined && member.psiScore !== null ? member.psiScore : 85;
   const level = member.psiRiskLevel || member.aiRiskLevel || "Low Risk";
   const hasSelectedCenter = !!member.hasSelectedCenter;
   const selectedCenterName = member.selectedCenterName || null;
@@ -559,13 +561,10 @@ const getPsiBadgeStyle = (score, level) => {
   const s = Number(score || 0);
   const lvl = String(level || "").toUpperCase();
 
-  if (s >= 75 || lvl.includes("CRITICAL") || lvl.includes("REJECTED") || lvl.includes("PHYSICIAN")) {
+  if (s < 50 || lvl.includes("CRITICAL") || lvl.includes("REJECTED") || lvl.includes("PHYSICIAN")) {
     return { bg: "#fee2e2", color: "#991b1b", border: "#fecaca" };
   }
-  if (s >= 50 || lvl.includes("HIGH")) {
-    return { bg: "#ffedd5", color: "#c2410c", border: "#fed7aa" };
-  }
-  if (s >= 25 || lvl.includes("MODERATE") || lvl.includes("CAUTION")) {
+  if (s < 80 || lvl.includes("MODERATE") || lvl.includes("CAUTION") || lvl.includes("HIGH")) {
     return { bg: "#fef9c3", color: "#854d0e", border: "#fef08a" };
   }
   return { bg: "#dcfce7", color: "#166534", border: "#bbf7d0" };
@@ -620,9 +619,33 @@ function Profile() {
     }
   };
 
+  // Available Doctors State for Health Records Tab
+  const [availableDoctors, setAvailableDoctors] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+
+  const fetchAvailableDoctors = async () => {
+    try {
+      setLoadingDoctors(true);
+      const res = await apiGetAvailableDoctors(token);
+      if (res && res.success) {
+        setAvailableDoctors(res.doctors || []);
+      }
+    } catch (err) {
+      console.error("Failed to load available doctors:", err);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  const handleRefreshHealthTab = () => {
+    fetchDoctorConsultations();
+    fetchAvailableDoctors();
+  };
+
   useEffect(() => {
     if (activeTab === "health") {
       fetchDoctorConsultations();
+      fetchAvailableDoctors();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, token]);
@@ -2873,41 +2896,41 @@ function Profile() {
                 </div>
 
                 <div className="psi-card-widget">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                     <h3>Pilgrim Safety Index (PSI)</h3>
                   </div>
 
-                  {profileData?.hasSelectedCenter ? (
-                    <div style={{ fontSize: "11px", fontWeight: "700", padding: "2px 8px", borderRadius: "12px", background: "#e0f2fe", color: "#0369a1", marginBottom: "8px", display: "inline-block" }}>
-                      📍 Selected Center: {profileData.selectedCenterName}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: "11px", fontWeight: "600", padding: "2px 8px", borderRadius: "12px", background: "#f1f5f9", color: "#64748b", marginBottom: "8px", display: "inline-block" }}>
-                      ℹ️ Medical Evaluation Only (No Center Selected)
-                    </div>
-                  )}
+                  {(() => {
+                    const currentScore = profileData?.psiScore !== undefined ? profileData.psiScore : 85;
+                    const strokeColor = currentScore >= 80 ? "#10b981" : currentScore >= 50 ? "#f59e0b" : "#ef4444";
+                    const currentRisk = profileData?.psiRiskLevel || (currentScore >= 80 ? "Low Risk" : currentScore >= 50 ? "Moderate Risk" : "Critical Risk");
+                    return (
+                      <>
+                        <div className="psi-dial-container" onClick={() => setShowPsiModal(true)} style={{ cursor: "pointer" }}>
+                          <svg viewBox="0 0 100 100" className="psi-svg">
+                            <circle cx="50" cy="50" r="40" className="psi-bg-ring" />
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              className="psi-fill-ring"
+                              style={{
+                                strokeDasharray: "251.2",
+                                strokeDashoffset: `${251.2 - (251.2 * currentScore) / 100}`,
+                                stroke: strokeColor,
+                              }}
+                            />
+                          </svg>
+                          <div className="psi-dial-text">
+                            <span className="psi-score">{currentScore}</span>
+                            <span className="psi-max">/100</span>
+                          </div>
+                        </div>
 
-                  <div className="psi-dial-container" onClick={() => setShowPsiModal(true)} style={{ cursor: "pointer" }}>
-                    <svg viewBox="0 0 100 100" className="psi-svg">
-                      <circle cx="50" cy="50" r="40" className="psi-bg-ring" />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        className="psi-fill-ring"
-                        style={{
-                          strokeDasharray: "251.2",
-                          strokeDashoffset: `${251.2 - (251.2 * (profileData?.psiScore !== undefined ? profileData.psiScore : 20)) / 100}`,
-                        }}
-                      />
-                    </svg>
-                    <div className="psi-dial-text">
-                      <span className="psi-score">{profileData?.psiScore !== undefined ? profileData.psiScore : 20}</span>
-                      <span className="psi-max">/100</span>
-                    </div>
-                  </div>
-
-                  <div className="psi-risk-tag">{profileData?.psiRiskLevel || "Low Risk"}</div>
+                        <div className="psi-risk-tag" style={{ color: strokeColor }}>{currentRisk}</div>
+                      </>
+                    );
+                  })()}
                   <button className="psi-view-link" onClick={() => setShowPsiModal(true)}>
                     View Breakdown &rarr;
                   </button>
@@ -3906,11 +3929,11 @@ function Profile() {
                   <button
                     type="button"
                     className="btn-secondary-outline"
-                    onClick={fetchDoctorConsultations}
-                    disabled={loadingConsultations}
+                    onClick={handleRefreshHealthTab}
+                    disabled={loadingConsultations || loadingDoctors}
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "13.5px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff", cursor: "pointer", fontWeight: "600" }}
                   >
-                    <FiRefreshCw size={14} className={loadingConsultations ? "spin" : ""} /> Refresh
+                    <FiRefreshCw size={14} className={(loadingConsultations || loadingDoctors) ? "spin" : ""} /> Refresh
                   </button>
                 </div>
               </div>
@@ -3974,6 +3997,168 @@ function Profile() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* AVAILABLE BASE CAMP MEDICAL OFFICERS & ON-DUTY DOCTORS */}
+              <div style={{ marginBottom: "32px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                  <div>
+                    <h3 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <FaStethoscope style={{ color: "#059669" }} /> Available Base Camp Medical Officers & On-Duty Doctors
+                    </h3>
+                    <p style={{ margin: "4px 0 0 0", color: "#64748b", fontSize: "13px" }}>
+                      Physicians stationed at pilgrimage base camps, available for on-demand medical reviews & travel safety guidance.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{
+                      background: "#dcfce7",
+                      color: "#166534",
+                      border: "1px solid #86efac",
+                      padding: "5px 14px",
+                      borderRadius: "20px",
+                      fontSize: "12px",
+                      fontWeight: "800",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px"
+                    }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", display: "inline-block" }}></span>
+                      {availableDoctors.filter(d => d.isAvailable).length} Available On Duty
+                    </span>
+                  </div>
+                </div>
+
+                {loadingDoctors ? (
+                  <div style={{ textAlign: "center", padding: "30px", background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
+                    <FiRefreshCw className="spin" size={24} style={{ color: "#059669", marginBottom: "8px" }} />
+                    <p style={{ color: "#64748b", fontWeight: "600", fontSize: "13px" }}>Checking available medical officers...</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                    {availableDoctors.length === 0 ? (
+                      <div style={{ gridColumn: "1 / -1", padding: "24px", background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", textAlign: "center", color: "#64748b" }}>
+                        No medical officers currently listed. Field emergency teams remain reachable via emergency alerts.
+                      </div>
+                    ) : (
+                      availableDoctors.map((doc) => {
+                        const isDocAvailable = doc.isAvailable !== false && doc.dutyStatus !== "Off Duty";
+                        const isBusy = doc.dutyStatus === "Busy";
+
+                        return (
+                          <div
+                            key={doc._id}
+                            style={{
+                              background: "#ffffff",
+                              borderRadius: "14px",
+                              border: isDocAvailable ? "1.5px solid #a7f3d0" : "1px solid #e2e8f0",
+                              boxShadow: isDocAvailable ? "0 4px 16px rgba(16, 185, 129, 0.08)" : "0 2px 8px rgba(0,0,0,0.03)",
+                              padding: "18px 20px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              transition: "all 0.2s"
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                  <div
+                                    style={{
+                                      width: "44px",
+                                      height: "44px",
+                                      borderRadius: "12px",
+                                      background: isDocAvailable ? "#ecfdf5" : "#f1f5f9",
+                                      color: isDocAvailable ? "#059669" : "#64748b",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: "20px",
+                                      border: isDocAvailable ? "1px solid #a7f3d0" : "1px solid #cbd5e1"
+                                    }}
+                                  >
+                                    <FaStethoscope />
+                                  </div>
+                                  <div>
+                                    <h4 style={{ fontSize: "16px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
+                                      {doc.name}
+                                    </h4>
+                                    <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: "700" }}>
+                                      {doc.specialization}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: "800",
+                                    padding: "4px 10px",
+                                    borderRadius: "16px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: isDocAvailable ? (isBusy ? "#fef3c7" : "#dcfce7") : "#f1f5f9",
+                                    color: isDocAvailable ? (isBusy ? "#b45309" : "#15803d") : "#64748b",
+                                    border: isDocAvailable ? (isBusy ? "1px solid #fde68a" : "1px solid #86efac") : "1px solid #cbd5e1"
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: "7px",
+                                      height: "7px",
+                                      borderRadius: "50%",
+                                      background: isDocAvailable ? (isBusy ? "#f59e0b" : "#22c55e") : "#94a3b8"
+                                    }}
+                                  ></span>
+                                  {isDocAvailable ? (isBusy ? "Busy (In Consultation)" : "Available (On Duty)") : "Off Duty"}
+                                </span>
+                              </div>
+
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12.5px", color: "#475569", marginTop: "10px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiMapPin style={{ color: "#ea580c", flexShrink: 0 }} />
+                                  <span style={{ fontWeight: "600" }}>{doc.assignedCamp}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiClock style={{ color: "#2563eb", flexShrink: 0 }} />
+                                  <span>Duty Hours: {doc.availableFrom} – {doc.availableTo}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <FiPhone style={{ color: "#059669", flexShrink: 0 }} />
+                                  <span>Helpline / Direct: <strong>{doc.phone}</strong></span>
+                                </div>
+                              </div>
+
+                              {doc.dutyNote && (
+                                <div style={{ marginTop: "10px", padding: "8px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "11.5px", color: "#64748b", fontStyle: "italic" }}>
+                                  💬 {doc.dutyNote}
+                                </div>
+                              )}
+                            </div>
+
+                            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: "700" }}>
+                                {doc.doctorCode}
+                              </span>
+                              <span style={{
+                                fontSize: "12px",
+                                fontWeight: "700",
+                                color: isDocAvailable ? "#059669" : "#64748b",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}>
+                                {isDocAvailable ? <FiCheckCircle size={14} /> : <FiClock size={14} />}
+                                {isDocAvailable ? "Active at Base Camp" : "Check back later"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Consultation History Cards Section */}
@@ -4922,32 +5107,21 @@ function Profile() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                   <div>
                     <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>Overall Pilgrim Risk</span>
-                    <h2 style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a", margin: "2px 0 0" }}>{profileData?.psiScore !== undefined ? profileData.psiScore : 20} / 100</h2>
+                    <h2 style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a", margin: "2px 0 0" }}>{profileData?.psiScore !== undefined ? profileData.psiScore : 85} / 100</h2>
                   </div>
                   {(() => {
-                    const badgeStyle = getPsiBadgeStyle(profileData?.psiScore, profileData?.psiRiskLevel);
+                    const currentScore = profileData?.psiScore !== undefined ? profileData.psiScore : 85;
+                    const badgeStyle = getPsiBadgeStyle(currentScore, profileData?.psiRiskLevel);
                     return (
                       <span style={{ padding: "6px 14px", borderRadius: "16px", fontWeight: "800", fontSize: "13px", background: badgeStyle.bg, color: badgeStyle.color, border: `1px solid ${badgeStyle.border}` }}>
-                        {profileData?.psiRiskLevel || "Low Risk"}
+                        {profileData?.psiRiskLevel || (currentScore >= 80 ? "Low Risk" : currentScore >= 50 ? "Moderate Risk" : "Critical Risk")}
                       </span>
                     );
                   })()}
                 </div>
 
-                {profileData?.hasSelectedCenter ? (
-                  <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#e0f2fe", border: "1px solid #bae6fd", color: "#0369a1", fontSize: "12.5px", fontWeight: "700", marginBottom: "14px" }}>
-                    📍 Selected Pilgrimage Center: {profileData.selectedCenterName}
-                  </div>
-                ) : (
-                  <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309", fontSize: "12.5px", fontWeight: "600", marginBottom: "14px" }}>
-                    ℹ️ No Pilgrimage Center Selected (Calculated from Medical Condition & Medical Reports Only)
-                  </div>
-                )}
-
                 <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 16px", lineHeight: "1.5" }}>
-                  {profileData?.hasSelectedCenter
-                    ? profileData.psiSummary || `Authoritative safety risk score calculated by the Journey Travel Assessment for ${profileData.selectedCenterName}.`
-                    : "This PSI is calculated solely from your personal health profile, medical condition, and uploaded medical reports. Select a pilgrimage center in the Journey Planner to include live crowd density and weather forecast factors."}
+                  {profileData?.psiSummary || "Comprehensive Pilgrim Safety Index (PSI) calculated dynamically from personal medical evaluation, health vitals, weather conditions, and crowd density factors."}
                 </p>
 
                 {profileData?.hasSelectedCenter && Array.isArray(profileData.psiFactors) && profileData.psiFactors.length > 0 && (

@@ -20,6 +20,7 @@ import {
   FiHome,
   FiBell,
   FiX,
+  FiPlus,
   FiPlusCircle,
   FiEye,
   FiEyeOff,
@@ -486,30 +487,83 @@ function AdminDashboard() {
   // Filter accounts: registered doctors vs regular registered pilgrims
   const registeredDoctors = dbUsers.filter((u) => u.role === "physician");
   const registeredUserAccounts = dbUsers.filter(
-    (u) => u.role !== "admin" && u.role !== "physician" && u.email !== "pilgrimlq03@gmail.com"
+    (u) =>
+      u.role !== "admin" &&
+      u.role !== "physician" &&
+      u.email !== "pilgrimlq03@gmail.com" &&
+      !u.email?.toLowerCase().startsWith("test_pilgrim_")
   );
 
   // Convert real registered users & family members into pilgrim table format
-  const pilgrimsList = registeredUserAccounts.map((u, index) => ({
-    _id: u._id,
-    id: `REG-${u._id ? u._id.substring(u._id.length - 6).toUpperCase() : `00${index + 1}`}`,
-    name: u.name || "Registered Pilgrim",
-    email: u.email,
-    phone: u.phone || "Not provided",
-    familyMembers: u.familyMembers || [],
-    riskScore: "Low (14%)",
-    status: "Cleared",
-    location: "Pamba Base Camp",
-    lastCheckin: u.createdAt
-      ? new Date(u.createdAt).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-      : "Just registered",
-    rawUser: u,
-  }));
+  const pilgrimsList = registeredUserAccounts.map((u, index) => {
+    // 1. Dynamic Location from database:
+    let resolvedLocation = "Location not updated";
+    if (u.assignedCamp && u.assignedCamp.trim()) {
+      resolvedLocation = u.assignedCamp;
+    } else if (u.activeJourney?.selectedServices?.baseCamps?.length > 0) {
+      resolvedLocation = u.activeJourney.selectedServices.baseCamps[0].name;
+    } else if (u.location && u.location.trim()) {
+      resolvedLocation = u.location;
+    } else if (u.district && u.state) {
+      resolvedLocation = `${u.district}, ${u.state}`;
+    } else if (u.district || u.state) {
+      resolvedLocation = u.district || u.state;
+    } else if (u.address && u.address.trim()) {
+      resolvedLocation = u.address;
+    } else if (u.activeJourney?.pilgrimageCenterId?.name) {
+      resolvedLocation = `Center: ${u.activeJourney.pilgrimageCenterId.name}`;
+    } else if (u.activeJourney?.startLocation?.city) {
+      resolvedLocation = u.activeJourney.startLocation.city;
+    }
+
+    // 2. Dynamic Risk Score from database (psiScore & psiRiskLevel):
+    const scoreVal = (u.psiScore !== undefined && u.psiScore !== null) ? Number(u.psiScore) : 100;
+    const rawRiskLevel = u.psiRiskLevel || (scoreVal >= 80 ? "Low Risk" : scoreVal >= 50 ? "Moderate Risk" : "High Risk");
+    const riskScore = `${rawRiskLevel} (${scoreVal}%)`;
+    const isHighRisk = rawRiskLevel.toLowerCase().includes("high") || scoreVal < 50;
+    const isModerateRisk = rawRiskLevel.toLowerCase().includes("moderate") || (scoreVal >= 50 && scoreVal < 80);
+    const riskBadgeClass = isHighRisk ? "high" : isModerateRisk ? "medium" : "low";
+
+    // 3. Dynamic Medical / Journey Status from database:
+    let status = "Cleared";
+    let statusClass = "success";
+    if (u.doctorApprovalStatus === "rejected" || isHighRisk) {
+      status = "Medical Alert";
+      statusClass = "danger";
+    } else if (u.doctorApprovalStatus === "pending") {
+      status = "Under Review";
+      statusClass = "warning";
+    } else if (u.activeJourney?.status === "IN_PROGRESS" || u.activeJourney?.status === "active") {
+      status = "On Journey";
+      statusClass = "info";
+    } else if (u.doctorApprovalStatus === "approved") {
+      status = "Cleared";
+      statusClass = "success";
+    }
+
+    return {
+      _id: u._id,
+      id: `REG-${u._id ? u._id.substring(u._id.length - 6).toUpperCase() : `00${index + 1}`}`,
+      name: u.name || "Registered Pilgrim",
+      email: u.email,
+      phone: u.phone || "Not provided",
+      familyMembers: u.familyMembers || [],
+      riskScore,
+      riskBadgeClass,
+      status,
+      statusClass,
+      location: resolvedLocation,
+      lastCheckin: u.createdAt
+        ? new Date(u.createdAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Just registered",
+      rawUser: u,
+    };
+  });
 
   const totalFamilyMembersCount = pilgrimsList.reduce((acc, p) => acc + p.familyMembers.length, 0);
 
@@ -532,7 +586,7 @@ function AdminDashboard() {
     const matchesSearch = !term || matchesUser || matchesFamily;
 
     if (statusFilter === "all") return matchesSearch;
-    if (statusFilter === "cleared") return matchesSearch && pilgrim.status === "Cleared";
+    if (statusFilter === "cleared") return matchesSearch && (pilgrim.status === "Cleared" || pilgrim.status === "On Journey");
     if (statusFilter === "alert") return matchesSearch && pilgrim.status === "Medical Alert";
     if (statusFilter === "review") return matchesSearch && pilgrim.status === "Under Review";
     if (statusFilter === "has_family") return matchesSearch && pilgrim.familyMembers.length > 0;
@@ -1334,12 +1388,12 @@ function AdminDashboard() {
                                   </td>
                                   <td>{pilgrim.location}</td>
                                   <td>
-                                    <span className="risk-badge low">
+                                    <span className={`risk-badge ${pilgrim.riskBadgeClass}`}>
                                       {pilgrim.riskScore}
                                     </span>
                                   </td>
                                   <td>
-                                    <span className="status-pill success">
+                                    <span className={`status-pill ${pilgrim.statusClass}`}>
                                       {pilgrim.status}
                                     </span>
                                   </td>
@@ -1430,9 +1484,30 @@ function AdminDashboard() {
               {activeTab !== "enquiries" && (
                 <div className="admin-sidebar-panels">
                   {/* Medical Stations Summary */}
+                  {/* Medical Stations Summary */}
                   <div className="admin-panel">
-                    <div className="panel-header-simple">
-                      <FiMapPin /> <h4>Base Camp Operations</h4>
+                    <div className="panel-header-simple" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <FiMapPin /> <h4>Base Camp Operations</h4>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab("base_camps")}
+                        style={{
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "5px 12px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <FiPlus /> Add Camp
+                      </button>
                     </div>
                     <ul className="station-list">
                       {dbBaseCamps.length > 0 ? (
@@ -1483,6 +1558,16 @@ function AdminDashboard() {
                       >
                         <FiUserCheck style={{ color: "#60a5fa" }} />
                         <span style={{ color: "#ffffff", fontWeight: 700 }}>+ Register Doctor</span>
+                      </button>
+                      <button
+                        className="tool-btn"
+                        onClick={() => {
+                          setActiveTab("base_camps");
+                        }}
+                        style={{ border: "1px solid #10b981", background: "rgba(16, 185, 129, 0.15)", width: "100%", marginTop: "8px" }}
+                      >
+                        <FiMapPin style={{ color: "#34d399" }} />
+                        <span style={{ color: "#ffffff", fontWeight: 700 }}>+ Add Base Camp</span>
                       </button>
                     </div>
                   </div>

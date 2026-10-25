@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import JourneyMap from "../components/JourneyMap";
 import { useAuth } from "../context/AuthContext";
-import { apiGetJourneyById, apiDeleteJourney, apiStartJourney } from "../services/journeyService";
+import { apiGetJourneyById, apiCancelJourney, apiStartJourney } from "../services/journeyService";
 import { apiGetWeatherByCenterId } from "../services/weatherService";
 import WeatherCard from "../components/WeatherCard";
 import "../styles/JourneyDetails.css";
@@ -17,7 +17,9 @@ import {
   FiTrash2,
   FiCpu,
   FiAlertCircle,
-  FiPlay
+  FiPlay,
+  FiRefreshCw,
+  FiPlus
 } from "react-icons/fi";
 
 function JourneyDetails() {
@@ -29,30 +31,31 @@ function JourneyDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState("");
 
   // Weather state for journey destination & travel date
   const [weatherData, setWeatherData] = useState(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [weatherError, setWeatherError] = useState("");
 
-  useEffect(() => {
-    const fetchJourney = async () => {
-      try {
-        setLoading(true);
-        const data = await apiGetJourneyById(journeyId, token);
-        if (data && data.journey) {
-          setJourney(data.journey);
-        } else {
-          setError("Journey details not found.");
-        }
-      } catch (err) {
-        console.error("Error loading journey:", err);
-        setError(err.message || "Failed to load journey details.");
-      } finally {
-        setLoading(false);
+  const fetchJourney = async () => {
+    try {
+      setLoading(true);
+      const data = await apiGetJourneyById(journeyId, token);
+      if (data && data.journey) {
+        setJourney(data.journey);
+      } else {
+        setError("Journey details not found.");
       }
-    };
+    } catch (err) {
+      console.error("Error loading journey:", err);
+      setError(err.message || "Failed to load journey details.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (journeyId && token) {
       fetchJourney();
     }
@@ -98,17 +101,17 @@ function JourneyDetails() {
     }
   };
 
-  const handleDeleteJourney = async () => {
-    if (!window.confirm("Are you sure you want to cancel and delete this journey plan?")) {
+  const handleCancelJourney = async () => {
+    if (!window.confirm("Are you sure you want to cancel this pilgrimage journey booking? Your date will be released and you can rebook anytime.")) {
       return;
     }
     try {
       setDeleting(true);
-      await apiDeleteJourney(journeyId, token);
-      alert("Journey plan cancelled successfully.");
-      navigate("/my-journeys");
+      const res = await apiCancelJourney(journeyId, token);
+      setNoticeMessage(res.message || "Journey booking cancelled successfully.");
+      await fetchJourney();
     } catch (err) {
-      alert("Failed to delete journey: " + (err.message || "Server error"));
+      alert("Failed to cancel journey: " + (err.message || "Server error"));
     } finally {
       setDeleting(false);
     }
@@ -148,6 +151,22 @@ function JourneyDetails() {
   const center = journey.pilgrimageCenterId || {};
   const familyMembers = journey.travelingFamilyMembers || [];
 
+  const isExpired = journey.status === "EXPIRED" || journey.status === "expired";
+  const isCancelled = journey.status === "CANCELLED" || journey.status === "cancelled";
+  const isCompleted = journey.status === "COMPLETED" || journey.status === "completed";
+  const isInProgress = journey.status === "IN_PROGRESS" || journey.status === "active";
+  const isScheduled = journey.status === "SCHEDULED" || journey.status === "scheduled";
+  const isConfirmed = journey.status === "CONFIRMED" || journey.status === "confirmed";
+  const isPlanned = !isExpired && !isCancelled && !isCompleted && !isInProgress && !isScheduled && !isConfirmed;
+
+  let statusBg = "#2563eb";
+  if (isExpired) statusBg = "#d97706";
+  else if (isCancelled) statusBg = "#64748b";
+  else if (isCompleted) statusBg = "#059669";
+  else if (isInProgress) statusBg = "#10b981";
+  else if (isConfirmed) statusBg = "#0d9488";
+  else if (isScheduled) statusBg = "#4f46e5";
+
   // Flatten selected places for Leaflet Map
   const selectedPlacesMapList = [];
   if (journey.selectedServices) {
@@ -177,45 +196,142 @@ function JourneyDetails() {
 
           <div className="hero-flex">
             <div>
-              <span className="status-badge-planned">{journey.status ? journey.status.toUpperCase() : "PLANNED"}</span>
+              <span
+                className="status-badge-planned"
+                style={{ background: statusBg, color: "#ffffff", padding: "4px 12px", borderRadius: "6px", fontWeight: "700" }}
+              >
+                {journey.status ? journey.status.toUpperCase() : "PLANNED"}
+              </span>
               <h1>Pilgrimage Journey to {center.name || "Pilgrimage Center"}</h1>
               <p className="hero-location">
                 <FiMapPin /> {center.location?.city}, {center.location?.state}, {center.location?.country}
               </p>
             </div>
 
-            <div className="hero-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <button
-                type="button"
-                className="btn-primary-blue"
-                onClick={handleStartJourney}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: "10px",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  fontWeight: "800",
-                  border: "none",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                }}
-              >
-                <FiPlay /> Start Journey
-              </button>
+            <div className="hero-actions" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              {isExpired ? (
+                <button
+                  type="button"
+                  className="btn-primary-blue"
+                  onClick={() => navigate(`/journey-planner/${center._id}`)}
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "10px",
+                    background: "#0f172a",
+                    color: "#ffffff",
+                    fontWeight: "800",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                  }}
+                >
+                  <FiPlus /> Plan New Journey
+                </button>
+              ) : (
+                <>
+                  {isPlanned && (
+                    <button
+                      type="button"
+                      className="btn-primary-blue"
+                      onClick={handleStartJourney}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "10px",
+                        background: "#2563eb",
+                        color: "#ffffff",
+                        fontWeight: "800",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      <FiPlay /> Start Journey
+                    </button>
+                  )}
 
-              <button
-                type="button"
-                className="btn-delete-journey"
-                onClick={handleDeleteJourney}
-                disabled={deleting}
-              >
-                <FiTrash2 /> Cancel Journey
-              </button>
+                  {isPlanned && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/journey-planner/${center._id}?rescheduleJourneyId=${journey._id}`)}
+                      style={{
+                        padding: "10px 18px",
+                        borderRadius: "10px",
+                        background: "#f1f5f9",
+                        color: "#1e293b",
+                        fontWeight: "700",
+                        border: "1px solid #cbd5e1",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      <FiRefreshCw /> Reschedule
+                    </button>
+                  )}
+
+                  {isPlanned && (
+                    <button
+                      type="button"
+                      className="btn-delete-journey"
+                      onClick={handleCancelJourney}
+                      disabled={deleting}
+                    >
+                      <FiTrash2 /> Cancel Booking
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
+
+          {/* Expired journey message banner */}
+          {isExpired && (
+            <div
+              style={{
+                marginTop: "16px",
+                background: "#fef3c7",
+                border: "1px solid #f59e0b",
+                borderRadius: "10px",
+                padding: "12px 18px",
+                color: "#92400e",
+                fontWeight: "600",
+                fontSize: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <FiAlertCircle size={20} />
+              <span>
+                Your planned journey to {center.name || "this centre"} has expired. Please plan a new journey if you still wish to visit this centre.
+              </span>
+            </div>
+          )}
+
+          {noticeMessage && (
+            <div
+              style={{
+                marginTop: "16px",
+                background: "#f0fdf4",
+                border: "1px solid #86efac",
+                borderRadius: "10px",
+                padding: "12px 18px",
+                color: "#166534",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              ✓ {noticeMessage}
+            </div>
+          )}
         </div>
       </div>
 
