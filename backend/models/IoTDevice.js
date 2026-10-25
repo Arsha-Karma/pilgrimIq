@@ -50,11 +50,19 @@ const ioTDeviceSchema = new mongoose.Schema(
     },
     buzzerPin: {
       type: Number,
-      default: 18,
+      default: 23,
     },
     ipAddress: {
       type: String,
       default: "",
+    },
+    pendingTestCommand: {
+      type: Boolean,
+      default: false,
+    },
+    testCommandPattern: {
+      type: String,
+      default: "warning_short",
     },
   },
   {

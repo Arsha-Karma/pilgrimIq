@@ -38,7 +38,7 @@ const char* DEVICE_TOKEN = "YOUR_COPIED_DEVICE_TOKEN_FROM_DASHBOARD";
 // ==========================================
 // 4. Hardware Pinout & Timing Configurations
 // ==========================================
-#define BUZZER_PIN 18          // GPIO 18 connects to Active Buzzer I/O (PWM or Digital Output)
+#define BUZZER_PIN 23          // GPIO 23 connects to Active Buzzer I/O (matches hardware setup)
 #define BUZZER_ACTIVE_HIGH 1   // 1 if buzzer sounds on HIGH, 0 if buzzer sounds on LOW (Active-Low)
 #define STATUS_LED_PIN 2       // Onboard blue LED on ESP32 DevKit V1
 

@@ -44,6 +44,8 @@ function App() {
         <Route path="/family-tracking" element={<FamilyTracking />} />
         <Route path="/track" element={<FamilyMemberTrack />} />
         <Route path="/track/:token" element={<FamilyMemberTrack />} />
+        <Route path="/family-member/track" element={<FamilyMemberTrack />} />
+        <Route path="/family-member/track/:token" element={<FamilyMemberTrack />} />
         <Route path="/family" element={<Profile />} />
         <Route path="/my-family" element={<Profile />} />
         <Route path="/emergency-services" element={<Profile />} />

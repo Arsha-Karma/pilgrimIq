@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   apiValidateInvitation,
+  apiValidateGroupInviteCode,
+  apiJoinGroupByCodePublic,
   apiAcceptInvitationAndStartSession,
   apiSessionSubmitLocation,
   apiSessionStopTracking,
@@ -16,19 +19,30 @@ import {
   FiCrosshair,
   FiClock,
   FiInfo,
+  FiUserCheck,
+  FiLogIn,
+  FiUserPlus,
   FiX
 } from "react-icons/fi";
 
 function FamilyMemberTrack() {
+  const { user, token } = useAuth();
   const { token: paramToken } = useParams();
   const [searchParams] = useSearchParams();
-  const inviteToken = paramToken || searchParams.get("invite") || "";
+  const inviteToken = paramToken || searchParams.get("invite") || searchParams.get("token") || "";
+  const joinCode = searchParams.get("join") || searchParams.get("code") || "";
 
   // Invitation and Session State
   const [loading, setLoading] = useState(true);
   const [validInvitation, setValidInvitation] = useState(null);
+  const [groupInfo, setGroupInfo] = useState(null);
+  const [guestName, setGuestName] = useState(user?.name || "");
+  const [guestRelationship, setGuestRelationship] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
+
+  const storageKey = inviteToken ? `pilgrim_session_${inviteToken}` : joinCode ? `pilgrim_session_code_${joinCode}` : "";
   const [sessionToken, setSessionToken] = useState(
-    sessionStorage.getItem(`pilgrim_session_${inviteToken}`) || ""
+    storageKey ? sessionStorage.getItem(storageKey) || "" : ""
   );
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -41,11 +55,11 @@ function FamilyMemberTrack() {
   const watchIdRef = useRef(null);
   const lastLocationSendTime = useRef(0);
 
-  // Validate Invitation on Mount
+  // Validate Invitation or Group Join Code on Mount
   useEffect(() => {
     const validate = async () => {
-      if (!inviteToken) {
-        setErrorMsg("Missing invitation token. Please check your tracking link.");
+      if (!inviteToken && !joinCode) {
+        setErrorMsg("Missing invitation token or group code. Please check your tracking link.");
         setLoading(false);
         return;
       }
@@ -53,17 +67,41 @@ function FamilyMemberTrack() {
       try {
         setLoading(true);
         setErrorMsg("");
-        const data = await apiValidateInvitation(inviteToken);
-        if (data.valid) {
-          setValidInvitation(data);
-          if (data.consentGiven) {
-            setConsentGiven(true);
+
+        if (inviteToken) {
+          const data = await apiValidateInvitation(inviteToken);
+          if (data.valid) {
+            setValidInvitation(data);
+            if (data.consentGiven) {
+              setConsentGiven(true);
+            }
+          } else {
+            setErrorMsg(data.message || "Invalid invitation link.");
           }
-        } else {
-          setErrorMsg(data.message || "Invalid invitation link.");
+        } else if (joinCode) {
+          const data = await apiValidateGroupInviteCode(joinCode);
+          if (data.valid) {
+            setGroupInfo(data);
+            // If already have a valid session in sessionStorage for this code, load state
+            const cachedSession = sessionStorage.getItem(`pilgrim_session_code_${joinCode}`);
+            const cachedMemberName = sessionStorage.getItem(`pilgrim_member_name_${joinCode}`);
+            if (cachedSession && cachedMemberName) {
+              setSessionToken(cachedSession);
+              setValidInvitation({
+                valid: true,
+                memberName: cachedMemberName,
+                groupName: data.groupName,
+                separationThresholdMeters: data.separationThresholdMeters || 5,
+                consentGiven: true,
+              });
+              setConsentGiven(true);
+            }
+          } else {
+            setErrorMsg(data.message || "Invalid group invitation code.");
+          }
         }
       } catch (err) {
-        console.error("Invitation validation error:", err);
+        console.error("Validation error:", err);
         setErrorMsg(err.message || "Failed to validate invitation link.");
       } finally {
         setLoading(false);
@@ -71,7 +109,52 @@ function FamilyMemberTrack() {
     };
 
     validate();
-  }, [inviteToken]);
+  }, [inviteToken, joinCode]);
+
+  // Handle Joining Group via 6-digit Join Code
+  const handleJoinViaCode = async (e) => {
+    e.preventDefault();
+    if (!guestName.trim()) {
+      setErrorMsg("Please enter your name to join this family tracking group.");
+      return;
+    }
+    if (!consentGiven) {
+      setErrorMsg("Please provide your consent for GPS tracking to join.");
+      return;
+    }
+
+    try {
+      setIsJoining(true);
+      setErrorMsg("");
+      const res = await apiJoinGroupByCodePublic(joinCode, {
+        name: guestName.trim(),
+        relationship: guestRelationship.trim(),
+        consentGiven: true,
+      });
+
+      if (res.sessionToken) {
+        setSessionToken(res.sessionToken);
+        sessionStorage.setItem(`pilgrim_session_code_${joinCode}`, res.sessionToken);
+        sessionStorage.setItem(`pilgrim_member_name_${joinCode}`, res.member?.name || guestName.trim());
+      }
+
+      setValidInvitation({
+        valid: true,
+        membershipId: res.member?.id,
+        memberName: res.member?.name || guestName.trim(),
+        relationship: res.member?.relationship || guestRelationship.trim(),
+        groupName: res.group?.name || groupInfo.groupName,
+        separationThresholdMeters: res.group?.separationThresholdMeters || groupInfo.separationThresholdMeters || 5,
+        consentGiven: true,
+      });
+      setSuccessMsg(`Joined ${res.group?.name || "family group"}! You can now start sharing your location.`);
+    } catch (err) {
+      console.error("Join group error:", err);
+      setErrorMsg(err.message || "Failed to join family group.");
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   // Handle Start Location Sharing
   const handleStartSharing = async () => {
@@ -92,7 +175,7 @@ function FamilyMemberTrack() {
       // Exchange invite token for restricted tracking session token if not already active
       let activeSession = sessionToken;
       if (!activeSession) {
-        const sessionRes = await apiAcceptInvitationAndStartSession(inviteToken, true);
+        const sessionRes = await apiAcceptInvitationAndStartSession(inviteToken, true, token);
         if (sessionRes.sessionToken) {
           activeSession = sessionRes.sessionToken;
           setSessionToken(activeSession);
@@ -218,6 +301,95 @@ function FamilyMemberTrack() {
               Please ask your family group coordinator to send you a fresh invitation link.
             </p>
           </div>
+        ) : !validInvitation && groupInfo ? (
+          <div style={{ background: "#ffffff", padding: "28px 20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 16px rgba(0,0,0,0.04)" }}>
+            <div style={{ textAlign: "center", marginBottom: "20px" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "54px", height: "54px", borderRadius: "14px", background: "#dbeafe", color: "#2563eb", marginBottom: "12px" }}>
+                <FiUserPlus size={28} />
+              </div>
+              <h2 style={{ margin: "0 0 6px 0", fontSize: "20px", color: "#0f172a", fontWeight: "800" }}>
+                Join {groupInfo.groupName}
+              </h2>
+              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                Group Code: <strong>{groupInfo.inviteCode}</strong> • Alert Threshold: {groupInfo.separationThresholdMeters || 5}m
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "10px 14px", borderRadius: "10px", fontSize: "13px", marginBottom: "16px" }}>
+                {errorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleJoinViaCode}>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#334155", marginBottom: "6px" }}>
+                  Your Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh, Priya, Dad"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", boxSizing: "border-box" }}
+                  disabled={isJoining}
+                />
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#334155", marginBottom: "6px" }}>
+                  Relationship to Main User (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mother, Son, Friend"
+                  value={guestRelationship}
+                  onChange={(e) => setGuestRelationship(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", boxSizing: "border-box" }}
+                  disabled={isJoining}
+                />
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "18px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                  <input
+                    type="checkbox"
+                    id="join-consent-cb"
+                    checked={consentGiven}
+                    onChange={(e) => setConsentGiven(e.target.checked)}
+                    style={{ width: "18px", height: "18px", marginTop: "2px", cursor: "pointer" }}
+                  />
+                  <label htmlFor="join-consent-cb" style={{ fontSize: "12.5px", color: "#334155", lineHeight: "1.4", cursor: "pointer" }}>
+                    I independently consent to sharing my smartphone GPS location with this pilgrimage family group for crowd safety.
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isJoining || !guestName.trim() || !consentGiven}
+                style={{
+                  width: "100%",
+                  background: isJoining || !guestName.trim() || !consentGiven ? "#94a3b8" : "#2563eb",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "13px",
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  fontWeight: "800",
+                  cursor: isJoining || !guestName.trim() || !consentGiven ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: consentGiven && guestName.trim() ? "0 4px 14px rgba(37, 99, 235, 0.3)" : "none",
+                }}
+              >
+                <FiMapPin size={18} /> {isJoining ? "Joining Group..." : "Join & Start Tracking"}
+              </button>
+            </form>
+          </div>
         ) : validInvitation ? (
           <div>
             {/* Member Welcome Card */}
@@ -237,10 +409,21 @@ function FamilyMemberTrack() {
               <h1 style={{ margin: "0 0 4px 0", fontSize: "22px", fontWeight: "800" }}>
                 Welcome, {validInvitation.memberName}!
               </h1>
-              <p style={{ margin: 0, fontSize: "14px", opacity: 0.9 }}>
+              <p style={{ margin: "0 0 10px 0", fontSize: "14px", opacity: 0.9 }}>
                 Group: <strong>{validInvitation.groupName}</strong>
                 {validInvitation.relationship && ` (${validInvitation.relationship})`}
               </p>
+
+              {/* Account Status Pill */}
+              {user ? (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.22)", padding: "4px 10px", borderRadius: "10px", fontSize: "12px", fontWeight: "600" }}>
+                  <FiUserCheck size={14} /> Logged in as {user.name} (Linked Account)
+                </div>
+              ) : (
+                <div style={{ fontSize: "12px", background: "rgba(255,255,255,0.18)", padding: "6px 10px", borderRadius: "8px", marginTop: "4px" }}>
+                  Tracking as Guest • <Link to="/login" style={{ color: "#ffffff", textDecoration: "underline", fontWeight: "700" }}>Log In</Link> or <Link to="/register" style={{ color: "#ffffff", textDecoration: "underline", fontWeight: "700" }}>Register</Link> to save to your profile
+                </div>
+              )}
             </div>
 
             {/* Notification messages */}
@@ -264,10 +447,10 @@ function FamilyMemberTrack() {
                 <FiShield style={{ color: "#2563eb" }} /> How It Works
               </h4>
               <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#475569", lineHeight: "1.5" }}>
-                Sharing your location helps your family keep you safe in large pilgrimage crowds. If you move further than <strong>{validInvitation.separationThresholdMeters || 10} meters</strong> away from the group leader, their portable ESP32 device will buzz to alert them.
+                Sharing your location helps your family keep you safe in large pilgrimage crowds. If you move further than <strong>{validInvitation.separationThresholdMeters || 5} meters</strong> away from the group leader, their portable ESP32 device will buzz to alert them.
               </p>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#16a34a", fontWeight: "700" }}>
-                <FiCheckCircle /> No username or password required.
+                <FiCheckCircle /> GPS location is shared only while this page is open with your consent.
               </div>
             </div>
 

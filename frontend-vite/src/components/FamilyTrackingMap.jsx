@@ -263,6 +263,9 @@ function FamilyTrackingMap({
                         <strong>Distance: {member.distanceMeters} meters away</strong>
                       </div>
                     )}
+                    <div>
+                      <span>Coords: {member.lastLocation.latitude.toFixed(6)}°, {member.lastLocation.longitude.toFixed(6)}°</span>
+                    </div>
                     {member.lastLocation.accuracy && (
                       <div>
                         <span>GPS Accuracy: ±{Math.round(member.lastLocation.accuracy)}m</span>
@@ -272,6 +275,11 @@ function FamilyTrackingMap({
                       <div>
                         <FiClock size={12} />
                         <span>Updated: {new Date(member.lastLocation.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                    )}
+                    {status === "stale" && (
+                      <div style={{ color: "#b45309", fontSize: "11px", fontWeight: "700", marginTop: "2px" }}>
+                        ⚠️ Stale Location - Phone may be locked/offline
                       </div>
                     )}
                   </div>

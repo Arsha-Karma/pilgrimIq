@@ -9,6 +9,8 @@ const {
   regenerateMemberInvite,
   revokeMember,
   validateInvitation,
+  validateGroupInviteCode,
+  joinGroupByCodePublic,
   acceptInvitationAndStartSession,
   sessionSubmitLocation,
   sessionStopTracking,
@@ -29,6 +31,7 @@ const {
   iotHeartbeat,
   iotGetPendingCommands,
   iotAcknowledgeCommand,
+  triggerBuzzerTest,
 } = require("../controllers/familyTrackingController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -40,6 +43,10 @@ const { protectIoT } = require("../middleware/iotAuthMiddleware");
 // Invitation link validation & session exchange (No PilgrimIQ user account needed)
 router.get("/invite/:token", validateInvitation);
 router.post("/invite/:token/session", acceptInvitationAndStartSession);
+
+// Group invitation link & QR code endpoints (Join by 6-digit inviteCode)
+router.get("/invite/code/:code", validateGroupInviteCode);
+router.post("/invite/code/:code/join", joinGroupByCodePublic);
 
 // Restricted tracking session endpoints (Protected by x-tracking-session header)
 router.post("/session/location", sessionSubmitLocation);
@@ -92,5 +99,6 @@ router.post("/alerts/:alertId/resolve", resolveAlert);
 // ESP32 Device Association & Status for Dashboard
 router.post("/iot/register", registerIoTDevice);
 router.get("/iot/status/:groupId", getDeviceStatus);
+router.post("/iot/test-buzzer/:groupId", triggerBuzzerTest);
 
 module.exports = router;

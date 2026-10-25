@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import QRCode from "qrcode";
 import Navbar from "../components/Navbar";
 import UserSidebar from "../components/UserSidebar";
 import FamilyTrackingMap from "../components/FamilyTrackingMap";
@@ -22,6 +23,8 @@ import {
   apiAddFamilyMember,
   apiRegenerateMemberInvite,
   apiRevokeFamilyMember,
+  apiTriggerBuzzerTest,
+  getPublicFrontendUrl,
 } from "../services/familyTrackingService";
 import "../styles/FamilyTracking.css";
 import {
@@ -46,7 +49,8 @@ import {
   FiX,
   FiTrash2,
   FiUserPlus,
-  FiRefreshCw
+  FiRefreshCw,
+  FiMaximize2
 } from "react-icons/fi";
 
 function FamilyTracking() {
@@ -69,6 +73,7 @@ function FamilyTracking() {
   const [gpsError, setGpsError] = useState("");
   const watchIdRef = useRef(null);
   const lastLocationSendTime = useRef(0);
+  const lastPlayedAlertIdRef = useRef(null);
 
   // Map & Focus
   const [focusedMemberId, setFocusedMemberId] = useState(null);
@@ -80,10 +85,15 @@ function FamilyTracking() {
   const [showPairModal, setShowPairModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showGroupQrModal, setShowGroupQrModal] = useState(false);
+
+  // QR Code Data URLs
+  const [inviteQrDataUrl, setInviteQrDataUrl] = useState("");
+  const [groupQrDataUrl, setGroupQrDataUrl] = useState("");
 
   // Form Inputs & Validation
   const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupThreshold, setNewGroupThreshold] = useState(10);
+  const [newGroupThreshold, setNewGroupThreshold] = useState(5);
   const [groupCreateError, setGroupCreateError] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
@@ -91,6 +101,7 @@ function FamilyTracking() {
   const [pairDeviceIdInput, setPairDeviceIdInput] = useState("ESP32-TRACKER-01");
   const [registeredDeviceSecret, setRegisteredDeviceSecret] = useState(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [groupLinkCopied, setGroupLinkCopied] = useState(false);
 
   // Saved Family Members from Database
   const [savedFamilyMembers, setSavedFamilyMembers] = useState([]);
@@ -195,9 +206,14 @@ function FamilyTracking() {
 
       if (alertsData && Array.isArray(alertsData.alerts)) {
         setAlerts(alertsData.alerts);
-        const activeUnack = alertsData.alerts.find((a) => a.status === "active");
-        if (activeUnack) {
-          playSimulatedBuzzer(activeUnack.buzzerPattern);
+        const activeAlert = alertsData.alerts.find(
+          (a) => a.status === "active" && (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
+        );
+        if (activeAlert && lastPlayedAlertIdRef.current !== activeAlert._id) {
+          lastPlayedAlertIdRef.current = activeAlert._id;
+          playSimulatedBuzzer(activeAlert.buzzerPattern);
+        } else if (!activeAlert) {
+          lastPlayedAlertIdRef.current = null;
         }
       }
 
@@ -212,6 +228,33 @@ function FamilyTracking() {
   useEffect(() => {
     loadGroups();
   }, [loadGroups]);
+
+  // Generate client-side QR Code for Member Invitation Link
+  useEffect(() => {
+    if (activeInviteData?.inviteUrl) {
+      QRCode.toDataURL(activeInviteData.inviteUrl, {
+        width: 240,
+        margin: 1,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      })
+        .then((url) => setInviteQrDataUrl(url))
+        .catch((err) => console.warn("Member QR code gen notice:", err.message));
+    }
+  }, [activeInviteData]);
+
+  // Generate client-side QR Code for Group Join Code
+  useEffect(() => {
+    if (selectedGroup?.inviteCode) {
+      const groupJoinUrl = `${getPublicFrontendUrl()}/track?join=${selectedGroup.inviteCode}`;
+      QRCode.toDataURL(groupJoinUrl, {
+        width: 240,
+        margin: 1,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      })
+        .then((url) => setGroupQrDataUrl(url))
+        .catch((err) => console.warn("Group QR code gen notice:", err.message));
+    }
+  }, [selectedGroup]);
 
   useEffect(() => {
     if (selectedGroup) {
@@ -499,7 +542,7 @@ function FamilyTracking() {
         throw new Error("Backend failed to generate tracking invitation.");
       }
 
-      const inviteUrl = `${window.location.origin}/track/${data.inviteToken}`;
+      const inviteUrl = `${getPublicFrontendUrl()}/track/${data.inviteToken}`;
       setActiveInviteData({
         memberName: data.member.name,
         relationship: data.member.relationship,
@@ -527,7 +570,7 @@ function FamilyTracking() {
     if (!selectedGroup) return;
     try {
       const data = await apiRegenerateMemberInvite(selectedGroup._id, membershipId, token);
-      const inviteUrl = `${window.location.origin}/track/${data.inviteToken}`;
+      const inviteUrl = `${getPublicFrontendUrl()}/track/${data.inviteToken}`;
       setActiveInviteData({
         memberName,
         membershipId,
@@ -633,14 +676,18 @@ function FamilyTracking() {
     const simLat = baseLat + offsetDegrees;
     const simLng = baseLng;
 
-    // Pick first non-main member for simulation, or submit without membership
+    // Pick first non-main participating member for simulation
     const targetMember = members.find((m) => m.role !== "main");
+    if (!targetMember) {
+      setError("Proximity separation requires at least one participating family member. The main user cannot be separated from themselves.");
+      return;
+    }
 
     try {
       const res = await apiSubmitLocation(
         {
           groupId: selectedGroup._id,
-          membershipId: targetMember?.membershipId || null,
+          membershipId: targetMember.membershipId,
           latitude: simLat,
           longitude: simLng,
           accuracy: 5,
@@ -653,16 +700,41 @@ function FamilyTracking() {
         playSimulatedBuzzer(res.alert.buzzerPattern);
       }
       pollGroupData();
-      setSuccessMsg(`Simulated coordinate moved to ~${distanceMeters}m away.`);
+      setSuccessMsg(`Simulated coordinate moved for ${targetMember.name} to ~${distanceMeters}m away.`);
     } catch (err) {
       console.warn("Simulation notice:", err.message);
     }
   };
 
-  // Active separation alerts
+  // Handle Testing Buzzer (Browser simulation + physical ESP32 trigger)
+  const handleTestBuzzer = async () => {
+    // 1. Play immediate browser audio beep simulation (preserved)
+    playSimulatedBuzzer("warning_short");
+
+    // 2. Queue physical buzzer test on paired ESP32 via backend
+    if (selectedGroup?._id && selectedGroup?.pairedDeviceId) {
+      try {
+        await apiTriggerBuzzerTest(selectedGroup._id, token);
+        setSuccessMsg("Test sound command queued! Physical ESP32 buzzer will beep shortly.");
+        setTimeout(() => setSuccessMsg(""), 3500);
+      } catch (err) {
+        console.warn("Physical buzzer test notice:", err.message);
+      }
+    }
+  };
+
+  // Genuine active alerts in database (status === "active", excluding main user)
   const activeAlerts = alerts.filter(
-    (a) => a.status === "active" || a.status === "acknowledged_by_device"
+    (a) => a.status === "active" && (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
   );
+
+  // Unresolved alerts (status is active or acknowledged by device, but not yet reunited)
+  const unresolvedAlerts = alerts.filter(
+    (a) =>
+      (a.status === "active" || a.status === "acknowledged_by_device") &&
+      (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
+  );
+
   const mainUserMembership = members.find((m) => m.role === "main");
   const mainUserLocation = mainUserMembership?.lastLocation || currentCoords;
 
@@ -778,7 +850,7 @@ function FamilyTracking() {
                       GROUP CREATOR / MAIN USER
                     </span>
                     <span style={{ fontSize: "12px", color: "#64748b" }}>
-                      Threshold: <strong>{selectedGroup.separationThresholdMeters || 10} meters</strong>
+                      Threshold: <strong>{selectedGroup.separationThresholdMeters || 5} meters</strong>
                     </span>
                   </div>
                 </div>
@@ -796,6 +868,15 @@ function FamilyTracking() {
                 >
                   {codeCopied ? <FiCheck color="#16a34a" /> : <FiCopy />}
                   {codeCopied ? "Copied!" : "Copy"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-copy-code"
+                  onClick={() => setShowGroupQrModal(true)}
+                  title="Show Group QR Code & Invite Link"
+                  style={{ display: "flex", alignItems: "center", gap: "5px", marginLeft: "4px" }}
+                >
+                  <FiShare2 color="#2563eb" /> QR Code
                 </button>
               </div>
             </div>
@@ -844,7 +925,7 @@ function FamilyTracking() {
                 </div>
                 <div className="metric-details">
                   <p>Separation Range</p>
-                  <h4>{selectedGroup.separationThresholdMeters || 10} m</h4>
+                  <h4>{selectedGroup.separationThresholdMeters || 5} m</h4>
                 </div>
               </div>
 
@@ -864,36 +945,161 @@ function FamilyTracking() {
                 </div>
                 <div className="metric-details">
                   <p>Active Alerts</p>
-                  <h4>{activeAlerts.length} Separations</h4>
+                  <h4>{activeAlerts.length} Active</h4>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Active Separation Alert Banner */}
-          {activeAlerts.length > 0 && (
+          {/* Main User GPS Inactive Warning Banner */}
+          {selectedGroup && !isWatchingLocation && (
             <div
-              className={`separation-alert-banner ${
-                activeAlerts[0].severity === "critical"
+              style={{
+                background: "#eff6ff",
+                border: "1.5px solid #bfdbfe",
+                color: "#1e40af",
+                padding: "14px 18px",
+                borderRadius: "12px",
+                marginBottom: "20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "14px",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.08)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <FiInfo size={24} color="#2563eb" style={{ flexShrink: 0 }} />
+                <div>
+                  <strong style={{ fontSize: "14.5px", display: "block", color: "#1e3a8a", marginBottom: "2px" }}>
+                    Main User GPS Location Sharing Not Started
+                  </strong>
+                  <span style={{ fontSize: "12.5px", color: "#3b82f6" }}>
+                    Proximity distance tracking and ESP32 separation buzzer alerts are paused until you start location sharing on your device.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-primary-action"
+                style={{ padding: "8px 16px", fontSize: "13px", whiteSpace: "nowrap" }}
+                onClick={() => {
+                  setConsentGranted(true);
+                  handleStartLocationSharing();
+                }}
+              >
+                <FiMapPin size={14} style={{ marginRight: "6px" }} /> Start Sharing Now
+              </button>
+            </div>
+          )}
+
+          {/* Active Separation Alert Banner (Lost Family Member Location Card) */}
+          {unresolvedAlerts.length > 0 && (
+            <div
+              className={`separation-alert-banner ${unresolvedAlerts[0].severity === "critical"
                   ? "alert-banner-critical"
                   : "alert-banner-warning"
-              }`}
+                }`}
             >
               <div className="alert-banner-content">
                 <div className="alert-banner-icon">
                   <FiAlertTriangle />
                 </div>
                 <div className="alert-banner-text">
-                  <h4>
-                    {activeAlerts[0].severity === "critical"
-                      ? "CRITICAL SEPARATION DETECTED"
-                      : "EARLY SEPARATION WARNING"}
-                  </h4>
-                  <p>
-                    <strong>{activeAlerts[0].memberName || activeAlerts[0].member?.name || "Family Member"}</strong> is{" "}
-                    <strong>{activeAlerts[0].distanceMeters} meters away</strong> (threshold:{" "}
-                    {activeAlerts[0].thresholdMeters}m). Buzzer trigger dispatched to ESP32 DevKit V1.
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+                    <h4 style={{ margin: 0 }}>
+                      {unresolvedAlerts[0].severity === "critical"
+                        ? "CRITICAL SEPARATION DETECTED"
+                        : "SEPARATION WARNING DETECTED"}
+                    </h4>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "800",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        background: unresolvedAlerts[0].status === "acknowledged_by_device" ? "#dbeafe" : "#fef3c7",
+                        color: unresolvedAlerts[0].status === "acknowledged_by_device" ? "#1e40af" : "#92400e",
+                      }}
+                    >
+                      {unresolvedAlerts[0].status === "acknowledged_by_device"
+                        ? "ESP32 Buzzer Sounded"
+                        : "Alerting ESP32 DevKit V1"}
+                    </span>
+                    {unresolvedAlerts[0].memberLocation?.recordedAt && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          padding: "2px 8px",
+                          borderRadius: "10px",
+                          background:
+                            Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
+                              (selectedGroup?.locationFreshnessMinutes || 3) * 60000
+                              ? "#fef2f2"
+                              : "#ecfdf5",
+                          color:
+                            Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
+                              (selectedGroup?.locationFreshnessMinutes || 3) * 60000
+                              ? "#b91c1c"
+                              : "#065f46",
+                        }}
+                      >
+                        {Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
+                          (selectedGroup?.locationFreshnessMinutes || 3) * 60000
+                          ? `⚠️ Stale Fix (${Math.round(
+                            (Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime()) / 60000
+                          )}m ago) - Do not treat as live`
+                          : "● Live GPS Location"}
+                      </span>
+                    )}
+                  </div>
+
+                  <p style={{ margin: "4px 0 8px 0" }}>
+                    <strong>{unresolvedAlerts[0].memberName || unresolvedAlerts[0].member?.name || "Family Member"}</strong> is{" "}
+                    <strong>{unresolvedAlerts[0].distanceMeters} meters away</strong> from the main user (Safe threshold:{" "}
+                    {unresolvedAlerts[0].thresholdMeters || 5}m).
                   </p>
+
+                  {/* Comprehensive Lost Member Location Details */}
+                  {unresolvedAlerts[0].memberLocation?.latitude && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: "6px 14px",
+                        fontSize: "12px",
+                        background: "rgba(255,255,255,0.85)",
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        marginTop: "8px",
+                        color: "#0f172a",
+                        border: "1px solid rgba(0,0,0,0.06)",
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Latitude:</span>
+                        <strong>{unresolvedAlerts[0].memberLocation.latitude.toFixed(6)}°</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Longitude:</span>
+                        <strong>{unresolvedAlerts[0].memberLocation.longitude.toFixed(6)}°</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>GPS Accuracy:</span>
+                        <strong>±{Math.round(unresolvedAlerts[0].memberLocation.accuracy || 0)}m</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Last Reported:</span>
+                        <strong>
+                          {new Date(
+                            unresolvedAlerts[0].memberLocation.recordedAt || unresolvedAlerts[0].createdAt
+                          ).toLocaleTimeString()}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -901,20 +1107,38 @@ function FamilyTracking() {
                 <button
                   type="button"
                   className="btn-banner-resolve"
-                  onClick={() => handleResolveAlert(activeAlerts[0]._id)}
+                  onClick={() => handleResolveAlert(unresolvedAlerts[0]._id)}
+                  title="Mark separation resolved"
                 >
                   Mark Reunited
                 </button>
 
-                {activeAlerts[0].memberLocation?.latitude && (
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${activeAlerts[0].memberLocation.latitude},${activeAlerts[0].memberLocation.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-banner-directions"
-                  >
-                    <FiNavigation size={13} /> Open Directions
-                  </a>
+                {unresolvedAlerts[0].memberLocation?.latitude && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-banner-resolve"
+                      style={{ background: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
+                      onClick={() =>
+                        setFocusedMemberId(
+                          unresolvedAlerts[0].membership || unresolvedAlerts[0].member?._id || unresolvedAlerts[0].member
+                        )
+                      }
+                      title="Focus marker on tracking map"
+                    >
+                      <FiCrosshair size={13} /> Focus Map
+                    </button>
+
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${unresolvedAlerts[0].memberLocation.latitude},${unresolvedAlerts[0].memberLocation.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-banner-directions"
+                      title="Open navigation directions to lost member"
+                    >
+                      <FiNavigation size={13} /> Open Directions
+                    </a>
+                  </>
                 )}
               </div>
             </div>
@@ -1181,9 +1405,8 @@ function FamilyTracking() {
                   <div className="esp32-status-box">
                     <div className="esp32-badge-row">
                       <span
-                        className={`hardware-pill ${
-                          deviceStatus?.isOnline ? "hw-online" : "hw-offline"
-                        }`}
+                        className={`hardware-pill ${deviceStatus?.isOnline ? "hw-online" : "hw-offline"
+                          }`}
                       >
                         {deviceStatus?.isOnline ? "● ESP32 Online & Polling" : "○ ESP32 Disconnected"}
                       </span>
@@ -1215,7 +1438,7 @@ function FamilyTracking() {
                       </div>
                       <div>
                         <span>Buzzer GPIO Pin:</span>
-                        <strong>GPIO 18 (Active Buzzer)</strong>
+                        <strong>GPIO {deviceStatus?.device?.buzzerPin || 23} (Active Buzzer)</strong>
                       </div>
                       <div>
                         <span>Last Heartbeat:</span>
@@ -1231,7 +1454,7 @@ function FamilyTracking() {
                       <button
                         type="button"
                         className="btn-test-buzzer"
-                        onClick={() => playSimulatedBuzzer("warning_short")}
+                        onClick={handleTestBuzzer}
                       >
                         <FiVolume2 size={14} /> Test Buzzer Sound
                       </button>
@@ -1526,9 +1749,12 @@ function FamilyTracking() {
                   {/* QR Code */}
                   <div className="qr-code-box">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(
-                        activeInviteData.inviteUrl
-                      )}`}
+                      src={
+                        inviteQrDataUrl ||
+                        `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(
+                          activeInviteData.inviteUrl
+                        )}`
+                      }
                       alt={`Scan QR to track ${activeInviteData.memberName}`}
                     />
                     <span style={{ display: "block", marginTop: "8px", fontSize: "11.5px", color: "#64748b" }}>
@@ -1566,6 +1792,113 @@ function FamilyTracking() {
                   <p style={{ margin: 0, fontSize: "12px", color: "#059669", fontWeight: "600" }}>
                     ✓ Protected with SHA-256 token hash & single-use session exchange.
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Group QR Code & Invite Modal */}
+          {showGroupQrModal && selectedGroup && (
+            <div className="modal-overlay">
+              <div className="modal-content-card" style={{ maxWidth: "460px" }}>
+                <div className="modal-header">
+                  <h3>
+                    <FiShare2 style={{ color: "#2563eb", marginRight: "6px" }} />
+                    Family Group Join QR Code
+                  </h3>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setShowGroupQrModal(false)}
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                <div style={{ textAlign: "center" }}>
+                  <h4 style={{ margin: "0 0 6px 0", fontSize: "18px", color: "#0f172a" }}>
+                    {selectedGroup.name}
+                  </h4>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#64748b" }}>
+                    Family members can scan this QR code on their smartphone to immediately join this tracking group.
+                  </p>
+
+                  {/* QR Code */}
+                  <div className="qr-code-box" style={{ background: "#ffffff", padding: "16px", borderRadius: "12px", display: "inline-block", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
+                    <img
+                      src={
+                        groupQrDataUrl ||
+                        `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(
+                          `${getPublicFrontendUrl()}/track?join=${selectedGroup.inviteCode}`
+                        )}`
+                      }
+                      alt={`QR Code to join ${selectedGroup.name}`}
+                      style={{ width: "200px", height: "200px", display: "block" }}
+                    />
+                    <span style={{ display: "block", marginTop: "10px", fontSize: "12px", color: "#475569", fontWeight: "600" }}>
+                      Scan with smartphone camera
+                    </span>
+                  </div>
+
+                  {/* Group Code Card */}
+                  <div style={{ marginTop: "16px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>Or enter 6-digit Join Code:</div>
+                    <div style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "3px", color: "#1e40af", fontFamily: "monospace" }}>
+                      {selectedGroup.inviteCode}
+                    </div>
+                  </div>
+
+                  {/* Copy Link Input */}
+                  <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${getPublicFrontendUrl()}/track?join=${selectedGroup.inviteCode}`}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        fontFamily: "monospace",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary-action"
+                      style={{ padding: "8px 14px", fontSize: "13px" }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${getPublicFrontendUrl()}/track?join=${selectedGroup.inviteCode}`);
+                        setGroupLinkCopied(true);
+                        setTimeout(() => setGroupLinkCopied(false), 2500);
+                      }}
+                    >
+                      {groupLinkCopied ? <FiCheck /> : <FiCopy />}
+                      {groupLinkCopied ? "Copied!" : "Copy Link"}
+                    </button>
+                  </div>
+
+                  {/* Public Host Domain Information / Hotspot Testing Override */}
+                  <div style={{ marginTop: "12px", padding: "8px 12px", background: "#f1f5f9", borderRadius: "8px", fontSize: "11.5px", color: "#475569", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span>Host URL: </span>
+                      <strong style={{ color: "#0f172a" }}>{getPublicFrontendUrl()}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const custom = window.prompt("Enter public frontend URL or phone hotspot LAN IP (e.g. http://192.168.43.100:3000):", getPublicFrontendUrl());
+                        if (custom && custom.trim()) {
+                          localStorage.setItem("pilgrim_custom_public_url", custom.trim().replace(/\/+$/, ""));
+                          window.location.reload();
+                        }
+                      }}
+                      style={{ background: "none", border: "none", color: "#2563eb", textDecoration: "underline", cursor: "pointer", fontSize: "11px", fontWeight: "600" }}
+                    >
+                      Configure LAN / Public URL
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1612,14 +1945,14 @@ function FamilyTracking() {
                     <label>Separation Distance Threshold (Meters)</label>
                     <input
                       type="number"
-                      min="5"
+                      min="1"
                       max="1000"
                       value={newGroupThreshold}
                       onChange={(e) => setNewGroupThreshold(e.target.value)}
                       disabled={isCreatingGroup}
                     />
                     <div className="form-help-text">
-                      Default is 10 meters for close crowd tracking.
+                      Default is 5 meters for close crowd tracking.
                     </div>
                   </div>
 
@@ -1667,13 +2000,13 @@ function FamilyTracking() {
                     <label>Configurable Separation Distance (Meters)</label>
                     <input
                       type="number"
-                      min="5"
+                      min="1"
                       max="500"
                       value={newGroupThreshold}
                       onChange={(e) => setNewGroupThreshold(e.target.value)}
                     />
                     <div className="form-help-text">
-                      An alert triggers and buzzes the ESP32 when any family member moves further than this distance.
+                      Default is 5 meters. An alert triggers and buzzes the ESP32 when any family member moves further than this distance.
                     </div>
                   </div>
 

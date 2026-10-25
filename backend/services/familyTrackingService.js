@@ -164,6 +164,24 @@ async function processLocationUpdate({
       alert: null,
     };
   } else {
+    // Check if there are other active family members (main user is not the only member)
+    const activeMemberCount = await FamilyMembership.countDocuments({
+      group: groupId,
+      role: "member",
+      status: "active",
+    });
+
+    if (activeMemberCount === 0) {
+      // Main user is the only member in this group; no separation alert can be generated
+      return {
+        location: null,
+        role: "member",
+        distanceFromMain: 0,
+        separationStatus: "normal",
+        alert: null,
+      };
+    }
+
     // Current user is a family member. Retrieve latest main user location
     mainUserLocation = await MemberLocation.findOne({
       group: groupId,
@@ -174,9 +192,21 @@ async function processLocationUpdate({
       ? isLocationFresh(mainUserLocation.serverReceivedAt, group.locationFreshnessMinutes)
       : false;
 
+    const memberAccuracy = typeof accuracy === "number" && !isNaN(accuracy) ? accuracy : 0;
+    const mainAccuracy =
+      mainUserLocation && typeof mainUserLocation.accuracy === "number" && !isNaN(mainUserLocation.accuracy)
+        ? mainUserLocation.accuracy
+        : 0;
+
+    // Reject degraded GPS fixes (>35m error radius) to prevent false alerts
+    const isMainInaccurate = mainAccuracy > 35;
+    const isMemberInaccurate = memberAccuracy > 35;
+    const isAccuracyDegraded = isMainInaccurate || isMemberInaccurate;
+
     let separationStatus = "normal";
 
-    if (mainUserLocation && isMainFresh) {
+    // Only evaluate separation if main user's location is available, fresh, and accurate
+    if (mainUserLocation && isMainFresh && !isAccuracyDegraded) {
       computedDistance = calculateHaversineDistance(
         mainUserLocation.latitude,
         mainUserLocation.longitude,
@@ -184,7 +214,11 @@ async function processLocationUpdate({
         longitude
       );
 
-      const threshold = group.separationThresholdMeters || 10;
+      const threshold =
+        group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
+          ? group.separationThresholdMeters
+          : 5;
+
       const isSeparated = computedDistance !== null && computedDistance > threshold;
 
       if (isSeparated) {
@@ -193,100 +227,113 @@ async function processLocationUpdate({
         if (membership.consecutiveSeparatedCount >= (group.consecutiveReadingsRequired || 2)) {
           separationStatus = "separated";
 
-          // Determine severity & buzzer pattern
-          const isCritical =
-            computedDistance > threshold * 2.5 || membership.consecutiveSeparatedCount >= 4;
-          const severity = isCritical ? "critical" : "warning";
-          const buzzerPattern = isCritical ? "critical_urgent" : "warning_short";
+            // Determine severity & buzzer pattern
+            const isCritical =
+              computedDistance > threshold * 2.5 || membership.consecutiveSeparatedCount >= 4;
+            const severity = isCritical ? "critical" : "warning";
+            const buzzerPattern = isCritical ? "critical_urgent" : "warning_short";
 
-          // Check for active alert to prevent duplicate records
-          const activeAlertQuery = {
-            group: groupId,
-            status: { $in: ["active", "acknowledged_by_device"] },
-            $or: [
-              { membership: membership._id },
-              ...(membership.user ? [{ member: membership.user }] : []),
-            ],
-          };
-
-          const activeAlert = await SeparationAlert.findOne(activeAlertQuery).sort({ createdAt: -1 });
-
-          if (!activeAlert) {
-            // Create fresh separation incident
-            alertCreated = await SeparationAlert.create({
+            // Check for active alert to prevent duplicate records
+            const activeAlertQuery = {
               group: groupId,
-              membership: membership._id,
-              member: membership.user || null,
-              memberName: membership.name || "Family Member",
-              mainUser: mainUserId,
-              distanceMeters: computedDistance,
-              thresholdMeters: threshold,
-              severity,
-              buzzerPattern,
-              memberLocation: {
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: membership._id },
+                ...(membership.user ? [{ member: membership.user }] : []),
+              ],
+            };
+
+            const activeAlert = await SeparationAlert.findOne(activeAlertQuery).sort({ createdAt: -1 });
+
+            if (!activeAlert) {
+              // Create fresh separation incident
+              alertCreated = await SeparationAlert.create({
+                group: groupId,
+                membership: membership._id,
+                member: membership.user || null,
+                memberName: membership.name || "Family Member",
+                mainUser: mainUserId,
+                distanceMeters: computedDistance,
+                thresholdMeters: threshold,
+                severity,
+                buzzerPattern,
+                memberLocation: {
+                  latitude,
+                  longitude,
+                  accuracy: memberAccuracy,
+                  recordedAt: new Date(),
+                },
+                mainLocation: {
+                  latitude: mainUserLocation.latitude,
+                  longitude: mainUserLocation.longitude,
+                  accuracy: mainAccuracy,
+                  recordedAt: mainUserLocation.serverReceivedAt,
+                },
+                status: "active",
+                deviceCommandDelivered: false,
+                consecutiveCount: membership.consecutiveSeparatedCount,
+              });
+            } else {
+              // Update existing alert with latest distance and coordinates
+              activeAlert.distanceMeters = computedDistance;
+              activeAlert.consecutiveCount = membership.consecutiveSeparatedCount;
+              activeAlert.memberName = membership.name || activeAlert.memberName;
+
+              // If severity escalated from warning to critical, re-arm buzzer command for ESP32
+              if (severity === "critical" && activeAlert.severity !== "critical") {
+                activeAlert.severity = "critical";
+                activeAlert.buzzerPattern = "critical_urgent";
+                activeAlert.status = "active";
+                activeAlert.deviceCommandDelivered = false;
+              }
+
+              activeAlert.memberLocation = {
                 latitude,
                 longitude,
-                accuracy,
+                accuracy: memberAccuracy,
                 recordedAt: new Date(),
-              },
-              mainLocation: {
-                latitude: mainUserLocation.latitude,
-                longitude: mainUserLocation.longitude,
-                accuracy: mainUserLocation.accuracy,
-                recordedAt: mainUserLocation.serverReceivedAt,
-              },
-              status: "active",
-              deviceCommandDelivered: false,
-              consecutiveCount: membership.consecutiveSeparatedCount,
-            });
-          } else {
-            // Update existing active alert with latest distance and severity
-            activeAlert.distanceMeters = computedDistance;
-            activeAlert.consecutiveCount = membership.consecutiveSeparatedCount;
-            activeAlert.memberName = membership.name || activeAlert.memberName;
-            if (severity === "critical") {
-              activeAlert.severity = "critical";
-              activeAlert.buzzerPattern = "critical_urgent";
+              };
+              await activeAlert.save();
+              alertCreated = activeAlert;
             }
-            activeAlert.memberLocation = {
-              latitude,
-              longitude,
-              accuracy,
-              recordedAt: new Date(),
-            };
-            await activeAlert.save();
-            alertCreated = activeAlert;
+          } else {
+            // Warning state before full threshold confirmation
+            separationStatus = "warning";
           }
         } else {
-          // Warning state before full threshold confirmation
-          separationStatus = "warning";
-        }
-      } else {
-        // Member is within safe distance
-        membership.consecutiveSeparatedCount = 0;
-        separationStatus = "normal";
+          // Member returned within safe distance
+          membership.consecutiveSeparatedCount = 0;
+          separationStatus = "normal";
 
-        // Auto-resolve any existing active alert
-        await SeparationAlert.updateMany(
-          {
-            group: groupId,
-            status: { $in: ["active", "acknowledged_by_device"] },
-            $or: [
-              { membership: membership._id },
-              ...(membership.user ? [{ member: membership.user }] : []),
-            ],
-          },
-          {
-            $set: {
-              status: "resolved",
-              resolvedAt: new Date(),
-              resolvedReason: "Member reunited within safe distance (" + computedDistance + "m)",
+          // Auto-resolve any existing active or acknowledged alert
+          await SeparationAlert.updateMany(
+            {
+              group: groupId,
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: membership._id },
+                ...(membership.user ? [{ member: membership.user }] : []),
+              ],
             },
-          }
-        );
-      }
+            {
+              $set: {
+                status: "resolved",
+                resolvedAt: new Date(),
+                resolvedReason: `Member returned within safe distance (${computedDistance}m)`,
+              },
+            }
+          );
+        }
     } else {
-      separationStatus = mainUserLocation ? "stale" : "unavailable";
+      if (!mainUserLocation) {
+        separationStatus = "unavailable";
+      } else if (!isMainFresh) {
+        separationStatus = "stale";
+      } else if (isAccuracyDegraded) {
+        separationStatus = "inaccurate_gps";
+      } else {
+        separationStatus = "normal";
+      }
     }
 
     await membership.save();
@@ -348,7 +395,10 @@ async function reevaluateMembersSeparation(group, mainLocation) {
         latestLoc.longitude
       );
 
-      const threshold = group.separationThresholdMeters || 10;
+      const threshold =
+        group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
+          ? group.separationThresholdMeters
+          : 5;
       if (distance !== null && distance <= threshold) {
         member.consecutiveSeparatedCount = 0;
         await member.save();

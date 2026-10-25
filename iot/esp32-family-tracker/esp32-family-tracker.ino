@@ -1,10 +1,10 @@
 /**
  * PilgrimIQ IoT Family Tracking & Separation Alert Firmware
  * Board: ESP32 DevKit V1 (DOIT ESP32 DEVKIT V1)
- * Hardware: Active Buzzer module connected to GPIO 18
+ * Hardware: Active Buzzer module connected to GPIO 23
  * 
  * Required Libraries (Install via Arduino Library Manager):
- * - ArduinoJson by Benoit Blanchon (v6 or v7)
+ * - ArduinoJson by Benoit Blanchon (v6 or v7 supported)
  * - Built-in: WiFi.h, HTTPClient.h, WiFiClientSecure.h
  */
 
@@ -21,8 +21,33 @@
   #warning "Using config.example.h. Please create config.h with your actual Wi-Fi and device credentials."
 #endif
 
+#ifndef BUZZER_PIN
+  #define BUZZER_PIN 23
+#endif
+#ifndef BUZZER_ACTIVE_HIGH
+  #define BUZZER_ACTIVE_HIGH 1
+#endif
+#ifndef STATUS_LED_PIN
+  #define STATUS_LED_PIN 2
+#endif
+#ifndef COMMAND_POLL_INTERVAL_MS
+  #define COMMAND_POLL_INTERVAL_MS 3000
+#endif
+#ifndef HEARTBEAT_INTERVAL_MS
+  #define HEARTBEAT_INTERVAL_MS 15000
+#endif
+
+// Electrical logic levels based on configured active-high vs active-low polarity
+#if (BUZZER_ACTIVE_HIGH == 1)
+  #define BUZZER_ON_LEVEL   HIGH
+  #define BUZZER_OFF_LEVEL  LOW
+#else
+  #define BUZZER_ON_LEVEL   LOW
+  #define BUZZER_OFF_LEVEL  HIGH
+#endif
+
 // Firmware Version
-const char* FIRMWARE_VERSION = "1.0.0";
+const char* FIRMWARE_VERSION = "1.0.2";
 
 // State Timing Trackers
 unsigned long lastCommandPollTime = 0;
@@ -33,51 +58,114 @@ const unsigned long wifiReconnectInterval = 10000; // 10s reconnection check
 bool isDeviceRegistered = false;
 
 // ==========================================
-// BUZZER CONTROL UTILITIES
+// NON-BLOCKING BUZZER STATE MACHINE
 // ==========================================
+bool buzzerActive = false;
+unsigned long buzzerStartTime = 0;
+unsigned long buzzerLastToggleTime = 0;
+bool buzzerPinState = false;
+int buzzerPulseCount = 0;
+int buzzerMaxPulses = 0;
+unsigned long buzzerPulseOnMs = 0;
+unsigned long buzzerPulseOffMs = 0;
+
+// Maximum buzzer safety duration (2 seconds maximum)
+const unsigned long BUZZER_SAFETY_MAX_MS = 2000;
+
+// Track the last alert ID processed to prevent duplicate alerts
+String lastProcessedAlertId = "";
+
 void setBuzzerState(bool active) {
-  if (BUZZER_ACTIVE_HIGH) {
-    digitalWrite(BUZZER_PIN, active ? HIGH : LOW);
-  } else {
-    digitalWrite(BUZZER_PIN, active ? LOW : HIGH);
+  digitalWrite(BUZZER_PIN, active ? BUZZER_ON_LEVEL : BUZZER_OFF_LEVEL);
+}
+
+/**
+ * Stop buzzer immediately and ensure GPIO pin and LED are driven to strictly OFF level
+ */
+void stopBuzzer() {
+  bool wasActive = buzzerActive;
+  buzzerActive = false;
+  buzzerPinState = false;
+  digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+  digitalWrite(STATUS_LED_PIN, LOW);
+  if (wasActive) {
+    Serial.println("[BUZZER] Buzzer stopped.");
   }
 }
 
 /**
- * Sounds the physical active buzzer based on alert severity
+ * Triggers non-blocking buzzer pattern (max duration bounded to ~0.8-1.0s, max 2.0s safety cutoff)
  */
-void soundBuzzer(const char* pattern) {
-  Serial.print("[BUZZER] Sounding pattern: ");
-  Serial.println(pattern);
+void triggerBuzzerPattern(const char* pattern) {
+  buzzerActive = true;
+  buzzerStartTime = millis();
+  buzzerLastToggleTime = millis();
+  buzzerPulseCount = 0;
 
   if (strcmp(pattern, "critical_urgent") == 0) {
-    // Critical separation: 4 rapid high-urgency pulses
-    for (int i = 0; i < 4; i++) {
-      setBuzzerState(true);
-      digitalWrite(STATUS_LED_PIN, HIGH);
-      delay(120);
-      setBuzzerState(false);
-      digitalWrite(STATUS_LED_PIN, LOW);
-      delay(100);
-    }
+    // Critical separation: 4 rapid pulses (150ms ON, 100ms OFF = ~900ms total)
+    buzzerMaxPulses = 4;
+    buzzerPulseOnMs = 150;
+    buzzerPulseOffMs = 100;
   } else {
-    // Early warning: 2 distinct notification beeps
-    for (int i = 0; i < 2; i++) {
-      setBuzzerState(true);
-      digitalWrite(STATUS_LED_PIN, HIGH);
-      delay(200);
-      setBuzzerState(false);
-      digitalWrite(STATUS_LED_PIN, LOW);
-      delay(150);
-    }
+    // Early warning / dashboard test: 2 distinct notification beeps (300ms ON, 200ms OFF = ~800ms total)
+    buzzerMaxPulses = 2;
+    buzzerPulseOnMs = 300;
+    buzzerPulseOffMs = 200;
   }
+
+  // Activate first pulse immediately
+  buzzerPinState = true;
+  digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
+  digitalWrite(STATUS_LED_PIN, HIGH);
+  Serial.print("[BUZZER] Non-blocking pattern started: ");
+  Serial.println(pattern);
 }
 
-// Quick chirp on boot to verify buzzer circuit integrity
-void testBuzzerChirp() {
-  setBuzzerState(true);
-  delay(80);
-  setBuzzerState(false);
+/**
+ * Non-blocking routine called on every Arduino loop() cycle to drive buzzer pulses
+ */
+void updateBuzzer() {
+  if (!buzzerActive) {
+    // Keep buzzer pin strictly OFF whenever idle
+    digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+    return;
+  }
+
+  unsigned long currentMillis = millis();
+
+  // Hard safety timeout: Automatically turn off buzzer after 2000ms maximum
+  if (currentMillis - buzzerStartTime >= BUZZER_SAFETY_MAX_MS) {
+    Serial.println("[BUZZER] Safety timeout reached (2s).");
+    stopBuzzer();
+    return;
+  }
+
+  if (buzzerPinState) {
+    // Currently buzzing (pulse ON) -> check if pulse ON duration has elapsed
+    if (currentMillis - buzzerLastToggleTime >= buzzerPulseOnMs) {
+      digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+      digitalWrite(STATUS_LED_PIN, LOW);
+      buzzerPinState = false;
+      buzzerLastToggleTime = currentMillis;
+      buzzerPulseCount++;
+
+      // If all pulses completed, stop buzzer
+      if (buzzerPulseCount >= buzzerMaxPulses) {
+        stopBuzzer();
+      }
+    }
+  } else {
+    // Currently in pause between pulses (pulse OFF) -> check if pause duration has elapsed
+    if (buzzerPulseCount < buzzerMaxPulses) {
+      if (currentMillis - buzzerLastToggleTime >= buzzerPulseOffMs) {
+        digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        buzzerPinState = true;
+        buzzerLastToggleTime = currentMillis;
+      }
+    }
+  }
 }
 
 // ==========================================
@@ -87,6 +175,7 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
   Serial.println();
+  Serial.println("[WIFI] Wi-Fi connecting...");
   Serial.print("[WIFI] Connecting to SSID: ");
   Serial.println(WIFI_SSID);
 
@@ -102,9 +191,11 @@ void connectWiFi() {
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
-    Serial.print("[WIFI] Connected! Assigned IP: ");
+    Serial.println("[WIFI] Wi-Fi connected!");
+    Serial.print("[WIFI] Assigned IP: ");
     Serial.println(WiFi.localIP());
-    testBuzzerChirp(); // Audio chirp on successful network connect
+    // NOTE: Startup and Wi-Fi connection buzzer chirps have been removed.
+    // Buzzer remains strictly OFF during startup and connection.
   } else {
     Serial.println();
     Serial.println("[WIFI] Connection failed. Will retry in background...");
@@ -121,6 +212,9 @@ void setupHttpHeaders(HTTPClient &http) {
   http.addHeader("x-device-token", DEVICE_TOKEN);
 }
 
+// Forward declaration
+void acknowledgeAlertDelivery(const char* alertId);
+
 // ==========================================
 // 1. POLL PENDING BUZZER COMMANDS
 // ==========================================
@@ -133,7 +227,7 @@ void pollPendingCommands() {
   // Use WiFiClientSecure if HTTPS, standard WiFiClient if HTTP
   if (url.startsWith("https://")) {
     WiFiClientSecure client;
-    client.setInsecure(); // For college prototype demo; in high-security production, load root CA certificate
+    client.setInsecure(); // For prototype demo; in high-security production, load root CA certificate
     http.begin(client, url);
   } else {
     WiFiClient client;
@@ -148,7 +242,12 @@ void pollPendingCommands() {
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
 
-    StaticJsonDocument<1024> doc;
+    #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
+      JsonDocument doc;
+    #else
+      StaticJsonDocument<1024> doc;
+    #endif
+
     DeserializationError err = deserializeJson(doc, payload);
 
     if (!err) {
@@ -157,35 +256,63 @@ void pollPendingCommands() {
       if (hasCommand) {
         const char* command = doc["command"] | "NONE";
         const char* alertId = doc["alertId"] | "";
+        const char* memberId = doc["memberId"] | "";
+        const char* memberName = doc["memberName"] | "Family Member";
+        float distance = doc["distanceMeters"] | 0.0;
+        float threshold = doc["thresholdMeters"] | 5.0;
         const char* severity = doc["severity"] | "warning";
         const char* buzzerPattern = doc["buzzerPattern"] | "warning_short";
-        float distance = doc["distanceMeters"] | 0.0;
-        const char* memberName = doc["memberName"] | "Family Member";
+
+        // De-duplicate: If this alertId was already received and processed, do NOT trigger buzzer again!
+        if (strlen(alertId) > 0 && lastProcessedAlertId.equals(alertId)) {
+          Serial.print("[COMMAND] Alert ID ");
+          Serial.print(alertId);
+          Serial.println(" was already processed. Duplicate buzzer suppressed. Re-acknowledging to server...");
+          acknowledgeAlertDelivery(alertId);
+          http.end();
+          return;
+        }
+
+        // Record genuinely new alert ID
+        if (strlen(alertId) > 0) {
+          lastProcessedAlertId = String(alertId);
+        }
 
         Serial.println("==================================================");
-        Serial.println("[ALERT TRIGGERED] SEPARATION WARNING DETECTED!");
-        Serial.print("  Member: "); Serial.println(memberName);
+        Serial.println("[ALERT TRIGGERED] NEW SEPARATION WARNING DETECTED!");
+        Serial.print("  Alert ID: "); Serial.println(alertId);
+        Serial.print("  Member ID: "); Serial.println(memberId);
+        Serial.print("  Member Name: "); Serial.println(memberName);
         Serial.print("  Distance: "); Serial.print(distance); Serial.println(" meters");
+        Serial.print("  Threshold: "); Serial.print(threshold); Serial.println(" meters");
         Serial.print("  Severity: "); Serial.println(severity);
         Serial.println("==================================================");
 
-        // Sound the active buzzer
-        soundBuzzer(buzzerPattern);
+        Serial.println("[BUZZER] Buzzer activated by a real alert!");
+        // Sound the active buzzer non-blockingly (~0.8 to 1.0 seconds max, auto turns OFF)
+        triggerBuzzerPattern(buzzerPattern);
 
         // Send delivery acknowledgement back to PilgrimIQ backend
         if (strlen(alertId) > 0) {
           acknowledgeAlertDelivery(alertId);
         }
+      } else {
+        // Backend reports SAFE / no active alerts -> keep buzzer strictly OFF
+        stopBuzzer();
       }
     } else {
       Serial.print("[JSON ERROR] Failed to parse command response: ");
       Serial.println(err.c_str());
     }
   } else if (httpCode == 401) {
+    stopBuzzer();
     Serial.println("[AUTH ERROR] ESP32 not authorized. Verify DEVICE_ID and DEVICE_TOKEN in config.h.");
+  } else if (httpCode < 0) {
+    stopBuzzer();
+    Serial.print("[HTTP ERROR] Failed to connect: ");
+    Serial.println(http.errorToString(httpCode).c_str());
   } else {
-    Serial.print("[HTTP POLL] Status code: ");
-    Serial.println(httpCode);
+    stopBuzzer();
   }
 
   http.end();
@@ -195,7 +322,7 @@ void pollPendingCommands() {
 // 2. ACKNOWLEDGE COMMAND DELIVERY
 // ==========================================
 void acknowledgeAlertDelivery(const char* alertId) {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED || strlen(alertId) == 0) return;
 
   HTTPClient http;
   String url = String(BACKEND_BASE_URL) + "/acknowledge";
@@ -212,7 +339,12 @@ void acknowledgeAlertDelivery(const char* alertId) {
   http.setTimeout(4000);
   setupHttpHeaders(http);
 
-  StaticJsonDocument<256> doc;
+  #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
+    JsonDocument doc;
+  #else
+    StaticJsonDocument<256> doc;
+  #endif
+
   doc["alertId"] = alertId;
   String requestBody;
   serializeJson(doc, requestBody);
@@ -220,7 +352,9 @@ void acknowledgeAlertDelivery(const char* alertId) {
   int httpCode = http.POST(requestBody);
 
   if (httpCode == HTTP_CODE_OK) {
-    Serial.println("[ACK SUCCESS] Alert delivery acknowledged to server.");
+    Serial.print("[ACK SUCCESS] Alert ");
+    Serial.print(alertId);
+    Serial.println(" delivery acknowledged to server.");
   } else {
     Serial.print("[ACK FAILED] Response code: ");
     Serial.println(httpCode);
@@ -250,7 +384,12 @@ void sendHeartbeat() {
   http.setTimeout(4000);
   setupHttpHeaders(http);
 
-  StaticJsonDocument<256> doc;
+  #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
+    JsonDocument doc;
+  #else
+    StaticJsonDocument<256> doc;
+  #endif
+
   doc["firmwareVersion"] = FIRMWARE_VERSION;
   doc["ipAddress"] = WiFi.localIP().toString();
   doc["batteryLevel"] = 100; // Simulated battery / USB powered
@@ -274,28 +413,31 @@ void sendHeartbeat() {
 // ARDUINO SETUP
 // ==========================================
 void setup() {
+  // CRITICAL: Initialize GPIO 23 to strictly OFF on line 1 before any delay or boot sequence
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
+
   Serial.begin(115200);
-  delay(1000);
+  delay(500);
 
   Serial.println();
+  Serial.println("[BOOT] ESP32 booted.");
+  Serial.println("[BUZZER] Buzzer initialized OFF.");
   Serial.println("==================================================");
   Serial.println("PilgrimIQ IoT Family Tracker DevKit V1 Starting...");
   Serial.print("Firmware Version: "); Serial.println(FIRMWARE_VERSION);
   Serial.print("Configured Device ID: "); Serial.println(DEVICE_ID);
   Serial.print("Buzzer GPIO: "); Serial.println(BUZZER_PIN);
+#if (BUZZER_ACTIVE_HIGH == 1)
+  Serial.println("Buzzer Polarity: ACTIVE-HIGH (Pin HIGH = Sound, Pin LOW = Silent)");
+#else
+  Serial.println("Buzzer Polarity: ACTIVE-LOW (Pin LOW = Sound, Pin HIGH = Silent)");
+#endif
   Serial.println("==================================================");
 
-  // Configure GPIO Pins
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(STATUS_LED_PIN, OUTPUT);
-
-  setBuzzerState(false);
-  digitalWrite(STATUS_LED_PIN, LOW);
-
-  // Initial Buzzer Test (Short Chirp)
-  testBuzzerChirp();
-
-  // Connect to Local Wi-Fi
+  // Connect to Local Wi-Fi (no Wi-Fi chirp)
   connectWiFi();
 }
 
@@ -303,10 +445,14 @@ void setup() {
 // ARDUINO MAIN LOOP
 // ==========================================
 void loop() {
+  // 1. Service non-blocking buzzer state machine (1-2s bounded, auto-off)
+  updateBuzzer();
+
   unsigned long currentMillis = millis();
 
-  // 1. Maintain Wi-Fi Connection
+  // 2. Maintain Wi-Fi Connection
   if (WiFi.status() != WL_CONNECTED) {
+    stopBuzzer(); // Guarantee buzzer is immediately OFF when disconnected
     if (currentMillis - wifiReconnectPreviousMillis >= wifiReconnectInterval) {
       wifiReconnectPreviousMillis = currentMillis;
       Serial.println("[WIFI] Connection lost. Attempting reconnection...");
@@ -315,13 +461,13 @@ void loop() {
     return; // Don't attempt HTTP operations without active connection
   }
 
-  // 2. Poll Pending Separation Commands (Every 3 seconds)
+  // 3. Poll Pending Separation Commands (Every 3 seconds)
   if (currentMillis - lastCommandPollTime >= COMMAND_POLL_INTERVAL_MS) {
     lastCommandPollTime = currentMillis;
     pollPendingCommands();
   }
 
-  // 3. Send Periodic Connectivity Heartbeat (Every 15 seconds)
+  // 4. Send Periodic Connectivity Heartbeat (Every 15 seconds)
   if (currentMillis - lastHeartbeatTime >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatTime = currentMillis;
     sendHeartbeat();

@@ -28,7 +28,7 @@ Most 3-pin active buzzer modules (such as the KY-012 or standard sensor modules)
 |                        |                     |                        |
 |  [ 3V3 ] (or VIN 5V)   +-------------------->+ [ VCC ]                |
 |  [ GND ]               +-------------------->+ [ GND ]                |
-|  [ GPIO 18 ]           +-------------------->+ [ I/O ] (Signal)       |
+|  [ GPIO 23 ]           +-------------------->+ [ I/O ] (Signal)       |
 +------------------------+                     +------------------------+
 ```
 
@@ -36,10 +36,10 @@ Most 3-pin active buzzer modules (such as the KY-012 or standard sensor modules)
 | :--- | :--- | :--- |
 | **VCC** (or `+`) | **3V3** (or **VIN / 5V**) | Power supply (3.3V is optimal for direct GPIO control) |
 | **GND** (or `-`) | **GND** | Common ground |
-| **I/O** (or `S`) | **GPIO 18** | Digital trigger output from ESP32 |
+| **I/O** (or `S`) | **GPIO 23** | Digital trigger output from ESP32 |
 
 > **Active Buzzer vs. Passive Buzzer Note:**
-> An **Active Buzzer** has an integrated tone generator. When `GPIO 18` is set to `HIGH`, it automatically sounds a high-frequency beep (~2.4 kHz). If using a 2-pin buzzer without a transistor driver board, ensure current draw does not exceed 12mA; using a standard 3-pin transistor-buffered buzzer breakout module is strongly recommended.
+> An **Active Buzzer** has an integrated tone generator. When `GPIO 23` is set to `HIGH`, it automatically sounds a high-frequency beep (~2.4 kHz). If using a 2-pin buzzer without a transistor driver board, ensure current draw does not exceed 12mA; using a standard 3-pin transistor-buffered buzzer breakout module is strongly recommended.
 
 ---
 

@@ -19,7 +19,7 @@ const {
 // @access  Private (JWT User)
 const createGroup = async (req, res, next) => {
   try {
-    const { name, separationThresholdMeters = 10 } = req.body;
+    const { name, separationThresholdMeters = 5 } = req.body;
 
     if (!name || !name.trim()) {
       res.status(400);
@@ -49,7 +49,7 @@ const createGroup = async (req, res, next) => {
       name: name.trim(),
       creator: req.user._id,
       inviteCode,
-      separationThresholdMeters: Number(separationThresholdMeters) || 10,
+      separationThresholdMeters: Number(separationThresholdMeters) || 5,
     });
 
     // Create membership for creator as "main"
@@ -473,7 +473,7 @@ const validateInvitation = async (req, res, next) => {
       memberName: membership.name,
       relationship: membership.relationship,
       groupName: membership.group.name,
-      separationThresholdMeters: membership.group.separationThresholdMeters || 10,
+      separationThresholdMeters: membership.group.separationThresholdMeters || 5,
       isInvitationAccepted: membership.isInvitationAccepted,
       isLocationSharing: membership.isLocationSharing,
       consentGiven: membership.consentGiven,
@@ -483,7 +483,7 @@ const validateInvitation = async (req, res, next) => {
   }
 };
 
-// @desc    Accept invitation and create a restricted tracking session (No login required)
+// @desc    Accept invitation and create a restricted tracking session (Supports guest & account users)
 // @route   POST /api/family-tracking/invite/:token/session
 // @access  Public (Validated by invitation token)
 const acceptInvitationAndStartSession = async (req, res, next) => {
@@ -512,6 +512,24 @@ const acceptInvitationAndStartSession = async (req, res, next) => {
       throw new Error("This invitation link has expired.");
     }
 
+    // Optionally link user account if member is logged in with PilgrimIQ
+    if (req.user && req.user._id) {
+      membership.user = req.user._id;
+      membership.isAccountUser = true;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+      try {
+        const authToken = req.headers.authorization.split(" ")[1];
+        const jwt = require("jsonwebtoken");
+        const decoded = jwt.verify(authToken, process.env.JWT_SECRET);
+        if (decoded && (decoded.id || decoded._id)) {
+          membership.user = decoded.id || decoded._id;
+          membership.isAccountUser = true;
+        }
+      } catch (e) {
+        // Fallback to guest mode if token cannot be verified
+      }
+    }
+
     // Generate restricted 64-character session token
     const rawSessionToken = crypto.randomBytes(32).toString("hex");
     const sessionTokenHash = FamilyMembership.hashToken(rawSessionToken);
@@ -530,6 +548,7 @@ const acceptInvitationAndStartSession = async (req, res, next) => {
       message: "Tracking session initialized successfully.",
       sessionToken: rawSessionToken, // Restricted token stored in member's browser
       sessionExpiresAt,
+      isAccountUser: membership.isAccountUser,
       member: {
         id: membership._id,
         name: membership.name,
@@ -538,8 +557,138 @@ const acceptInvitationAndStartSession = async (req, res, next) => {
       group: {
         id: membership.group._id,
         name: membership.group.name,
-        separationThresholdMeters: membership.group.separationThresholdMeters,
+        separationThresholdMeters: membership.group.separationThresholdMeters || 5,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Validate a family group invite code (Public - No login required)
+// @route   GET /api/family-tracking/invite/code/:code
+// @access  Public
+const validateGroupInviteCode = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    if (!code || !code.trim()) {
+      return res.status(400).json({ valid: false, message: "Invitation code is required." });
+    }
+    const cleanCode = code.trim().toUpperCase();
+    const group = await FamilyGroup.findOne({ inviteCode: cleanCode }).select("name separationThresholdMeters creator");
+    if (!group) {
+      return res.status(404).json({ valid: false, message: "No family tracking group found with this invite code." });
+    }
+    return res.status(200).json({
+      valid: true,
+      groupId: group._id,
+      groupName: group.name,
+      inviteCode: cleanCode,
+      separationThresholdMeters: group.separationThresholdMeters || 5,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Join group via invite code (Public for family members without login)
+// @route   POST /api/family-tracking/invite/code/:code/join
+// @access  Public
+const joinGroupByCodePublic = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const { name, relationship, consentGiven = true } = req.body;
+    if (!name || !name.trim()) {
+      res.status(400);
+      throw new Error("Your name is required to join the tracking group.");
+    }
+    const cleanCode = (code || "").trim().toUpperCase();
+    const group = await FamilyGroup.findOne({ inviteCode: cleanCode });
+    if (!group) {
+      res.status(404);
+      throw new Error("Invalid invitation code. Group not found.");
+    }
+
+    // Optional user token linkage
+    let linkedUserId = null;
+    let isAccountUser = false;
+    if (req.user && req.user._id) {
+      linkedUserId = req.user._id;
+      isAccountUser = true;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+      try {
+        const authToken = req.headers.authorization.split(" ")[1];
+        const jwt = require("jsonwebtoken");
+        const decoded = jwt.verify(authToken, process.env.JWT_SECRET);
+        if (decoded && (decoded.id || decoded._id)) {
+          linkedUserId = decoded.id || decoded._id;
+          isAccountUser = true;
+        }
+      } catch (e) {
+        // Continue as guest
+      }
+    }
+
+    // Check if membership already exists with this name in this group
+    let membership = await FamilyMembership.findOne({
+      group: group._id,
+      name: name.trim(),
+      status: "active",
+    });
+
+    if (!membership) {
+      membership = await FamilyMembership.create({
+        group: group._id,
+        user: linkedUserId,
+        name: name.trim(),
+        relationship: relationship ? relationship.trim() : "",
+        role: "member",
+        isAccountUser,
+        isInvitationAccepted: true,
+        isLocationSharing: true,
+        consentGiven: !!consentGiven,
+        consentGivenAt: new Date(),
+        status: "active",
+      });
+    } else {
+      membership.consentGiven = !!consentGiven;
+      membership.consentGivenAt = new Date();
+      membership.isInvitationAccepted = true;
+      membership.isLocationSharing = true;
+      if (linkedUserId) {
+        membership.user = linkedUserId;
+        membership.isAccountUser = true;
+      }
+      if (relationship) membership.relationship = relationship.trim();
+      await membership.save();
+    }
+
+    // Generate restricted 64-char session token
+    const rawSessionToken = crypto.randomBytes(32).toString("hex");
+    const sessionTokenHash = FamilyMembership.hashToken(rawSessionToken);
+    const sessionExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    membership.sessionTokenHash = sessionTokenHash;
+    membership.sessionExpiresAt = sessionExpiresAt;
+    await membership.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Joined ${group.name} successfully.`,
+      sessionToken: rawSessionToken,
+      sessionExpiresAt,
+      isAccountUser: membership.isAccountUser,
+      member: {
+        id: membership._id,
+        name: membership.name,
+        relationship: membership.relationship,
+      },
+      group: {
+        id: group._id,
+        name: group.name,
+        separationThresholdMeters: group.separationThresholdMeters || 5,
+      },
+      consentGiven: membership.consentGiven,
     });
   } catch (error) {
     next(error);
@@ -1232,6 +1381,23 @@ const getGroupAlerts = async (req, res, next) => {
       throw new Error("Not authorized to view alerts for this group.");
     }
 
+    // Auto-expire stale alerts older than 5 minutes
+    const expiryCutoff = new Date(Date.now() - 5 * 60 * 1000);
+    await SeparationAlert.updateMany(
+      {
+        group: groupId,
+        status: { $in: ["active", "acknowledged_by_device"] },
+        createdAt: { $lt: expiryCutoff },
+      },
+      {
+        $set: {
+          status: "expired",
+          resolvedAt: new Date(),
+          resolvedReason: "Alert expired automatically due to age (> 5 min)",
+        },
+      }
+    );
+
     const alerts = await SeparationAlert.find({ group: groupId })
       .sort({ createdAt: -1 })
       .limit(30)
@@ -1323,6 +1489,7 @@ const registerIoTDevice = async (req, res, next) => {
       device.group = group._id;
       device.registeredBy = req.user._id;
       device.name = name;
+      device.buzzerPin = 23;
       device.status = "registered";
       device.lastHeartbeat = null;
       await device.save();
@@ -1333,6 +1500,7 @@ const registerIoTDevice = async (req, res, next) => {
         group: group._id,
         registeredBy: req.user._id,
         name,
+        buzzerPin: 23,
         status: "registered",
       });
     }
@@ -1349,7 +1517,7 @@ const registerIoTDevice = async (req, res, next) => {
         id: device._id,
         name: device.name,
         status: device.status,
-        buzzerPin: device.buzzerPin,
+        buzzerPin: device.buzzerPin || 23,
       },
     });
   } catch (error) {
@@ -1392,12 +1560,16 @@ const getDeviceStatus = async (req, res, next) => {
     const lastSeen = device.lastHeartbeat ? new Date(device.lastHeartbeat).getTime() : 0;
     const isOnline = now - lastSeen <= 45000;
 
+    const deviceObj = device.toObject();
+    const buzzerPin = deviceObj.buzzerPin || 23;
+
     res.status(200).json({
       success: true,
       hasDevice: true,
       isOnline,
       device: {
-        ...device.toObject(),
+        ...deviceObj,
+        buzzerPin,
         isOnline,
       },
     });
@@ -1447,30 +1619,149 @@ const iotGetPendingCommands = async (req, res, next) => {
       });
     }
 
+    const group = await FamilyGroup.findById(device.group);
+    if (!group) {
+      return res.status(200).json({
+        hasCommand: false,
+        command: "NONE",
+        status: "SAFE",
+      });
+    }
+
+    // Verify this device is the paired device for this group
+    if (group.pairedDeviceId && group.pairedDeviceId !== device.deviceId) {
+      return res.status(200).json({
+        hasCommand: false,
+        command: "NONE",
+        status: "SAFE",
+        message: "Device ID does not match active paired group.",
+      });
+    }
+
     device.lastHeartbeat = new Date();
     device.status = "online";
     await device.save();
 
+    // Check if a physical buzzer test was commanded from dashboard
+    if (device.pendingTestCommand) {
+      device.pendingTestCommand = false;
+      await device.save();
+
+      return res.status(200).json({
+        hasCommand: true,
+        command: "TRIGGER_BUZZER",
+        alertId: "test-cmd-" + Date.now(),
+        memberId: "",
+        membershipId: null,
+        severity: "warning",
+        buzzerPattern: device.testCommandPattern || "warning_short",
+        distanceMeters: 0,
+        thresholdMeters: group.separationThresholdMeters || 5,
+        memberName: "Hardware Buzzer Test",
+        timestamp: new Date(),
+      });
+    }
+
+    // Auto-expire stale alerts older than 5 minutes
+    const expiryCutoff = new Date(Date.now() - 5 * 60 * 1000);
+    await SeparationAlert.updateMany(
+      {
+        group: device.group,
+        status: { $in: ["active", "acknowledged_by_device"] },
+        createdAt: { $lt: expiryCutoff },
+      },
+      {
+        $set: {
+          status: "expired",
+          resolvedAt: new Date(),
+          resolvedReason: "Alert expired automatically due to age (> 5 min)",
+        },
+      }
+    );
+
+    // Check if the group only has the main user (no participating family members)
+    const otherMembersCount = await FamilyMembership.countDocuments({
+      group: device.group,
+      role: "member",
+      status: "active",
+    });
+
+    // Fetch latest location of the main user (creator)
+    const mainLocation = await MemberLocation.findOne({
+      group: device.group,
+      user: group.creator,
+    }).sort({ serverReceivedAt: -1 });
+
+    const isMainFresh = mainLocation
+      ? isLocationFresh(mainLocation.serverReceivedAt, group.locationFreshnessMinutes)
+      : false;
+
+    const isMainInaccurate = mainLocation && typeof mainLocation.accuracy === "number" && mainLocation.accuracy > 35;
+
     const activeAlert = await SeparationAlert.findOne({
       group: device.group,
       status: "active",
+      deviceCommandDelivered: false,
     })
       .sort({ createdAt: -1 })
       .populate("member", "name");
 
     if (activeAlert) {
+      // If main user is the only member, suppress alert
+      if (otherMembersCount === 0) {
+        activeAlert.status = "resolved";
+        activeAlert.resolvedReason = "Suppressed: Main user is the only member in this group.";
+        await activeAlert.save();
+        return res.status(200).json({
+          hasCommand: false,
+          command: "NONE",
+          status: "SAFE",
+        });
+      }
+
+      // If main user's location is unavailable, stale, or inaccurate, do not buzz
+      if (!mainLocation || !isMainFresh || isMainInaccurate) {
+        return res.status(200).json({
+          hasCommand: false,
+          command: "NONE",
+          status: "SAFE",
+          message: "Main user GPS unavailable, stale, or inaccurate.",
+        });
+      }
+
+      // Ensure main user cannot be alerted as separated from themselves
+      if (activeAlert.member && String(activeAlert.member._id || activeAlert.member) === String(group.creator)) {
+        activeAlert.status = "resolved";
+        activeAlert.resolvedReason = "Resolved: Main user cannot be separated from themselves.";
+        await activeAlert.save();
+        return res.status(200).json({
+          hasCommand: false,
+          command: "NONE",
+          status: "SAFE",
+        });
+      }
+
       const memberDisplayName =
         activeAlert.memberName || (activeAlert.member ? activeAlert.member.name : "Family Member");
+      const memberId = activeAlert.membership
+        ? activeAlert.membership.toString()
+        : activeAlert.member
+        ? activeAlert.member.toString()
+        : "";
 
       return res.status(200).json({
         hasCommand: true,
         command: "TRIGGER_BUZZER",
         alertId: activeAlert._id,
+        memberId,
+        membershipId: activeAlert.membership,
         severity: activeAlert.severity,
         buzzerPattern: activeAlert.buzzerPattern,
         distanceMeters: activeAlert.distanceMeters,
         thresholdMeters: activeAlert.thresholdMeters,
         memberName: memberDisplayName,
+        memberLocation: activeAlert.memberLocation,
+        mainLocation: activeAlert.mainLocation,
         timestamp: activeAlert.createdAt,
       });
     }
@@ -1497,6 +1788,16 @@ const iotAcknowledgeCommand = async (req, res, next) => {
       throw new Error("Alert ID is required to acknowledge command.");
     }
 
+    // Hardware buzzer test command acknowledgement (does not use SeparationAlert collection)
+    if (String(alertId).startsWith("test-")) {
+      return res.status(200).json({
+        success: true,
+        message: "Hardware buzzer test acknowledged by ESP32.",
+        alertId,
+        acknowledgedAt: new Date(),
+      });
+    }
+
     const alert = await SeparationAlert.findById(alertId);
     if (!alert) {
       res.status(404);
@@ -1519,6 +1820,54 @@ const iotAcknowledgeCommand = async (req, res, next) => {
   }
 };
 
+// @desc    Trigger physical ESP32 buzzer test from dashboard (Zero fake SeparationAlert records)
+// @route   POST /api/family-tracking/iot/test-buzzer/:groupId
+// @access  Private (JWT User)
+const triggerBuzzerTest = async (req, res, next) => {
+  try {
+    const { groupId } = req.params;
+
+    const group = await FamilyGroup.findById(groupId);
+    if (!group) {
+      res.status(404);
+      throw new Error("Family group not found.");
+    }
+
+    if (!group.pairedDeviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "No ESP32 hardware device is paired with this family group.",
+      });
+    }
+
+    const device = await IoTDevice.findOne({ deviceId: group.pairedDeviceId });
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: "Paired IoT device record not found.",
+      });
+    }
+
+    // Set pending one-shot hardware test command on the device directly
+    device.pendingTestCommand = true;
+    device.testCommandPattern = "warning_short";
+    await device.save();
+
+    // Clean up any legacy test alert records from SeparationAlert collection
+    await SeparationAlert.deleteMany({
+      group: group._id,
+      memberName: "Physical Buzzer Test",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Buzzer test queued! Physical ESP32 buzzer will sound on the next poll cycle.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createGroup,
   joinGroupByCode,
@@ -1527,6 +1876,8 @@ module.exports = {
   regenerateMemberInvite,
   revokeMember,
   validateInvitation,
+  validateGroupInviteCode,
+  joinGroupByCodePublic,
   acceptInvitationAndStartSession,
   sessionSubmitLocation,
   sessionStopTracking,
@@ -1547,4 +1898,5 @@ module.exports = {
   iotHeartbeat,
   iotGetPendingCommands,
   iotAcknowledgeCommand,
+  triggerBuzzerTest,
 };

@@ -70,7 +70,7 @@ const memberLocationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["live", "stale", "unavailable", "stopped", "separated"],
+      enum: ["live", "stale", "unavailable", "stopped", "separated", "warning", "normal", "inaccurate_gps"],
       default: "live",
     },
     isSimulated: {

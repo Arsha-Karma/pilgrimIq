@@ -55,11 +55,32 @@ export const apiRevokeFamilyMember = async (groupId, membershipId, token) => {
   });
 };
 
+// Determine configured public frontend URL (never localhost for shareable links)
+export const getPublicFrontendUrl = () => {
+  if (import.meta.env.VITE_PUBLIC_FRONTEND_URL) {
+    return import.meta.env.VITE_PUBLIC_FRONTEND_URL.replace(/\/+$/, "");
+  }
+  if (import.meta.env.VITE_FRONTEND_URL) {
+    return import.meta.env.VITE_FRONTEND_URL.replace(/\/+$/, "");
+  }
+  const custom = typeof window !== "undefined" ? localStorage.getItem("pilgrim_custom_public_url") : null;
+  if (custom && custom.trim()) {
+    return custom.trim().replace(/\/+$/, "");
+  }
+  if (typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1" && hostname !== "0.0.0.0") {
+      return window.location.origin;
+    }
+  }
+  return "https://pilgrimiq.vercel.app";
+};
+
 // ==========================================
 // NO-LOGIN FAMILY MEMBER SMARTPHONE APIS
 // ==========================================
 
-// Validate invitation link token (No login needed)
+// Validate individual member invitation link token (No login needed)
 export const apiValidateInvitation = async (inviteToken) => {
   return fetchAPI(`/family-tracking/invite/${inviteToken}`, {
     method: "GET",
@@ -67,11 +88,32 @@ export const apiValidateInvitation = async (inviteToken) => {
   });
 };
 
-// Accept invitation & exchange for a restricted tracking session
-export const apiAcceptInvitationAndStartSession = async (inviteToken, consentGiven = true) => {
-  return fetchAPI(`/family-tracking/invite/${inviteToken}/session`, {
+// Validate 6-digit group invitation code (Public - No login needed)
+export const apiValidateGroupInviteCode = async (inviteCode) => {
+  return fetchAPI(`/family-tracking/invite/code/${encodeURIComponent(inviteCode)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
+// Join group via 6-digit invite code (Public for family members without login)
+export const apiJoinGroupByCodePublic = async (inviteCode, memberData) => {
+  return fetchAPI(`/family-tracking/invite/code/${encodeURIComponent(inviteCode)}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(memberData),
+  });
+};
+
+// Accept invitation & exchange for a restricted tracking session (supports optional account linking)
+export const apiAcceptInvitationAndStartSession = async (inviteToken, consentGiven = true, userToken = null) => {
+  const headers = { "Content-Type": "application/json" };
+  if (userToken) {
+    headers["Authorization"] = `Bearer ${userToken}`;
+  }
+  return fetchAPI(`/family-tracking/invite/${inviteToken}/session`, {
+    method: "POST",
+    headers,
     body: JSON.stringify({ consentGiven }),
   });
 };
@@ -221,6 +263,14 @@ export const apiRegisterIoTDevice = async (deviceData, token) => {
 export const apiGetIoTDeviceStatus = async (groupId, token) => {
   return fetchAPI(`/family-tracking/iot/status/${groupId}`, {
     method: "GET",
+    headers: getHeaders(token),
+  });
+};
+
+// Trigger physical ESP32 buzzer test from dashboard
+export const apiTriggerBuzzerTest = async (groupId, token) => {
+  return fetchAPI(`/family-tracking/iot/test-buzzer/${groupId}`, {
+    method: "POST",
     headers: getHeaders(token),
   });
 };
