@@ -309,10 +309,20 @@ void pollPendingCommands() {
         triggerBuzzerPattern(buzzerPattern);
         // Delivery acknowledgment will be dispatched by stopBuzzer() once physical pattern completes
       } else {
-        // Backend reports SAFE / no active alerts -> keep buzzer strictly OFF
-        stopBuzzer();
         const char* statusMsg = doc["status"] | "SAFE";
+        int activeAlertsCount = doc["activeAlertsCount"] | 0;
         const char* infoMsg = doc["message"] | "";
+
+        if (strcmp(statusMsg, "SAFE") == 0 || activeAlertsCount == 0) {
+          // Backend reports SAFE / no active alerts -> keep buzzer strictly OFF
+          stopBuzzer();
+        } else {
+          // Backend reports SEPARATED with remaining active alerts -> do not prematurely silence buzzer
+          Serial.print("[ALERT] Active separation continues for ");
+          Serial.print(activeAlertsCount);
+          Serial.println(" family member(s). Alert state preserved.");
+        }
+
         Serial.print("[COMMAND] Polled OK (HTTP 200) - Status: ");
         Serial.print(statusMsg);
         if (strlen(infoMsg) > 0) {

@@ -674,28 +674,30 @@ function FamilyTracking() {
   };
 
   // Resolve Alert / Mark Reunited
-  const handleResolveAlert = async (alertId, memberName = "family member") => {
+  const handleResolveAlert = async (alertId, memberName = "family member", membershipId = null) => {
     try {
       setError("");
       const res = await apiResolveSeparationAlert(
         alertId,
         `Reunited with ${memberName} & verified on dashboard`,
-        token
+        token,
+        membershipId,
+        memberName
       );
 
       // Display required confirmation message
       const confirmMsg = res?.message || "Family member reunited successfully. Your group is now safe.";
       setSuccessMsg(confirmMsg);
 
-      const resolvedMembershipId = res?.membershipId || res?.alert?.membership;
-      const resolvedMemberUserId = res?.alert?.member;
+      const resolvedMembershipId = res?.membershipId || membershipId || res?.alert?.membership;
+      const resolvedMemberUserId = res?.alert?.member || res?.memberId;
 
       // Immediately update frontend state for alerts of this member
       setAlerts((prevAlerts) =>
         prevAlerts.map((a) => {
           const isTargetAlert =
             a._id === alertId ||
-            (resolvedMembershipId && String(a.membership) === String(resolvedMembershipId)) ||
+            (resolvedMembershipId && String(a.membership?._id || a.membership) === String(resolvedMembershipId)) ||
             (resolvedMemberUserId && String(a.member?._id || a.member) === String(resolvedMemberUserId)) ||
             (memberName && a.memberName && a.memberName.toLowerCase() === memberName.toLowerCase());
           if (isTargetAlert) {
@@ -1424,7 +1426,13 @@ function FamilyTracking() {
                       <button
                         type="button"
                         className="btn-banner-resolve"
-                        onClick={() => handleResolveAlert(alertItem._id, memberName)}
+                        onClick={() =>
+                          handleResolveAlert(
+                            alertItem._id,
+                            memberName,
+                            alertItem.membership?._id || alertItem.membership
+                          )
+                        }
                         title="Mark separation resolved"
                       >
                         Mark Reunited
@@ -1529,18 +1537,18 @@ function FamilyTracking() {
 
                   <div className="members-list-container">
                     {members.map((member) => {
-                      const isSeparated = member.isSeparated;
+                      const isReunited =
+                        member.reunionStatus === "reunited" ||
+                        member.locationStatus === "reunited";
+                      const isSeparated = !isReunited && member.isSeparated;
                       const initial = (member.name || "M").charAt(0).toUpperCase();
 
                       // Compute status label
                       let statusLabel = member.locationStatus || "invited";
-                      if (isSeparated) {
-                        statusLabel = "separated";
-                      } else if (
-                        member.reunionStatus === "reunited" ||
-                        member.locationStatus === "reunited"
-                      ) {
+                      if (isReunited) {
                         statusLabel = "reunited";
+                      } else if (isSeparated) {
+                        statusLabel = "separated";
                       } else if (!member.isInvitationAccepted && member.hasInviteLink) {
                         statusLabel = "invited";
                       } else if (member.isInvitationAccepted && !member.isLocationSharing) {
@@ -1628,7 +1636,7 @@ function FamilyTracking() {
                                     uniqueUnresolvedAlerts.find(
                                       (a) =>
                                         (a.membership &&
-                                          String(a.membership) ===
+                                          String(a.membership?._id || a.membership) ===
                                             String(member.membershipId)) ||
                                         (a.member &&
                                           String(a.member._id || a.member) ===
@@ -1643,7 +1651,7 @@ function FamilyTracking() {
                                         (a.status === "active" ||
                                           a.status === "acknowledged_by_device") &&
                                         ((a.membership &&
-                                          String(a.membership) ===
+                                          String(a.membership?._id || a.membership) ===
                                             String(member.membershipId)) ||
                                           (a.member &&
                                             String(a.member._id || a.member) ===
@@ -1656,7 +1664,24 @@ function FamilyTracking() {
                                               member.name.toLowerCase()))
                                     );
                                   if (alertItem) {
-                                    handleResolveAlert(alertItem._id, member.name);
+                                    handleResolveAlert(alertItem._id, member.name, member.membershipId);
+                                  } else {
+                                    const anyAlert = alerts.find(
+                                      (a) =>
+                                        (a.membership &&
+                                          String(a.membership?._id || a.membership) ===
+                                            String(member.membershipId)) ||
+                                        (a.member &&
+                                          String(a.member._id || a.member) ===
+                                            String(member.user?._id || member.user)) ||
+                                        (a.memberName &&
+                                          member.name &&
+                                          a.memberName.toLowerCase() ===
+                                            member.name.toLowerCase())
+                                    );
+                                    if (anyAlert) {
+                                      handleResolveAlert(anyAlert._id, member.name, member.membershipId);
+                                    }
                                   }
                                 }}
                                 title="Mark Reunited"

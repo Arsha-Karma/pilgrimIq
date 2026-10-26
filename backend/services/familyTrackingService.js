@@ -225,10 +225,37 @@ async function processLocationUpdate({
       if (isSeparated) {
         // If member was confirmed reunited, verify whether this update represents fresh movement after reunion
         const isReunitedState = membership.reunionStatus === "reunited" || Boolean(membership.reunitedAt);
-        const locTime = new Date(clientTimestamp).getTime();
+        const locTime = Math.min(new Date(clientTimestamp).getTime(), Date.now());
         const reunionTime = new Date(membership.lastResolvedLocationTimestamp || membership.reunitedAt || 0).getTime();
 
-        if (isReunitedState && locTime <= reunionTime) {
+        let isStalePreReunionFix = false;
+        if (isReunitedState) {
+          if (locTime <= reunionTime) {
+            isStalePreReunionFix = true;
+          } else {
+            // Check previous location recorded at or before reunion
+            const prevLoc = await MemberLocation.findOne({
+              group: groupId,
+              membership: membership._id,
+              serverReceivedAt: { $lte: new Date(reunionTime) },
+            }).sort({ serverReceivedAt: -1 });
+
+            if (prevLoc) {
+              const diffFromResolved = calculateHaversineDistance(
+                prevLoc.latitude,
+                prevLoc.longitude,
+                latitude,
+                longitude
+              );
+              // If position hasn't moved (> 15m) from pre-reunion coordinates, it's the cached fix
+              if (diffFromResolved !== null && diffFromResolved < 15) {
+                isStalePreReunionFix = true;
+              }
+            }
+          }
+        }
+
+        if (isReunitedState && isStalePreReunionFix) {
           // Respect reunion confirmation from existing coordinates
           separationStatus = "reunited";
         } else {
@@ -451,8 +478,28 @@ async function reevaluateMembersSeparation(group, mainLocation) {
           const locTime = new Date(latestLoc.serverReceivedAt || latestLoc.clientTimestamp).getTime();
           const reunionTime = new Date(member.lastResolvedLocationTimestamp || member.reunitedAt || 0).getTime();
 
-          if (isReunitedState && locTime <= reunionTime) {
-            continue; // Respect confirmed reunion, do not recreate alert from stale member coordinates
+          if (isReunitedState) {
+            if (locTime <= reunionTime) {
+              continue; // Respect confirmed reunion, do not recreate alert from stale member coordinates
+            }
+            // Check if member coordinates are unchanged from pre-reunion location
+            const prevLoc = await MemberLocation.findOne({
+              group: group._id,
+              membership: member._id,
+              serverReceivedAt: { $lte: new Date(reunionTime) },
+            }).sort({ serverReceivedAt: -1 });
+
+            if (prevLoc) {
+              const diffFromResolved = calculateHaversineDistance(
+                prevLoc.latitude,
+                prevLoc.longitude,
+                latestLoc.latitude,
+                latestLoc.longitude
+              );
+              if (diffFromResolved !== null && diffFromResolved < 15) {
+                continue;
+              }
+            }
           }
 
           member.consecutiveSeparatedCount = (member.consecutiveSeparatedCount || 0) + 1;

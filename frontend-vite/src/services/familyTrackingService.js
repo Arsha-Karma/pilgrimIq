@@ -242,11 +242,11 @@ export const apiGetFamilyGroupAlerts = async (groupId, token) => {
 };
 
 // Manually resolve an alert
-export const apiResolveSeparationAlert = async (alertId, reason, token) => {
+export const apiResolveSeparationAlert = async (alertId, reason, token, membershipId = null, memberName = null) => {
   return fetchAPI(`/family-tracking/alerts/${alertId}/resolve`, {
     method: "POST",
     headers: getHeaders(token),
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, membershipId, memberName }),
   });
 };
 

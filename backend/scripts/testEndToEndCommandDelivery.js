@@ -202,7 +202,8 @@ async function runEndToEndVerification() {
     resCmd = mockResponse();
     await iotGetPendingCommands(reqCmd, resCmd, (err) => { if (err) throw err; });
     assert.strictEqual(resCmd.data.hasCommand, false, "Subsequent poll suppresses duplicate buzzer command");
-    assert.strictEqual(resCmd.data.status, "SAFE", "ESP32 reports SAFE to keep buzzer pin strictly OFF");
+    assert.strictEqual(resCmd.data.status, "SEPARATED", "ESP32 reports SEPARATED while alert remains active/acknowledged");
+    assert.strictEqual(resCmd.data.activeAlertsCount, 1, "Active alerts count is 1");
     console.log("  [PASS] Subsequent poll suppresses duplicate buzzer while separation persists.");
 
     // Dashboard check: Dashboard still displays member as separated

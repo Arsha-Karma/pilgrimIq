@@ -1086,13 +1086,12 @@ const getGroupMembers = async (req, res, next) => {
           // Check if member location is from before/at reunion
           const locTime = latestLoc ? new Date(latestLoc.serverReceivedAt || latestLoc.clientTimestamp).getTime() : 0;
           const reunionTime = new Date(m.lastResolvedLocationTimestamp || m.reunitedAt || 0).getTime();
-          if (locTime <= reunionTime) {
-            // Respect reunion confirmation from existing coordinates
-            isSeparated = false;
-            finalLocationStatus = "reunited";
+          // Respect reunion confirmation
+          isSeparated = false;
+          finalLocationStatus = "reunited";
 
-            // Reconcile and resolve any remaining active alerts for this specific reunited member
-            if (activeAlertForMember) {
+          // Reconcile and resolve any remaining active alerts for this specific reunited member
+          if (activeAlertForMember) {
               await SeparationAlert.updateMany(
                 {
                   group: groupId,
@@ -1112,13 +1111,6 @@ const getGroupMembers = async (req, res, next) => {
                 }
               );
             }
-          } else if (isMainFresh && isMemberFresh && distanceMeters !== null && distanceMeters > threshold) {
-            isSeparated = true;
-            finalLocationStatus = "separated";
-          } else {
-            isSeparated = false;
-            finalLocationStatus = "reunited";
-          }
         } else if (activeAlertForMember) {
           isSeparated = true;
           finalLocationStatus = "separated";
@@ -1561,7 +1553,7 @@ const getGroupAlerts = async (req, res, next) => {
 const resolveAlert = async (req, res, next) => {
   try {
     const { alertId } = req.params;
-    const { reason = "Resolved manually from dashboard" } = req.body;
+    const { reason = "Resolved manually from dashboard", membershipId, memberName } = req.body;
 
     const alert = await SeparationAlert.findById(alertId);
     if (!alert) {
@@ -1597,14 +1589,21 @@ const resolveAlert = async (req, res, next) => {
 
     // 2. Identify the target member record with robust fallback
     let memberRecord = null;
-    if (alert.membership) {
+    if (membershipId && mongoose.Types.ObjectId.isValid(membershipId)) {
+      memberRecord = await FamilyMembership.findOne({ _id: membershipId, group: alert.group });
+    }
+    if (!memberRecord && alert.membership) {
       memberRecord = await FamilyMembership.findOne({ _id: alert.membership, group: alert.group });
     }
     if (!memberRecord && alert.member) {
       memberRecord = await FamilyMembership.findOne({ group: alert.group, user: alert.member });
     }
-    if (!memberRecord && alert.memberName) {
-      memberRecord = await FamilyMembership.findOne({ group: alert.group, name: alert.memberName });
+    const nameToMatch = (memberName || alert.memberName || "").trim();
+    if (!memberRecord && nameToMatch) {
+      memberRecord = await FamilyMembership.findOne({
+        group: alert.group,
+        name: { $regex: new RegExp(`^${nameToMatch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      });
     }
 
     // 3. Resolve any other active or acknowledged alerts for this SPECIFIC member
@@ -1650,7 +1649,8 @@ const resolveAlert = async (req, res, next) => {
       message: "Family member reunited successfully. Your group is now safe.",
       alert,
       reunionStatus: "reunited",
-      membershipId: memberRecord?._id || alert.membership,
+      membershipId: memberRecord?._id || alert.membership || membershipId,
+      memberName: memberRecord?.name || alert.memberName || memberName,
     });
   } catch (error) {
     next(error);

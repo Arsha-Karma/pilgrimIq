@@ -273,8 +273,11 @@ function FamilyTrackingMap({
           const memberPos = [member.lastLocation.latitude, member.lastLocation.longitude];
           const displayName = member.name || member.displayName || member.user?.name || "Family Member";
           const initial = displayName.charAt(0).toUpperCase();
-          const isSeparated = member.isSeparated;
-          const status = member.locationStatus || "live";
+          const isReunited =
+            member.reunionStatus === "reunited" ||
+            member.locationStatus === "reunited";
+          const isSeparated = !isReunited && member.isSeparated;
+          const status = isReunited ? "reunited" : (member.locationStatus || "live");
           const icon = createMemberIcon(initial, status, isSeparated);
 
           let badgeClass = "safe-badge";
@@ -282,7 +285,7 @@ function FamilyTrackingMap({
           if (isSeparated) {
             badgeClass = "separated-badge";
             badgeText = "SEPARATED (ALERT)";
-          } else if (status === "reunited") {
+          } else if (isReunited) {
             badgeClass = "reunited-badge";
             badgeText = "REUNITED";
           } else if (status === "stale") {
