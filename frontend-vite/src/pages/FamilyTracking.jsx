@@ -660,14 +660,162 @@ function FamilyTracking() {
     }
   };
 
-  // Resolve Alert
-  const handleResolveAlert = async (alertId) => {
+  // Resolve Alert / Mark Reunited
+  const handleResolveAlert = async (alertId, memberName = "family member") => {
     try {
-      await apiResolveSeparationAlert(alertId, "Reunited & verified on dashboard", token);
-      pollGroupData();
+      setError("");
+      const res = await apiResolveSeparationAlert(
+        alertId,
+        `Reunited with ${memberName} & verified on dashboard`,
+        token
+      );
+
+      // Display required confirmation message
+      const confirmMsg = res?.message || "Family member reunited successfully. Your group is now safe.";
+      setSuccessMsg(confirmMsg);
+
+      // Immediately update frontend state
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((a) =>
+          a._id === alertId ? { ...a, status: "resolved", resolvedAt: new Date() } : a
+        )
+      );
+
+      // Update member status in local state to REUNITED
+      setMembers((prevMembers) =>
+        prevMembers.map((m) => {
+          const isTarget =
+            String(m.membershipId) === String(res?.membershipId) ||
+            (res?.alert?.member && String(m.user?._id || m.user) === String(res.alert.member)) ||
+            (m.name && memberName && m.name.toLowerCase() === memberName.toLowerCase());
+          if (isTarget) {
+            return {
+              ...m,
+              isSeparated: false,
+              locationStatus: "reunited",
+              reunionStatus: "reunited",
+            };
+          }
+          return m;
+        })
+      );
+
+      // Synchronize with backend
+      await pollGroupData();
     } catch (err) {
-      setError(err.message || "Failed to resolve alert.");
+      setError("Failed to mark reunited: " + (err.message || "Request failed."));
     }
+  };
+
+  // Helper coordinate validator
+  const isValidGpsCoordinate = (lat, lng) => {
+    return (
+      typeof lat === "number" &&
+      typeof lng === "number" &&
+      !isNaN(lat) &&
+      !isNaN(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180 &&
+      !(lat === 0 && lng === 0)
+    );
+  };
+
+  // Open Google Maps Directions with strict validation and freshness verification
+  const handleOpenDirections = (target) => {
+    if (!selectedGroup) {
+      setError("Please select a family tracking group first.");
+      return;
+    }
+
+    // 1. Identify member name and target coordinates
+    let memberName = "Family Member";
+    let destLat = null;
+    let destLng = null;
+    let destTimestamp = null;
+    let memberId = null;
+
+    if (target.memberLocation?.latitude !== undefined) {
+      // Called with alert object
+      memberName = target.memberName || target.member?.name || "Family Member";
+      destLat = target.memberLocation.latitude;
+      destLng = target.memberLocation.longitude;
+      destTimestamp = target.memberLocation.recordedAt || target.createdAt;
+      memberId = target.membership || target.member?._id || target.member;
+
+      // Check if members state has an even newer valid fix for this member
+      const memberInState = members.find(
+        (m) =>
+          String(m.membershipId) === String(memberId) ||
+          (m.user && String(m.user._id || m.user) === String(memberId))
+      );
+      if (
+        memberInState?.lastLocation?.latitude !== undefined &&
+        memberInState.lastLocation.timestamp
+      ) {
+        const stateTime = new Date(memberInState.lastLocation.timestamp).getTime();
+        const alertTime = new Date(destTimestamp).getTime();
+        if (stateTime > alertTime) {
+          destLat = memberInState.lastLocation.latitude;
+          destLng = memberInState.lastLocation.longitude;
+          destTimestamp = memberInState.lastLocation.timestamp;
+        }
+      }
+    } else if (target.lastLocation?.latitude !== undefined) {
+      // Called with member object
+      memberName = target.name || target.displayName || target.user?.name || "Family Member";
+      destLat = target.lastLocation.latitude;
+      destLng = target.lastLocation.longitude;
+      destTimestamp = target.lastLocation.timestamp;
+      memberId = target.membershipId || target._id;
+    }
+
+    // 2. Retrieve main user coordinates
+    const mainUserMembership = members.find((m) => m.role === "main");
+    const mainLat =
+      currentCoords?.latitude ?? mainUserMembership?.lastLocation?.latitude ?? null;
+    const mainLng =
+      currentCoords?.longitude ?? mainUserMembership?.lastLocation?.longitude ?? null;
+
+    // 3. Validate main user coordinates
+    if (!isValidGpsCoordinate(mainLat, mainLng)) {
+      setError(
+        "Cannot open directions: Main user's GPS coordinates are unavailable. Please start location sharing to establish your starting location."
+      );
+      return;
+    }
+
+    // 4. Validate separated family member coordinates
+    if (!isValidGpsCoordinate(destLat, destLng)) {
+      setError(
+        `Cannot open directions: ${memberName}'s GPS coordinates are unavailable or invalid.`
+      );
+      return;
+    }
+
+    // 5. Freshness check: warn user if destination GPS is stale
+    const freshnessMs = (selectedGroup.locationFreshnessMinutes || 3) * 60 * 1000;
+    const now = Date.now();
+    const destAge = destTimestamp ? now - new Date(destTimestamp).getTime() : Infinity;
+    const isDestStale = destAge > freshnessMs;
+
+    if (isDestStale) {
+      const lastReportedTimeStr = destTimestamp
+        ? new Date(destTimestamp).toLocaleTimeString()
+        : "unknown time";
+      const minsAgo = Math.round(destAge / 60000);
+      const proceed = window.confirm(
+        `Notice: ${memberName}'s GPS location is not live (last reported at ${lastReportedTimeStr}, ~${minsAgo} minutes ago).\n\nDirections will route to this last available location.\n\nDo you want to continue to Google Maps?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+
+    // 6. Open Google Maps Directions URL
+    const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${mainLat},${mainLng}&destination=${destLat},${destLng}&travelmode=driving`;
+    window.open(gmapsUrl, "_blank", "noopener,noreferrer");
   };
 
   // Copy Group Invite Code
@@ -1040,153 +1188,206 @@ function FamilyTracking() {
             </div>
           )}
 
-          {/* Active Separation Alert Banner (Lost Family Member Location Card) */}
+          {/* Active Separation Alert Banner (Lost Family Member Location Cards) */}
           {unresolvedAlerts.length > 0 && (
-            <div
-              className={`separation-alert-banner ${unresolvedAlerts[0].severity === "critical"
-                  ? "alert-banner-critical"
-                  : "alert-banner-warning"
-                }`}
-            >
-              <div className="alert-banner-content">
-                <div className="alert-banner-icon">
-                  <FiAlertTriangle />
-                </div>
-                <div className="alert-banner-text">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
-                    <h4 style={{ margin: 0 }}>
-                      {unresolvedAlerts[0].severity === "critical"
-                        ? "CRITICAL SEPARATION DETECTED"
-                        : "SEPARATION WARNING DETECTED"}
-                    </h4>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "800",
-                        padding: "2px 8px",
-                        borderRadius: "10px",
-                        background: unresolvedAlerts[0].status === "acknowledged_by_device" ? "#dbeafe" : "#fef3c7",
-                        color: unresolvedAlerts[0].status === "acknowledged_by_device" ? "#1e40af" : "#92400e",
-                      }}
-                    >
-                      {unresolvedAlerts[0].status === "acknowledged_by_device"
-                        ? "ESP32 Buzzer Sounded"
-                        : "Alerting ESP32 DevKit V1"}
-                    </span>
-                    {unresolvedAlerts[0].memberLocation?.recordedAt && (
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: "700",
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          background:
-                            Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
-                              (selectedGroup?.locationFreshnessMinutes || 3) * 60000
-                              ? "#fef2f2"
-                              : "#ecfdf5",
-                          color:
-                            Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
-                              (selectedGroup?.locationFreshnessMinutes || 3) * 60000
-                              ? "#b91c1c"
-                              : "#065f46",
-                        }}
-                      >
-                        {Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime() >
-                          (selectedGroup?.locationFreshnessMinutes || 3) * 60000
-                          ? `⚠️ Stale Fix (${Math.round(
-                            (Date.now() - new Date(unresolvedAlerts[0].memberLocation.recordedAt).getTime()) / 60000
-                          )}m ago) - Do not treat as live`
-                          : "● Live GPS Location"}
-                      </span>
-                    )}
-                  </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
+              {unresolvedAlerts.map((alertItem) => {
+                const isCritical = alertItem.severity === "critical";
+                const memberName = alertItem.memberName || alertItem.member?.name || "Family Member";
+                const matchingMember = members.find(
+                  (m) =>
+                    String(m.membershipId) === String(alertItem.membership) ||
+                    (alertItem.member &&
+                      String(m.user?._id || m.user) ===
+                        String(alertItem.member?._id || alertItem.member))
+                );
+                const actualDistance =
+                  matchingMember?.distanceMeters !== null &&
+                  matchingMember?.distanceMeters !== undefined
+                    ? matchingMember.distanceMeters
+                    : alertItem.distanceMeters;
 
-                  <p style={{ margin: "4px 0 8px 0" }}>
-                    <strong>{unresolvedAlerts[0].memberName || unresolvedAlerts[0].member?.name || "Family Member"}</strong> is{" "}
-                    <strong>{unresolvedAlerts[0].distanceMeters} meters away</strong> from the main user (Safe threshold:{" "}
-                    {unresolvedAlerts[0].thresholdMeters || 50}m).
-                  </p>
+                const isStaleFix =
+                  alertItem.memberLocation?.recordedAt &&
+                  Date.now() - new Date(alertItem.memberLocation.recordedAt).getTime() >
+                    (selectedGroup?.locationFreshnessMinutes || 3) * 60000;
 
-                  {/* Comprehensive Lost Member Location Details */}
-                  {unresolvedAlerts[0].memberLocation?.latitude && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                        gap: "6px 14px",
-                        fontSize: "12px",
-                        background: "rgba(255,255,255,0.85)",
-                        padding: "8px 12px",
-                        borderRadius: "8px",
-                        marginTop: "8px",
-                        color: "#0f172a",
-                        border: "1px solid rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Latitude:</span>
-                        <strong>{unresolvedAlerts[0].memberLocation.latitude.toFixed(6)}°</strong>
+                const lastReportedTime = alertItem.memberLocation?.recordedAt
+                  ? new Date(alertItem.memberLocation.recordedAt).toLocaleTimeString()
+                  : alertItem.createdAt
+                  ? new Date(alertItem.createdAt).toLocaleTimeString()
+                  : "";
+
+                return (
+                  <div
+                    key={alertItem._id}
+                    className={`separation-alert-banner ${
+                      isCritical ? "alert-banner-critical" : "alert-banner-warning"
+                    }`}
+                  >
+                    <div className="alert-banner-content">
+                      <div className="alert-banner-icon">
+                        <FiAlertTriangle />
                       </div>
-                      <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Longitude:</span>
-                        <strong>{unresolvedAlerts[0].memberLocation.longitude.toFixed(6)}°</strong>
-                      </div>
-                      <div>
-                        <span style={{ color: "#64748b", display: "block" }}>GPS Accuracy:</span>
-                        <strong>±{Math.round(unresolvedAlerts[0].memberLocation.accuracy || 0)}m</strong>
-                      </div>
-                      <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Last Reported:</span>
-                        <strong>
-                          {new Date(
-                            unresolvedAlerts[0].memberLocation.recordedAt || unresolvedAlerts[0].createdAt
-                          ).toLocaleTimeString()}
-                        </strong>
+                      <div className="alert-banner-text">
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            flexWrap: "wrap",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <h4 style={{ margin: 0 }}>
+                            {isCritical
+                              ? `CRITICAL SEPARATION DETECTED — ${memberName.toUpperCase()}`
+                              : `SEPARATION WARNING DETECTED — ${memberName.toUpperCase()}`}
+                          </h4>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: "800",
+                              padding: "2px 8px",
+                              borderRadius: "10px",
+                              background:
+                                alertItem.status === "acknowledged_by_device"
+                                  ? "#dbeafe"
+                                  : "#fef3c7",
+                              color:
+                                alertItem.status === "acknowledged_by_device"
+                                  ? "#1e40af"
+                                  : "#92400e",
+                            }}
+                          >
+                            {alertItem.status === "acknowledged_by_device"
+                              ? "ESP32 Buzzer Sounded"
+                              : "Alerting ESP32 DevKit V1"}
+                          </span>
+                          {alertItem.memberLocation?.recordedAt && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                padding: "2px 8px",
+                                borderRadius: "10px",
+                                background: isStaleFix ? "#fef2f2" : "#ecfdf5",
+                                color: isStaleFix ? "#b91c1c" : "#065f46",
+                              }}
+                            >
+                              {isStaleFix
+                                ? `⚠️ Stale Fix (${Math.round(
+                                    (Date.now() -
+                                      new Date(alertItem.memberLocation.recordedAt).getTime()) /
+                                      60000
+                                  )}m ago) - Do not treat as live`
+                                : "● Live GPS Location"}
+                            </span>
+                          )}
+                        </div>
+
+                        <p style={{ margin: "4px 0 8px 0" }}>
+                          <strong>{memberName}</strong> is{" "}
+                          <strong>{actualDistance} meters away</strong> from the main user (Safe
+                          threshold:{" "}
+                          {alertItem.thresholdMeters ||
+                            selectedGroup?.separationThresholdMeters ||
+                            50}
+                          m).
+                        </p>
+
+                        {/* Comprehensive Lost Member Location Details */}
+                        {alertItem.memberLocation?.latitude && (
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                              gap: "6px 14px",
+                              fontSize: "12px",
+                              background: "rgba(255,255,255,0.85)",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              marginTop: "8px",
+                              color: "#0f172a",
+                              border: "1px solid rgba(0,0,0,0.06)",
+                            }}
+                          >
+                            <div>
+                              <span style={{ color: "#64748b", display: "block" }}>Latitude:</span>
+                              <strong>{alertItem.memberLocation.latitude.toFixed(6)}°</strong>
+                            </div>
+                            <div>
+                              <span style={{ color: "#64748b", display: "block" }}>
+                                Longitude:
+                              </span>
+                              <strong>{alertItem.memberLocation.longitude.toFixed(6)}°</strong>
+                            </div>
+                            <div>
+                              <span style={{ color: "#64748b", display: "block" }}>
+                                GPS Accuracy:
+                              </span>
+                              <strong>
+                                ±{Math.round(alertItem.memberLocation.accuracy || 0)}m
+                              </strong>
+                            </div>
+                            <div>
+                              <span style={{ color: "#64748b", display: "block" }}>
+                                Last Reported:
+                              </span>
+                              <strong>{lastReportedTime}</strong>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="alert-banner-actions">
-                <button
-                  type="button"
-                  className="btn-banner-resolve"
-                  onClick={() => handleResolveAlert(unresolvedAlerts[0]._id)}
-                  title="Mark separation resolved"
-                >
-                  Mark Reunited
-                </button>
+                    <div className="alert-banner-actions">
+                      <button
+                        type="button"
+                        className="btn-banner-resolve"
+                        onClick={() => handleResolveAlert(alertItem._id, memberName)}
+                        title="Mark separation resolved"
+                      >
+                        Mark Reunited
+                      </button>
 
-                {unresolvedAlerts[0].memberLocation?.latitude && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-banner-resolve"
-                      style={{ background: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
-                      onClick={() =>
-                        setFocusedMemberId(
-                          unresolvedAlerts[0].membership || unresolvedAlerts[0].member?._id || unresolvedAlerts[0].member
-                        )
-                      }
-                      title="Focus marker on tracking map"
-                    >
-                      <FiCrosshair size={13} /> Focus Map
-                    </button>
+                      {alertItem.memberLocation?.latitude && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-banner-resolve"
+                            style={{
+                              background: "#ffffff",
+                              color: "#1e293b",
+                              border: "1px solid #cbd5e1",
+                            }}
+                            onClick={() =>
+                              setFocusedMemberId(
+                                alertItem.membership ||
+                                  alertItem.member?._id ||
+                                  alertItem.member
+                              )
+                            }
+                            title="Focus marker on tracking map"
+                          >
+                            <FiCrosshair size={13} /> Focus Map
+                          </button>
 
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${unresolvedAlerts[0].memberLocation.latitude},${unresolvedAlerts[0].memberLocation.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-banner-directions"
-                      title="Open navigation directions to lost member"
-                    >
-                      <FiNavigation size={13} /> Open Directions
-                    </a>
-                  </>
-                )}
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDirections(alertItem)}
+                            className="btn-banner-directions"
+                            title="Open navigation directions to lost member in Google Maps"
+                            style={{ border: "none", cursor: "pointer" }}
+                          >
+                            <FiNavigation size={13} /> Open Directions
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1225,6 +1426,7 @@ function FamilyTracking() {
                   members={members}
                   separationThreshold={selectedGroup.separationThresholdMeters || 50}
                   focusedMemberId={focusedMemberId}
+                  onOpenDirections={handleOpenDirections}
                 />
               </div>
 
@@ -1255,6 +1457,11 @@ function FamilyTracking() {
                       let statusLabel = member.locationStatus || "invited";
                       if (isSeparated) {
                         statusLabel = "separated";
+                      } else if (
+                        member.reunionStatus === "reunited" ||
+                        member.locationStatus === "reunited"
+                      ) {
+                        statusLabel = "reunited";
                       } else if (!member.isInvitationAccepted && member.hasInviteLink) {
                         statusLabel = "invited";
                       } else if (member.isInvitationAccepted && !member.isLocationSharing) {
@@ -1320,16 +1527,44 @@ function FamilyTracking() {
                                   <FiCrosshair size={14} />
                                 </button>
 
-                                <a
-                                  href={`https://www.google.com/maps/dir/?api=1&destination=${member.lastLocation.latitude},${member.lastLocation.longitude}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <button
+                                  type="button"
                                   className="btn-icon-action"
+                                  onClick={() => handleOpenDirections(member)}
                                   title="Open directions in Google Maps"
+                                  style={{ color: "#2563eb" }}
                                 >
                                   <FiNavigation size={14} />
-                                </a>
+                                </button>
                               </>
+                            )}
+
+                            {/* Mark Reunited shortcut button for separated members */}
+                            {isSeparated && (
+                              <button
+                                type="button"
+                                className="btn-icon-action"
+                                onClick={() => {
+                                  const alertItem = unresolvedAlerts.find(
+                                    (a) =>
+                                      String(a.membership) === String(member.membershipId) ||
+                                      (a.member &&
+                                        String(a.member._id || a.member) ===
+                                          String(member.user?._id || member.user))
+                                  );
+                                  if (alertItem) {
+                                    handleResolveAlert(alertItem._id, member.name);
+                                  }
+                                }}
+                                title="Mark Reunited"
+                                style={{
+                                  color: "#16a34a",
+                                  background: "#f0fdf4",
+                                  borderColor: "#86efac",
+                                }}
+                              >
+                                <FiCheck size={14} />
+                              </button>
                             )}
 
                             {member.role !== "main" && (

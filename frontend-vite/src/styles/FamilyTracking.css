@@ -470,6 +470,11 @@
   color: #065f46;
 }
 
+.reunited-badge {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
 .separated-badge {
   background: #fee2e2;
   color: #991b1b;
@@ -746,6 +751,11 @@
 .status-live {
   background: #d1fae5;
   color: #065f46;
+}
+
+.status-reunited {
+  background: #ccfbf1;
+  color: #0f766e;
 }
 
 .status-separated {

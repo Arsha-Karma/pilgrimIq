@@ -1030,16 +1030,79 @@ const getGroupMembers = async (req, res, next) => {
           ? isLocationFresh(latestLoc.serverReceivedAt || latestLoc.clientTimestamp, freshnessMinutes)
           : false;
 
-        if (!isMain && m.isLocationSharing && isMainFresh && isMemberFresh && latestLoc && mainLocation) {
+        // Calculate actual straight-line distance whenever valid coordinates exist
+        if (!isMain && latestLoc && mainLocation) {
           distanceMeters = calculateHaversineDistance(
             mainLocation.latitude,
             mainLocation.longitude,
             latestLoc.latitude,
             latestLoc.longitude
           );
-          if (distanceMeters !== null && distanceMeters > threshold) {
-            isSeparated = true;
+        }
+
+        // Check if there is an active/acknowledged separation alert for this member
+        const activeAlertForMember = await SeparationAlert.findOne({
+          group: groupId,
+          status: { $in: ["active", "acknowledged_by_device"] },
+          $or: [
+            { membership: m._id },
+            ...(m.user ? [{ member: m.user._id || m.user }] : []),
+          ],
+        }).sort({ createdAt: -1 });
+
+        let finalLocationStatus = locationStatus;
+
+        if (distanceMeters !== null && distanceMeters <= threshold) {
+          // Member is safely within threshold
+          isSeparated = false;
+          finalLocationStatus = isMemberFresh ? "live" : (latestLoc ? "stale" : "unavailable");
+
+          if (m.reunionStatus === "reunited" || m.reunitedAt || m.consecutiveSeparatedCount > 0) {
+            m.reunionStatus = "normal";
+            m.reunitedAt = null;
+            m.consecutiveSeparatedCount = 0;
+            await m.save();
           }
+
+          // Auto-resolve any active alerts for this member
+          await SeparationAlert.updateMany(
+            {
+              group: groupId,
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: m._id },
+                ...(m.user ? [{ member: m.user._id || m.user }] : []),
+              ],
+            },
+            {
+              $set: {
+                status: "resolved",
+                resolvedAt: new Date(),
+                resolvedReason: `Reunited within safe distance (${distanceMeters}m)`,
+              },
+            }
+          );
+        } else if (m.reunionStatus === "reunited" || m.reunitedAt) {
+          // Check if member location is from before/at reunion
+          const locTime = latestLoc ? new Date(latestLoc.serverReceivedAt || latestLoc.clientTimestamp).getTime() : 0;
+          const reunionTime = new Date(m.lastResolvedLocationTimestamp || m.reunitedAt || 0).getTime();
+          if (locTime <= reunionTime) {
+            // Respect reunion confirmation from existing coordinates
+            isSeparated = false;
+            finalLocationStatus = "reunited";
+          } else if (isMainFresh && isMemberFresh && distanceMeters !== null && distanceMeters > threshold) {
+            isSeparated = true;
+            finalLocationStatus = "separated";
+          } else {
+            isSeparated = false;
+            finalLocationStatus = "reunited";
+          }
+        } else if (activeAlertForMember) {
+          isSeparated = true;
+          finalLocationStatus = "separated";
+        } else if (!isMain && m.isLocationSharing && isMainFresh && isMemberFresh && distanceMeters !== null && distanceMeters > threshold) {
+          isSeparated = true;
+          finalLocationStatus = "separated";
         }
 
         const isMainUser = isMain;
@@ -1057,8 +1120,10 @@ const getGroupMembers = async (req, res, next) => {
           hasInviteLink: Boolean(m.inviteTokenHash),
           isLocationSharing: m.isLocationSharing,
           consentGiven: m.consentGiven,
-          locationStatus,
+          locationStatus: finalLocationStatus,
           isSeparated,
+          reunionStatus: m.reunionStatus || "normal",
+          reunitedAt: m.reunitedAt || null,
           distanceMeters,
           lastLocation: latestLoc
             ? {
@@ -1449,23 +1514,59 @@ const resolveAlert = async (req, res, next) => {
       throw new Error("Alert not found.");
     }
 
+    const group = await FamilyGroup.findById(alert.group);
+    if (!group) {
+      res.status(404);
+      throw new Error("Associated family group not found.");
+    }
+
+    // Verify user is group creator or an active member of this group
+    const userMembership = await FamilyMembership.findOne({
+      group: alert.group,
+      user: req.user._id,
+      status: "active",
+    });
+
+    if (!userMembership && String(group.creator) !== String(req.user._id)) {
+      res.status(403);
+      throw new Error("Not authorized to resolve alerts for this group.");
+    }
+
+    // Handle already resolved alerts idempotently
+    if (alert.status === "resolved") {
+      return res.status(200).json({
+        success: true,
+        message: "Alert already resolved.",
+        alert,
+      });
+    }
+
+    const now = new Date();
     alert.status = "resolved";
-    alert.resolvedAt = new Date();
+    alert.resolvedAt = now;
     alert.resolvedReason = reason;
     await alert.save();
 
     const memberQuery = alert.membership
-      ? { _id: alert.membership }
+      ? { _id: alert.membership, group: alert.group }
       : { group: alert.group, user: alert.member };
 
-    await FamilyMembership.updateOne(memberQuery, {
-      $set: { consecutiveSeparatedCount: 0 },
-    });
+    const memberRecord = await FamilyMembership.findOne(memberQuery);
+    if (memberRecord) {
+      memberRecord.consecutiveSeparatedCount = 0;
+      memberRecord.reunitedAt = now;
+      memberRecord.reunionStatus = "reunited";
+      memberRecord.lastResolvedLocationTimestamp =
+        alert.memberLocation?.recordedAt || now;
+      await memberRecord.save();
+    }
 
     res.status(200).json({
       success: true,
-      message: "Alert marked as resolved.",
+      message: "Family member reunited successfully. Your group is now safe.",
       alert,
+      reunionStatus: "reunited",
+      membershipId: memberRecord?._id || alert.membership,
     });
   } catch (error) {
     next(error);
@@ -1846,6 +1947,16 @@ const iotGetPendingCommands = async (req, res, next) => {
           );
 
           if (distanceMeters !== null && distanceMeters > threshold) {
+            // Check if member is in confirmed reunited state
+            const isReunitedState = m.reunionStatus === "reunited" || Boolean(m.reunitedAt);
+            const locTime = new Date(memberLoc.serverReceivedAt || memberLoc.clientTimestamp).getTime();
+            const reunionTime = new Date(m.lastResolvedLocationTimestamp || m.reunitedAt || 0).getTime();
+
+            if (isReunitedState && locTime <= reunionTime) {
+              // Respect reunion confirmation, do not recreate alert from stale member coordinates
+              continue;
+            }
+
             // Real separation detected! Check existing alert record for this member
             const memberAlert = await SeparationAlert.findOne({
               group: device.group,
@@ -1951,7 +2062,14 @@ const iotGetPendingCommands = async (req, res, next) => {
               });
             }
           } else if (distanceMeters !== null && distanceMeters <= threshold) {
-            // Member is within safe distance -> auto-resolve any active/acknowledged alerts
+            // Member is within safe distance -> reset reunion state if any
+            if (m.reunionStatus === "reunited" || m.reunitedAt) {
+              m.reunionStatus = "normal";
+              m.reunitedAt = null;
+              await m.save();
+            }
+
+            // Auto-resolve any active/acknowledged alerts
             await SeparationAlert.updateMany(
               {
                 group: device.group,

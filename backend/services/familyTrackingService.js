@@ -223,10 +223,21 @@ async function processLocationUpdate({
       const isSeparated = computedDistance !== null && computedDistance > threshold;
 
       if (isSeparated) {
-        membership.consecutiveSeparatedCount = (membership.consecutiveSeparatedCount || 0) + 1;
+        // If member was confirmed reunited, verify whether this update represents fresh movement after reunion
+        const isReunitedState = membership.reunionStatus === "reunited" || Boolean(membership.reunitedAt);
+        const locTime = new Date(clientTimestamp).getTime();
+        const reunionTime = new Date(membership.lastResolvedLocationTimestamp || membership.reunitedAt || 0).getTime();
 
-        if (membership.consecutiveSeparatedCount >= (group.consecutiveReadingsRequired || 2)) {
-          separationStatus = "separated";
+        if (isReunitedState && locTime <= reunionTime) {
+          // Respect reunion confirmation from existing coordinates
+          separationStatus = "reunited";
+        } else {
+          membership.consecutiveSeparatedCount = (membership.consecutiveSeparatedCount || 0) + 1;
+
+          if (membership.consecutiveSeparatedCount >= (group.consecutiveReadingsRequired || 2)) {
+            separationStatus = "separated";
+            membership.reunionStatus = "separated";
+            membership.reunitedAt = null;
 
             // Determine severity & buzzer pattern
             const isCritical =
@@ -301,30 +312,33 @@ async function processLocationUpdate({
             // Warning state before full threshold confirmation
             separationStatus = "warning";
           }
-        } else {
-          // Member returned within safe distance
-          membership.consecutiveSeparatedCount = 0;
-          separationStatus = "normal";
-
-          // Auto-resolve any existing active or acknowledged alert
-          await SeparationAlert.updateMany(
-            {
-              group: groupId,
-              status: { $in: ["active", "acknowledged_by_device"] },
-              $or: [
-                { membership: membership._id },
-                ...(membership.user ? [{ member: membership.user }] : []),
-              ],
-            },
-            {
-              $set: {
-                status: "resolved",
-                resolvedAt: new Date(),
-                resolvedReason: `Member returned within safe distance (${computedDistance}m)`,
-              },
-            }
-          );
         }
+      } else {
+        // Member returned within safe distance
+        membership.consecutiveSeparatedCount = 0;
+        membership.reunionStatus = "normal";
+        membership.reunitedAt = null;
+        separationStatus = "normal";
+
+        // Auto-resolve any existing active or acknowledged alert
+        await SeparationAlert.updateMany(
+          {
+            group: groupId,
+            status: { $in: ["active", "acknowledged_by_device"] },
+            $or: [
+              { membership: membership._id },
+              ...(membership.user ? [{ member: membership.user }] : []),
+            ],
+          },
+          {
+            $set: {
+              status: "resolved",
+              resolvedAt: new Date(),
+              resolvedReason: `Member returned within safe distance (${computedDistance}m)`,
+            },
+          }
+        );
+      }
     } else {
       if (!mainUserLocation) {
         separationStatus = "unavailable";
@@ -410,6 +424,8 @@ async function reevaluateMembersSeparation(group, mainLocation) {
       if (!isAccuracyDegraded && distance !== null) {
         if (distance <= threshold) {
           member.consecutiveSeparatedCount = 0;
+          member.reunionStatus = "normal";
+          member.reunitedAt = null;
           await member.save();
 
           await SeparationAlert.updateMany(
@@ -431,9 +447,19 @@ async function reevaluateMembersSeparation(group, mainLocation) {
           );
         } else {
           // Main user moved away from member (> threshold)
+          const isReunitedState = member.reunionStatus === "reunited" || Boolean(member.reunitedAt);
+          const locTime = new Date(latestLoc.serverReceivedAt || latestLoc.clientTimestamp).getTime();
+          const reunionTime = new Date(member.lastResolvedLocationTimestamp || member.reunitedAt || 0).getTime();
+
+          if (isReunitedState && locTime <= reunionTime) {
+            continue; // Respect confirmed reunion, do not recreate alert from stale member coordinates
+          }
+
           member.consecutiveSeparatedCount = (member.consecutiveSeparatedCount || 0) + 1;
 
           if (member.consecutiveSeparatedCount >= (group.consecutiveReadingsRequired || 2)) {
+            member.reunionStatus = "separated";
+            member.reunitedAt = null;
             const isCritical = distance > threshold * 2.5 || member.consecutiveSeparatedCount >= 4;
             const severity = isCritical ? "critical" : "warning";
             const buzzerPattern = isCritical ? "critical_urgent" : "warning_short";

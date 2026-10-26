@@ -13,9 +13,20 @@ L.Icon.Default.mergeOptions({
 });
 
 // Helper component for animated or forced panning/recentering
-function ChangeMapView({ center, zoom }) {
+function ChangeMapView({ center, zoom, bounds }) {
   const map = useMap();
   useEffect(() => {
+    if (bounds && bounds.isValid && bounds.isValid()) {
+      try {
+        if (map && typeof map.stop === "function") {
+          map.stop();
+        }
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18, animate: true });
+        return;
+      } catch (err) {
+        // Prevent race condition on unmount
+      }
+    }
     if (center && !isNaN(center[0]) && !isNaN(center[1])) {
       try {
         if (map && typeof map.stop === "function") {
@@ -26,7 +37,7 @@ function ChangeMapView({ center, zoom }) {
         // Prevent race condition on unmount
       }
     }
-  }, [center, zoom, map]);
+  }, [center, zoom, bounds, map]);
   return null;
 }
 
@@ -82,6 +93,9 @@ const createMemberIcon = (initial, status, isSeparated) => {
   if (isSeparated) {
     bgColor = "#ef4444"; // red (separated)
     pulse = true;
+  } else if (status === "reunited") {
+    bgColor = "#0d9488"; // teal (reunited)
+    pulse = false;
   } else if (status === "warning") {
     bgColor = "#f59e0b"; // amber
   } else if (status === "stale" || status === "unavailable" || status === "stopped") {
@@ -141,13 +155,14 @@ function FamilyTrackingMap({
   separationThreshold = 50,
   focusedMemberId = null,
   onFocusMember,
+  onOpenDirections,
 }) {
   // Determine map center
   const defaultCenter = [12.9716, 77.5946]; // Default fallback
   const center = useMemo(() => {
     if (focusedMemberId) {
       const targetMember = members.find(
-        (m) => m.membershipId === focusedMemberId || m.user?._id === focusedMemberId
+        (m) => m.membershipId === focusedMemberId || m.user?._id === focusedMemberId || m._id === focusedMemberId
       );
       if (targetMember?.lastLocation?.latitude && targetMember?.lastLocation?.longitude) {
         return [targetMember.lastLocation.latitude, targetMember.lastLocation.longitude];
@@ -163,6 +178,27 @@ function FamilyTrackingMap({
     return defaultCenter;
   }, [mainUserLocation, members, focusedMemberId]);
 
+  // Determine bounds when focused on a member to display both main user and family member
+  const bounds = useMemo(() => {
+    if (focusedMemberId) {
+      const targetMember = members.find(
+        (m) => m.membershipId === focusedMemberId || m.user?._id === focusedMemberId || m._id === focusedMemberId
+      );
+      if (
+        targetMember?.lastLocation?.latitude &&
+        targetMember?.lastLocation?.longitude &&
+        mainUserLocation?.latitude &&
+        mainUserLocation?.longitude
+      ) {
+        return L.latLngBounds([
+          [mainUserLocation.latitude, mainUserLocation.longitude],
+          [targetMember.lastLocation.latitude, targetMember.lastLocation.longitude],
+        ]);
+      }
+    }
+    return null;
+  }, [focusedMemberId, members, mainUserLocation]);
+
   const mainPosition = mainUserLocation?.latitude && mainUserLocation?.longitude
     ? [mainUserLocation.latitude, mainUserLocation.longitude]
     : null;
@@ -175,7 +211,7 @@ function FamilyTrackingMap({
         scrollWheelZoom={true}
         className="leaflet-tracking-container"
       >
-        <ChangeMapView center={center} zoom={mainPosition ? 18 : 15} />
+        <ChangeMapView center={center} zoom={mainPosition ? 18 : 15} bounds={bounds} />
 
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -241,18 +277,30 @@ function FamilyTrackingMap({
           const status = member.locationStatus || "live";
           const icon = createMemberIcon(initial, status, isSeparated);
 
-          const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${member.lastLocation.latitude},${member.lastLocation.longitude}`;
+          let badgeClass = "safe-badge";
+          let badgeText = status.toUpperCase();
+          if (isSeparated) {
+            badgeClass = "separated-badge";
+            badgeText = "SEPARATED (ALERT)";
+          } else if (status === "reunited") {
+            badgeClass = "reunited-badge";
+            badgeText = "REUNITED";
+          } else if (status === "stale") {
+            badgeClass = "stale-badge";
+            badgeText = "STALE LOCATION";
+          }
+
+          const originParam = mainPosition
+            ? `&origin=${mainPosition[0]},${mainPosition[1]}`
+            : "";
+          const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${member.lastLocation.latitude},${member.lastLocation.longitude}&travelmode=driving`;
 
           return (
             <Marker key={member.membershipId || member._id || member.user?._id} position={memberPos} icon={icon}>
               <Popup>
                 <div className="map-popup-card">
-                  <div
-                    className={`popup-badge ${
-                      isSeparated ? "separated-badge" : status === "live" ? "safe-badge" : "stale-badge"
-                    }`}
-                  >
-                    {isSeparated ? "SEPARATED (ALERT)" : status.toUpperCase()}
+                  <div className={`popup-badge ${badgeClass}`}>
+                    {badgeText}
                   </div>
                   <h4 className="popup-title">{displayName}</h4>
                   
@@ -285,14 +333,25 @@ function FamilyTrackingMap({
                   </div>
 
                   <div className="popup-actions">
-                    <a
-                      href={directionsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-popup-directions"
-                    >
-                      <FiNavigation size={13} /> Open Directions
-                    </a>
+                    {onOpenDirections ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenDirections(member)}
+                        className="btn-popup-directions"
+                        style={{ width: "100%", border: "none", cursor: "pointer" }}
+                      >
+                        <FiNavigation size={13} /> Open Directions
+                      </button>
+                    ) : (
+                      <a
+                        href={directionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-popup-directions"
+                      >
+                        <FiNavigation size={13} /> Open Directions
+                      </a>
+                    )}
                   </div>
                 </div>
               </Popup>

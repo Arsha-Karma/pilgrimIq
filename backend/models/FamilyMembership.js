@@ -87,6 +87,19 @@ const familyMembershipSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    reunitedAt: {
+      type: Date,
+      default: null,
+    },
+    reunionStatus: {
+      type: String,
+      enum: ["normal", "reunited", "separated"],
+      default: "normal",
+    },
+    lastResolvedLocationTimestamp: {
+      type: Date,
+      default: null,
+    },
     joinedAt: {
       type: Date,
       default: Date.now,
