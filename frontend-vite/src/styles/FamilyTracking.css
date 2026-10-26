@@ -259,6 +259,11 @@
   color: #ef4444;
 }
 
+.icon-amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
 .metric-details p {
   margin: 0 0 2px 0;
   font-size: 12px;

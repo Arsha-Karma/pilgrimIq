@@ -217,9 +217,22 @@ function FamilyTracking() {
 
       if (alertsData && Array.isArray(alertsData.alerts)) {
         setAlerts(alertsData.alerts);
-        const activeAlert = alertsData.alerts.find(
-          (a) => a.status === "active" && (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
-        );
+        const currentMembers = membersData?.members || [];
+        const activeAlert = alertsData.alerts.find((a) => {
+          if (a.status !== "active") return false;
+          if (a.member && (a.member._id === user?._id || a.member === user?._id)) return false;
+          const matchingMember = currentMembers.find(
+            (m) =>
+              (a.membership && String(m.membershipId) === String(a.membership)) ||
+              (a.member && String(m.user?._id || m.user) === String(a.member?._id || a.member)) ||
+              (a.memberName && m.name && a.memberName.toLowerCase() === m.name.toLowerCase())
+          );
+          if (matchingMember && (matchingMember.reunionStatus === "reunited" || matchingMember.locationStatus === "reunited" || !matchingMember.isSeparated)) {
+            return false;
+          }
+          return true;
+        });
+
         if (activeAlert && lastPlayedAlertIdRef.current !== activeAlert._id) {
           lastPlayedAlertIdRef.current = activeAlert._id;
           playSimulatedBuzzer(activeAlert.buzzerPattern);
@@ -674,19 +687,30 @@ function FamilyTracking() {
       const confirmMsg = res?.message || "Family member reunited successfully. Your group is now safe.";
       setSuccessMsg(confirmMsg);
 
-      // Immediately update frontend state
+      const resolvedMembershipId = res?.membershipId || res?.alert?.membership;
+      const resolvedMemberUserId = res?.alert?.member;
+
+      // Immediately update frontend state for alerts of this member
       setAlerts((prevAlerts) =>
-        prevAlerts.map((a) =>
-          a._id === alertId ? { ...a, status: "resolved", resolvedAt: new Date() } : a
-        )
+        prevAlerts.map((a) => {
+          const isTargetAlert =
+            a._id === alertId ||
+            (resolvedMembershipId && String(a.membership) === String(resolvedMembershipId)) ||
+            (resolvedMemberUserId && String(a.member?._id || a.member) === String(resolvedMemberUserId)) ||
+            (memberName && a.memberName && a.memberName.toLowerCase() === memberName.toLowerCase());
+          if (isTargetAlert) {
+            return { ...a, status: "resolved", resolvedAt: new Date() };
+          }
+          return a;
+        })
       );
 
       // Update member status in local state to REUNITED
       setMembers((prevMembers) =>
         prevMembers.map((m) => {
           const isTarget =
-            String(m.membershipId) === String(res?.membershipId) ||
-            (res?.alert?.member && String(m.user?._id || m.user) === String(res.alert.member)) ||
+            (resolvedMembershipId && String(m.membershipId) === String(resolvedMembershipId)) ||
+            (resolvedMemberUserId && String(m.user?._id || m.user) === String(resolvedMemberUserId)) ||
             (m.name && memberName && m.name.toLowerCase() === memberName.toLowerCase());
           if (isTarget) {
             return {
@@ -893,17 +917,53 @@ function FamilyTracking() {
     }
   };
 
-  // Genuine active alerts in database (status === "active", excluding main user)
-  const activeAlerts = alerts.filter(
-    (a) => a.status === "active" && (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
-  );
+  // Genuine unresolved alerts (status is active or acknowledged by device, excluding main user and confirmed reunited members)
+  const unresolvedAlerts = alerts.filter((a) => {
+    if (a.status !== "active" && a.status !== "acknowledged_by_device") {
+      return false;
+    }
+    // Exclude alerts where main user is the member
+    if (a.member && (a.member._id === user?._id || a.member === user?._id)) {
+      return false;
+    }
+    // Cross-check with members list: if the member is already reunited or safe, exclude from active alerts
+    const matchingMember = members.find(
+      (m) =>
+        (a.membership && String(m.membershipId) === String(a.membership)) ||
+        (a.member && String(m.user?._id || m.user) === String(a.member?._id || a.member)) ||
+        (a.memberName && m.name && a.memberName.toLowerCase() === m.name.toLowerCase())
+    );
+    if (matchingMember) {
+      if (
+        matchingMember.reunionStatus === "reunited" ||
+        matchingMember.locationStatus === "reunited" ||
+        !matchingMember.isSeparated
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 
-  // Unresolved alerts (status is active or acknowledged by device, but not yet reunited)
-  const unresolvedAlerts = alerts.filter(
-    (a) =>
-      (a.status === "active" || a.status === "acknowledged_by_device") &&
-      (!a.member || (a.member._id !== user?._id && a.member !== user?._id))
-  );
+  // Unique unresolved alerts per separated member (most recent alert per member to prevent duplicates)
+  const uniqueUnresolvedAlerts = [];
+  const seenMemberKeys = new Set();
+  for (const alert of unresolvedAlerts) {
+    const memberKey = String(
+      alert.membership ||
+        alert.member?._id ||
+        alert.member ||
+        alert.memberName ||
+        alert._id
+    );
+    if (!seenMemberKeys.has(memberKey)) {
+      seenMemberKeys.add(memberKey);
+      uniqueUnresolvedAlerts.push(alert);
+    }
+  }
+
+  // Genuine active alerts in database (status === "active", excluding main user and reunited members)
+  const activeAlerts = uniqueUnresolvedAlerts.filter((a) => a.status === "active");
 
   const mainUserMembership = members.find((m) => m.role === "main");
   const mainUserLocation = mainUserMembership?.lastLocation || currentCoords;
@@ -1127,22 +1187,40 @@ function FamilyTracking() {
               </div>
 
               <div className="metric-card">
-                <div className={`metric-icon-box ${deviceStatus?.isOnline ? "icon-green" : "icon-red"}`}>
+                <div
+                  className={`metric-icon-box ${
+                    deviceStatus?.isOnline
+                      ? "icon-green"
+                      : deviceStatus?.connectionState === "stale"
+                      ? "icon-amber"
+                      : "icon-red"
+                  }`}
+                >
                   <FiCpu />
                 </div>
                 <div className="metric-details">
                   <p>ESP32 Hardware</p>
-                  <h4>{deviceStatus?.isOnline ? "Connected" : "Disconnected"}</h4>
+                  <h4>
+                    {deviceStatus?.isOnline
+                      ? "Connected"
+                      : deviceStatus?.connectionState === "stale"
+                      ? "Stale"
+                      : "Disconnected"}
+                  </h4>
                 </div>
               </div>
 
               <div className="metric-card">
-                <div className={`metric-icon-box ${unresolvedAlerts.length > 0 ? "icon-red" : "icon-green"}`}>
+                <div
+                  className={`metric-icon-box ${
+                    uniqueUnresolvedAlerts.length > 0 ? "icon-red" : "icon-green"
+                  }`}
+                >
                   <FiAlertTriangle />
                 </div>
                 <div className="metric-details">
                   <p>Active Alerts</p>
-                  <h4>{unresolvedAlerts.length} Active</h4>
+                  <h4>{uniqueUnresolvedAlerts.length} Active</h4>
                 </div>
               </div>
             </div>
@@ -1189,17 +1267,18 @@ function FamilyTracking() {
           )}
 
           {/* Active Separation Alert Banner (Lost Family Member Location Cards) */}
-          {unresolvedAlerts.length > 0 && (
+          {uniqueUnresolvedAlerts.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
-              {unresolvedAlerts.map((alertItem) => {
+              {uniqueUnresolvedAlerts.map((alertItem) => {
                 const isCritical = alertItem.severity === "critical";
                 const memberName = alertItem.memberName || alertItem.member?.name || "Family Member";
                 const matchingMember = members.find(
                   (m) =>
-                    String(m.membershipId) === String(alertItem.membership) ||
+                    (alertItem.membership && String(m.membershipId) === String(alertItem.membership)) ||
                     (alertItem.member &&
                       String(m.user?._id || m.user) ===
-                        String(alertItem.member?._id || alertItem.member))
+                        String(alertItem.member?._id || alertItem.member)) ||
+                    (m.name && alertItem.memberName && m.name.toLowerCase() === alertItem.memberName.toLowerCase())
                 );
                 const actualDistance =
                   matchingMember?.distanceMeters !== null &&
@@ -1545,13 +1624,37 @@ function FamilyTracking() {
                                 type="button"
                                 className="btn-icon-action"
                                 onClick={() => {
-                                  const alertItem = unresolvedAlerts.find(
-                                    (a) =>
-                                      String(a.membership) === String(member.membershipId) ||
-                                      (a.member &&
-                                        String(a.member._id || a.member) ===
-                                          String(member.user?._id || member.user))
-                                  );
+                                  const alertItem =
+                                    uniqueUnresolvedAlerts.find(
+                                      (a) =>
+                                        (a.membership &&
+                                          String(a.membership) ===
+                                            String(member.membershipId)) ||
+                                        (a.member &&
+                                          String(a.member._id || a.member) ===
+                                            String(member.user?._id || member.user)) ||
+                                        (a.memberName &&
+                                          member.name &&
+                                          a.memberName.toLowerCase() ===
+                                            member.name.toLowerCase())
+                                    ) ||
+                                    alerts.find(
+                                      (a) =>
+                                        (a.status === "active" ||
+                                          a.status === "acknowledged_by_device") &&
+                                        ((a.membership &&
+                                          String(a.membership) ===
+                                            String(member.membershipId)) ||
+                                          (a.member &&
+                                            String(a.member._id || a.member) ===
+                                              String(
+                                                member.user?._id || member.user
+                                              )) ||
+                                          (a.memberName &&
+                                            member.name &&
+                                            a.memberName.toLowerCase() ===
+                                              member.name.toLowerCase()))
+                                    );
                                   if (alertItem) {
                                     handleResolveAlert(alertItem._id, member.name);
                                   }

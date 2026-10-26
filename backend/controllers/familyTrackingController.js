@@ -1090,6 +1090,28 @@ const getGroupMembers = async (req, res, next) => {
             // Respect reunion confirmation from existing coordinates
             isSeparated = false;
             finalLocationStatus = "reunited";
+
+            // Reconcile and resolve any remaining active alerts for this specific reunited member
+            if (activeAlertForMember) {
+              await SeparationAlert.updateMany(
+                {
+                  group: groupId,
+                  status: { $in: ["active", "acknowledged_by_device"] },
+                  $or: [
+                    { membership: m._id },
+                    ...(m.user ? [{ member: m.user._id || m.user }] : []),
+                    { memberName: m.name },
+                  ],
+                },
+                {
+                  $set: {
+                    status: "resolved",
+                    resolvedAt: new Date(),
+                    resolvedReason: "Auto-resolved: Member confirmed reunited on dashboard",
+                  },
+                }
+              );
+            }
           } else if (isMainFresh && isMemberFresh && distanceMeters !== null && distanceMeters > threshold) {
             isSeparated = true;
             finalLocationStatus = "separated";
@@ -1485,6 +1507,39 @@ const getGroupAlerts = async (req, res, next) => {
       }
     );
 
+    // Reconcile: If any active/acknowledged alert belongs to a member who is
+    // currently confirmed reunited, mark those alerts resolved (preserves history)
+    const reunitedMemberships = await FamilyMembership.find({
+      group: groupId,
+      reunionStatus: "reunited",
+      status: "active",
+    });
+
+    if (reunitedMemberships.length > 0) {
+      const reconciledOr = [];
+      for (const rm of reunitedMemberships) {
+        reconciledOr.push({ membership: rm._id });
+        if (rm.user) reconciledOr.push({ member: rm.user });
+        if (rm.name) reconciledOr.push({ memberName: rm.name });
+      }
+      if (reconciledOr.length > 0) {
+        await SeparationAlert.updateMany(
+          {
+            group: groupId,
+            status: { $in: ["active", "acknowledged_by_device"] },
+            $or: reconciledOr,
+          },
+          {
+            $set: {
+              status: "resolved",
+              resolvedAt: new Date(),
+              resolvedReason: "Auto-reconciled: Family member marked reunited on dashboard",
+            },
+          }
+        );
+      }
+    }
+
     const alerts = await SeparationAlert.find({ group: groupId })
       .sort({ createdAt: -1 })
       .limit(30)
@@ -1532,32 +1587,61 @@ const resolveAlert = async (req, res, next) => {
       throw new Error("Not authorized to resolve alerts for this group.");
     }
 
-    // Handle already resolved alerts idempotently
-    if (alert.status === "resolved") {
-      return res.status(200).json({
-        success: true,
-        message: "Alert already resolved.",
-        alert,
-      });
-    }
-
     const now = new Date();
+
+    // 1. Resolve this specific alert
     alert.status = "resolved";
     alert.resolvedAt = now;
     alert.resolvedReason = reason;
     await alert.save();
 
-    const memberQuery = alert.membership
-      ? { _id: alert.membership, group: alert.group }
-      : { group: alert.group, user: alert.member };
+    // 2. Identify the target member record with robust fallback
+    let memberRecord = null;
+    if (alert.membership) {
+      memberRecord = await FamilyMembership.findOne({ _id: alert.membership, group: alert.group });
+    }
+    if (!memberRecord && alert.member) {
+      memberRecord = await FamilyMembership.findOne({ group: alert.group, user: alert.member });
+    }
+    if (!memberRecord && alert.memberName) {
+      memberRecord = await FamilyMembership.findOne({ group: alert.group, name: alert.memberName });
+    }
 
-    const memberRecord = await FamilyMembership.findOne(memberQuery);
+    // 3. Resolve any other active or acknowledged alerts for this SPECIFIC member
+    // (Prevents duplicate/stale alerts for this member from lingering, while preserving other members' alerts!)
+    const memberOrConditions = [];
+    if (memberRecord?._id) memberOrConditions.push({ membership: memberRecord._id });
+    if (alert.membership) memberOrConditions.push({ membership: alert.membership });
+    if (memberRecord?.user) memberOrConditions.push({ member: memberRecord.user });
+    if (alert.member) memberOrConditions.push({ member: alert.member });
+    if (memberRecord?.name) memberOrConditions.push({ memberName: memberRecord.name });
+    else if (alert.memberName) memberOrConditions.push({ memberName: alert.memberName });
+
+    if (memberOrConditions.length > 0) {
+      await SeparationAlert.updateMany(
+        {
+          group: alert.group,
+          status: { $in: ["active", "acknowledged_by_device"] },
+          $or: memberOrConditions,
+        },
+        {
+          $set: {
+            status: "resolved",
+            resolvedAt: now,
+            resolvedReason: reason,
+          },
+        }
+      );
+    }
+
+    // 4. Update member record to confirmed reunited state
     if (memberRecord) {
       memberRecord.consecutiveSeparatedCount = 0;
       memberRecord.reunitedAt = now;
       memberRecord.reunionStatus = "reunited";
-      memberRecord.lastResolvedLocationTimestamp =
-        alert.memberLocation?.recordedAt || now;
+      // CRITICAL: Set lastResolvedLocationTimestamp to now so that coordinates
+      // prior to or at the moment of reunion do NOT recreate an alert from stale GPS
+      memberRecord.lastResolvedLocationTimestamp = now;
       await memberRecord.save();
     }
 
@@ -1682,6 +1766,14 @@ const getDeviceStatus = async (req, res, next) => {
     const now = Date.now();
     const lastSeen = device.lastHeartbeat ? new Date(device.lastHeartbeat).getTime() : 0;
     const isOnline = now - lastSeen <= 45000;
+    const isStale = !isOnline && lastSeen > 0 && (now - lastSeen <= 5 * 60 * 1000);
+
+    let connectionState = "disconnected";
+    if (isOnline) {
+      connectionState = "connected";
+    } else if (isStale) {
+      connectionState = "stale";
+    }
 
     const deviceObj = device.toObject();
     const buzzerPin = deviceObj.buzzerPin || 23;
@@ -1690,10 +1782,13 @@ const getDeviceStatus = async (req, res, next) => {
       success: true,
       hasDevice: true,
       isOnline,
+      connectionState,
+      lastHeartbeat: device.lastHeartbeat,
       device: {
         ...deviceObj,
         buzzerPin,
         isOnline,
+        connectionState,
       },
     });
   } catch (error) {
@@ -1841,7 +1936,7 @@ const iotGetPendingCommands = async (req, res, next) => {
     }
 
     // Step 1: Check existing un-delivered active separation alert in database
-    const activeAlert = await SeparationAlert.findOne({
+    const activeAlerts = await SeparationAlert.find({
       group: device.group,
       status: "active",
       deviceCommandDelivered: false,
@@ -1849,7 +1944,7 @@ const iotGetPendingCommands = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .populate("member", "name");
 
-    if (activeAlert) {
+    for (const activeAlert of activeAlerts) {
       // Ensure main user cannot be alerted as separated from themselves
       const isSelfAlert =
         activeAlert.member && String(activeAlert.member._id || activeAlert.member) === String(group.creator);
@@ -1858,44 +1953,69 @@ const iotGetPendingCommands = async (req, res, next) => {
         activeAlert.status = "resolved";
         activeAlert.resolvedReason = "Resolved: Main user cannot be separated from themselves.";
         await activeAlert.save();
-      } else {
-        // Check if alert coordinates are fresh (reject stale GPS)
-        const isAlertFresh = isLocationFresh(
-          activeAlert.memberLocation?.recordedAt || activeAlert.updatedAt,
-          freshnessMinutes
-        );
+        continue;
+      }
 
-        if (!isAlertFresh) {
-          activeAlert.status = "expired";
-          activeAlert.resolvedReason = "Alert expired: Member GPS coordinates are stale.";
+      // Check if member is in confirmed reunited state
+      let alertMembership = null;
+      if (activeAlert.membership) {
+        alertMembership = await FamilyMembership.findById(activeAlert.membership);
+      }
+      if (!alertMembership && activeAlert.member) {
+        alertMembership = await FamilyMembership.findOne({ group: device.group, user: activeAlert.member });
+      }
+      if (!alertMembership && activeAlert.memberName) {
+        alertMembership = await FamilyMembership.findOne({ group: device.group, name: activeAlert.memberName });
+      }
+
+      if (alertMembership && (alertMembership.reunionStatus === "reunited" || alertMembership.reunitedAt)) {
+        const locTime = new Date(activeAlert.memberLocation?.recordedAt || activeAlert.createdAt).getTime();
+        const reunionTime = new Date(alertMembership.lastResolvedLocationTimestamp || alertMembership.reunitedAt || 0).getTime();
+        if (locTime <= reunionTime) {
+          activeAlert.status = "resolved";
+          activeAlert.resolvedReason = "Resolved: Member confirmed reunited on dashboard.";
           await activeAlert.save();
-        } else {
-          // Genuine un-delivered alert -> dispatch to ESP32
-          const memberDisplayName =
-            activeAlert.memberName || (activeAlert.member ? activeAlert.member.name : "Family Member");
-          const memberId = activeAlert.membership
-            ? activeAlert.membership.toString()
-            : activeAlert.member
-            ? activeAlert.member.toString()
-            : "";
-
-          return res.status(200).json({
-            hasCommand: true,
-            command: "TRIGGER_BUZZER",
-            alertId: activeAlert._id,
-            memberId,
-            membershipId: activeAlert.membership,
-            severity: activeAlert.severity,
-            buzzerPattern: activeAlert.buzzerPattern,
-            distanceMeters: activeAlert.distanceMeters,
-            thresholdMeters: activeAlert.thresholdMeters,
-            memberName: memberDisplayName,
-            memberLocation: activeAlert.memberLocation,
-            mainLocation: activeAlert.mainLocation,
-            timestamp: activeAlert.createdAt,
-          });
+          continue;
         }
       }
+
+      // Check if alert coordinates are fresh (reject stale GPS)
+      const isAlertFresh = isLocationFresh(
+        activeAlert.memberLocation?.recordedAt || activeAlert.updatedAt,
+        freshnessMinutes
+      );
+
+      if (!isAlertFresh) {
+        activeAlert.status = "expired";
+        activeAlert.resolvedReason = "Alert expired: Member GPS coordinates are stale.";
+        await activeAlert.save();
+        continue;
+      }
+
+      // Genuine un-delivered alert -> dispatch to ESP32
+      const memberDisplayName =
+        activeAlert.memberName || (activeAlert.member ? activeAlert.member.name : "Family Member");
+      const memberId = activeAlert.membership
+        ? activeAlert.membership.toString()
+        : activeAlert.member
+        ? activeAlert.member.toString()
+        : "";
+
+      return res.status(200).json({
+        hasCommand: true,
+        command: "TRIGGER_BUZZER",
+        alertId: activeAlert._id,
+        memberId,
+        membershipId: activeAlert.membership,
+        severity: activeAlert.severity,
+        buzzerPattern: activeAlert.buzzerPattern,
+        distanceMeters: activeAlert.distanceMeters,
+        thresholdMeters: activeAlert.thresholdMeters,
+        memberName: memberDisplayName,
+        memberLocation: activeAlert.memberLocation,
+        mainLocation: activeAlert.mainLocation,
+        timestamp: activeAlert.createdAt,
+      });
     }
 
     // Step 2: Synchronize with real separation state (same real criteria as dashboard)
@@ -2092,13 +2212,22 @@ const iotGetPendingCommands = async (req, res, next) => {
       }
     }
 
+    // Check if there are any remaining unresolved alerts in the group
+    const remainingActiveCount = await SeparationAlert.countDocuments({
+      group: device.group,
+      status: { $in: ["active", "acknowledged_by_device"] },
+    });
+
     return res.status(200).json({
       hasCommand: false,
       command: "NONE",
-      status: "SAFE",
-      message: "All family members within safe distance or tracking idle.",
+      status: remainingActiveCount > 0 ? "SEPARATED" : "SAFE",
+      message: remainingActiveCount > 0
+        ? `${remainingActiveCount} family member(s) currently separated (buzzer pattern already delivered).`
+        : "All family members within safe distance or tracking idle.",
       pairedGroup: group.name,
       activeMembersCount: otherMembersCount,
+      activeAlertsCount: remainingActiveCount,
     });
   } catch (error) {
     next(error);
