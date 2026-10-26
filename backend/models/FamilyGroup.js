@@ -24,7 +24,7 @@ const familyGroupSchema = new mongoose.Schema(
     },
     separationThresholdMeters: {
       type: Number,
-      default: 5,
+      default: 50,
       min: [1, "Minimum separation threshold is 1 meter"],
       max: [5000, "Maximum separation threshold is 5000 meters"],
     },

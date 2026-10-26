@@ -138,7 +138,7 @@ const createMemberIcon = (initial, status, isSeparated) => {
 function FamilyTrackingMap({
   mainUserLocation,
   members = [],
-  separationThreshold = 10,
+  separationThreshold = 50,
   focusedMemberId = null,
   onFocusMember,
 }) {
@@ -187,7 +187,7 @@ function FamilyTrackingMap({
         {mainPosition && (
           <Circle
             center={mainPosition}
-            radius={Number(separationThreshold) || 10}
+            radius={Number(separationThreshold) || 50}
             pathOptions={{
               color: "#2563eb",
               fillColor: "#3b82f6",

@@ -53,6 +53,15 @@ import {
   FiMaximize2
 } from "react-icons/fi";
 
+const SEPARATION_DISTANCE_PRESETS = [
+  { value: 5, label: "5m", hint: "Ultra-dense crowd / Tent" },
+  { value: 10, label: "10m", hint: "Close proximity" },
+  { value: 20, label: "20m", hint: "Nearby walking" },
+  { value: 50, label: "50m", hint: "Standard (Default)" },
+  { value: 100, label: "100m", hint: "Open courtyard" },
+  { value: 200, label: "200m", hint: "Wide perimeter" },
+];
+
 function FamilyTracking() {
   const { user, token } = useAuth();
 
@@ -93,7 +102,7 @@ function FamilyTracking() {
 
   // Form Inputs & Validation
   const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupThreshold, setNewGroupThreshold] = useState(5);
+  const [newGroupThreshold, setNewGroupThreshold] = useState(50);
   const [groupCreateError, setGroupCreateError] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
@@ -174,10 +183,12 @@ function FamilyTracking() {
       if (data && Array.isArray(data.groups)) {
         setGroups(data.groups);
         if (data.groups.length > 0) {
+          const savedActiveGroupId = sessionStorage.getItem("pilgrim_active_group_id");
           const target = selectedGroup
             ? data.groups.find((g) => g.group._id === selectedGroup._id) || data.groups[0]
-            : data.groups[0];
+            : (savedActiveGroupId ? data.groups.find((g) => g.group._id === savedActiveGroupId) : null) || data.groups[0];
           setSelectedGroup(target.group);
+          sessionStorage.setItem("pilgrim_active_group_id", target.group._id);
         } else {
           setSelectedGroup(null);
         }
@@ -447,7 +458,7 @@ function FamilyTracking() {
       const data = await apiCreateFamilyGroup(
         {
           name: newGroupName.trim(),
-          separationThresholdMeters: Number(newGroupThreshold) || 10,
+          separationThresholdMeters: Number(newGroupThreshold) || 50,
         },
         token
       );
@@ -602,16 +613,27 @@ function FamilyTracking() {
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     if (!selectedGroup) return;
+    const thresholdNum = Number(newGroupThreshold);
+    if (isNaN(thresholdNum) || thresholdNum < 1) {
+      setError("Please specify a valid separation threshold (minimum 1 meter).");
+      return;
+    }
     try {
-      await apiUpdateFamilyGroupSettings(
+      const data = await apiUpdateFamilyGroupSettings(
         selectedGroup._id,
         {
-          separationThresholdMeters: Number(newGroupThreshold),
+          separationThresholdMeters: thresholdNum,
         },
         token
       );
+      if (data?.group) {
+        setSelectedGroup(data.group);
+      } else {
+        setSelectedGroup((prev) => (prev ? { ...prev, separationThresholdMeters: thresholdNum } : null));
+      }
       setShowSettingsModal(false);
-      setSuccessMsg("Separation threshold updated.");
+      setSuccessMsg(`Separation threshold updated to ${thresholdNum} meters.`);
+      await loadGroups();
       pollGroupData();
     } catch (err) {
       setError(err.message || "Failed to update settings.");
@@ -754,9 +776,6 @@ function FamilyTracking() {
                   <FiUsers style={{ color: "#2563eb" }} />
                   PilgrimIQ Family Tracking & Separation Alert
                 </h1>
-                <p>
-                  IoT-backed crowd safety: Main user carries the ESP32 buzzer, family members share GPS via secure links without accounts.
-                </p>
               </div>
 
               <div className="header-action-buttons">
@@ -783,7 +802,7 @@ function FamilyTracking() {
                     type="button"
                     className="btn-outline-action"
                     onClick={() => {
-                      setNewGroupThreshold(selectedGroup.separationThresholdMeters || 10);
+                      setNewGroupThreshold(selectedGroup.separationThresholdMeters || 50);
                       setShowSettingsModal(true);
                     }}
                     title="Configure Separation Threshold"
@@ -844,13 +863,43 @@ function FamilyTracking() {
               <div className="group-identity">
                 <div className="group-avatar-icon">🏛️</div>
                 <div className="group-text-info">
-                  <h3>{selectedGroup.name}</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <h3 style={{ margin: 0 }}>{selectedGroup.name}</h3>
+                    {groups.length > 1 && (
+                      <select
+                        value={selectedGroup._id}
+                        onChange={(e) => {
+                          const g = groups.find((item) => item.group._id === e.target.value);
+                          if (g) {
+                            setSelectedGroup(g.group);
+                            sessionStorage.setItem("pilgrim_active_group_id", g.group._id);
+                          }
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          color: "#1e293b",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {groups.map((item) => (
+                          <option key={item.group._id} value={item.group._id}>
+                            {item.group.name} ({item.group.separationThresholdMeters || 50}m)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
                     <span className="group-role-badge role-main">
                       GROUP CREATOR / MAIN USER
                     </span>
                     <span style={{ fontSize: "12px", color: "#64748b" }}>
-                      Threshold: <strong>{selectedGroup.separationThresholdMeters || 5} meters</strong>
+                      Threshold: <strong>{selectedGroup.separationThresholdMeters || 50} meters</strong>
                     </span>
                   </div>
                 </div>
@@ -925,7 +974,7 @@ function FamilyTracking() {
                 </div>
                 <div className="metric-details">
                   <p>Separation Range</p>
-                  <h4>{selectedGroup.separationThresholdMeters || 5} m</h4>
+                  <h4>{selectedGroup.separationThresholdMeters || 50} m</h4>
                 </div>
               </div>
 
@@ -940,12 +989,12 @@ function FamilyTracking() {
               </div>
 
               <div className="metric-card">
-                <div className={`metric-icon-box ${activeAlerts.length > 0 ? "icon-red" : "icon-green"}`}>
+                <div className={`metric-icon-box ${unresolvedAlerts.length > 0 ? "icon-red" : "icon-green"}`}>
                   <FiAlertTriangle />
                 </div>
                 <div className="metric-details">
                   <p>Active Alerts</p>
-                  <h4>{activeAlerts.length} Active</h4>
+                  <h4>{unresolvedAlerts.length} Active</h4>
                 </div>
               </div>
             </div>
@@ -972,12 +1021,9 @@ function FamilyTracking() {
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <FiInfo size={24} color="#2563eb" style={{ flexShrink: 0 }} />
                 <div>
-                  <strong style={{ fontSize: "14.5px", display: "block", color: "#1e3a8a", marginBottom: "2px" }}>
+                  <strong style={{ fontSize: "14.5px", display: "block", color: "#1e3a8a" }}>
                     Main User GPS Location Sharing Not Started
                   </strong>
-                  <span style={{ fontSize: "12.5px", color: "#3b82f6" }}>
-                    Proximity distance tracking and ESP32 separation buzzer alerts are paused until you start location sharing on your device.
-                  </span>
                 </div>
               </div>
               <button
@@ -1059,7 +1105,7 @@ function FamilyTracking() {
                   <p style={{ margin: "4px 0 8px 0" }}>
                     <strong>{unresolvedAlerts[0].memberName || unresolvedAlerts[0].member?.name || "Family Member"}</strong> is{" "}
                     <strong>{unresolvedAlerts[0].distanceMeters} meters away</strong> from the main user (Safe threshold:{" "}
-                    {unresolvedAlerts[0].thresholdMeters || 5}m).
+                    {unresolvedAlerts[0].thresholdMeters || 50}m).
                   </p>
 
                   {/* Comprehensive Lost Member Location Details */}
@@ -1161,7 +1207,7 @@ function FamilyTracking() {
                     </div>
                     <div className="legend-item">
                       <span className="legend-dot dot-safe"></span>
-                      <span>Safe (&lt;{selectedGroup.separationThresholdMeters || 10}m)</span>
+                      <span>Safe (&lt;{selectedGroup.separationThresholdMeters || 50}m)</span>
                     </div>
                     <div className="legend-item">
                       <span className="legend-dot dot-separated"></span>
@@ -1177,7 +1223,7 @@ function FamilyTracking() {
                 <FamilyTrackingMap
                   mainUserLocation={mainUserLocation}
                   members={members}
-                  separationThreshold={selectedGroup.separationThresholdMeters || 10}
+                  separationThreshold={selectedGroup.separationThresholdMeters || 50}
                   focusedMemberId={focusedMemberId}
                 />
               </div>
@@ -1333,7 +1379,7 @@ function FamilyTracking() {
                         onChange={(e) => setConsentGranted(e.target.checked)}
                       />
                       <label htmlFor="consent-toggle">
-                        I consent to sharing my phone GPS coordinates with my group to calculate distance from my ESP32.
+                        I consent to sharing my phone GPS
                       </label>
                     </div>
 
@@ -1588,7 +1634,7 @@ function FamilyTracking() {
                       ) : (
                         <div>
                           <label style={{ display: "block", fontSize: "12.5px", fontWeight: "700", color: "#334155", marginBottom: "8px" }}>
-                            Choose Existing Family Member from Database:
+                            Choose family members
                           </label>
                           <div className="saved-members-list">
                             {savedFamilyMembers.map((fm) => {
@@ -1656,9 +1702,7 @@ function FamilyTracking() {
                             })}
                           </div>
 
-                          <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#059669", background: "#ecfdf5", padding: "8px 12px", borderRadius: "8px", border: "1px solid #a7f3d0" }}>
-                            🔒 <strong>Database Reused:</strong> Reuses existing database record without creating duplicate family entries. Family members access tracking directly via invitation link without needing an account.
-                          </p>
+
                         </div>
                       )}
                     </div>
@@ -1943,16 +1987,64 @@ function FamilyTracking() {
 
                   <div className="form-group">
                     <label>Separation Distance Threshold (Meters)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="1000"
-                      value={newGroupThreshold}
-                      onChange={(e) => setNewGroupThreshold(e.target.value)}
-                      disabled={isCreatingGroup}
-                    />
-                    <div className="form-help-text">
-                      Default is 5 meters for close crowd tracking.
+                    <p style={{ margin: "4px 0 10px 0", fontSize: "13px", color: "#64748b" }}>
+                      Choose standard distance or enter custom threshold:
+                    </p>
+                    <div
+                      className="threshold-preset-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "8px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {SEPARATION_DISTANCE_PRESETS.map((preset) => {
+                        const isSelected = Number(newGroupThreshold) === preset.value;
+                        return (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={`preset-chip ${isSelected ? "selected" : ""}`}
+                            onClick={() => setNewGroupThreshold(preset.value)}
+                            disabled={isCreatingGroup}
+                            style={{
+                              padding: "10px 8px",
+                              borderRadius: "10px",
+                              border: isSelected ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                              background: isSelected ? "#eff6ff" : "#ffffff",
+                              color: isSelected ? "#1d4ed8" : "#1e293b",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                              boxShadow: isSelected ? "0 2px 8px rgba(37,99,235,0.18)" : "none",
+                            }}
+                          >
+                            <div style={{ fontWeight: "800", fontSize: "15px" }}>{preset.label}</div>
+                            <div style={{ fontSize: "11px", color: isSelected ? "#2563eb" : "#64748b", marginTop: "2px" }}>
+                              {preset.hint}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5000"
+                        value={newGroupThreshold}
+                        onChange={(e) => setNewGroupThreshold(e.target.value)}
+                        disabled={isCreatingGroup}
+                        style={{ flex: 1 }}
+                        required
+                      />
+                      <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "700" }}>meters</span>
+                    </div>
+
+                    <div className="form-help-text" style={{ marginTop: "8px" }}>
+                      Default is 50 meters for crowd tracking. Choose from presets (5m, 10m, 20m, 50m, 100m, 200m) or type any custom distance.
                     </div>
                   </div>
 
@@ -1998,15 +2090,63 @@ function FamilyTracking() {
                 <form onSubmit={handleSaveSettings}>
                   <div className="form-group">
                     <label>Configurable Separation Distance (Meters)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="500"
-                      value={newGroupThreshold}
-                      onChange={(e) => setNewGroupThreshold(e.target.value)}
-                    />
-                    <div className="form-help-text">
-                      Default is 5 meters. An alert triggers and buzzes the ESP32 when any family member moves further than this distance.
+                    <p style={{ margin: "4px 0 10px 0", fontSize: "13px", color: "#64748b" }}>
+                      Select a predefined distance or type a custom threshold:
+                    </p>
+                    <div
+                      className="threshold-preset-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "8px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {SEPARATION_DISTANCE_PRESETS.map((preset) => {
+                        const isSelected = Number(newGroupThreshold) === preset.value;
+                        return (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={`preset-chip ${isSelected ? "selected" : ""}`}
+                            onClick={() => setNewGroupThreshold(preset.value)}
+                            style={{
+                              padding: "10px 8px",
+                              borderRadius: "10px",
+                              border: isSelected ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                              background: isSelected ? "#eff6ff" : "#ffffff",
+                              color: isSelected ? "#1d4ed8" : "#1e293b",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                              boxShadow: isSelected ? "0 2px 8px rgba(37,99,235,0.18)" : "none",
+                            }}
+                          >
+                            <div style={{ fontWeight: "800", fontSize: "15px" }}>{preset.label}</div>
+                            <div style={{ fontSize: "11px", color: isSelected ? "#2563eb" : "#64748b", marginTop: "2px" }}>
+                              {preset.hint}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5000"
+                        value={newGroupThreshold}
+                        onChange={(e) => setNewGroupThreshold(e.target.value)}
+                        style={{ flex: 1 }}
+                        placeholder="Custom distance in meters"
+                        required
+                      />
+                      <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "700" }}>meters</span>
+                    </div>
+
+                    <div className="form-help-text" style={{ marginTop: "8px" }}>
+                      Default is 50 meters. The selected threshold is saved to MongoDB Atlas and applied to real-time separation detection, active alerts, dashboard map radius, and the portable ESP32 buzzer.
                     </div>
                   </div>
 

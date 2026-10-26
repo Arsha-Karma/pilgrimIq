@@ -19,7 +19,7 @@ const {
 // @access  Private (JWT User)
 const createGroup = async (req, res, next) => {
   try {
-    const { name, separationThresholdMeters = 5 } = req.body;
+    const { name, separationThresholdMeters = 50 } = req.body;
 
     if (!name || !name.trim()) {
       res.status(400);
@@ -49,7 +49,7 @@ const createGroup = async (req, res, next) => {
       name: name.trim(),
       creator: req.user._id,
       inviteCode,
-      separationThresholdMeters: Number(separationThresholdMeters) || 5,
+      separationThresholdMeters: Number(separationThresholdMeters) || 50,
     });
 
     // Create membership for creator as "main"
@@ -473,7 +473,7 @@ const validateInvitation = async (req, res, next) => {
       memberName: membership.name,
       relationship: membership.relationship,
       groupName: membership.group.name,
-      separationThresholdMeters: membership.group.separationThresholdMeters || 5,
+      separationThresholdMeters: membership.group.separationThresholdMeters || 50,
       isInvitationAccepted: membership.isInvitationAccepted,
       isLocationSharing: membership.isLocationSharing,
       consentGiven: membership.consentGiven,
@@ -557,7 +557,7 @@ const acceptInvitationAndStartSession = async (req, res, next) => {
       group: {
         id: membership.group._id,
         name: membership.group.name,
-        separationThresholdMeters: membership.group.separationThresholdMeters || 5,
+        separationThresholdMeters: membership.group.separationThresholdMeters || 50,
       },
     });
   } catch (error) {
@@ -584,7 +584,7 @@ const validateGroupInviteCode = async (req, res, next) => {
       groupId: group._id,
       groupName: group.name,
       inviteCode: cleanCode,
-      separationThresholdMeters: group.separationThresholdMeters || 5,
+      separationThresholdMeters: group.separationThresholdMeters || 50,
     });
   } catch (error) {
     next(error);
@@ -686,7 +686,7 @@ const joinGroupByCodePublic = async (req, res, next) => {
       group: {
         id: group._id,
         name: group.name,
-        separationThresholdMeters: group.separationThresholdMeters || 5,
+        separationThresholdMeters: group.separationThresholdMeters || 50,
       },
       consentGiven: membership.consentGiven,
     });
@@ -846,7 +846,7 @@ const sessionGetStatus = async (req, res, next) => {
       memberName: membership.name,
       relationship: membership.relationship,
       groupName: membership.group.name,
-      separationThresholdMeters: membership.group.separationThresholdMeters,
+      separationThresholdMeters: membership.group.separationThresholdMeters || 50,
       isLocationSharing: membership.isLocationSharing,
       consentGiven: membership.consentGiven,
       lastLocation: latestLoc
@@ -980,20 +980,38 @@ const getGroupMembers = async (req, res, next) => {
       .populate("user", "name email phone avatar")
       .populate("familyMember", "name relationship age gender phone bloodGroup profilePhoto");
 
-    // Fetch latest location of the main user (creator)
+    const freshnessMinutes = group.locationFreshnessMinutes || 3;
+    const threshold =
+      group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
+        ? group.separationThresholdMeters
+        : 50;
+
+    // Fetch latest valid non-stopped location of the main user (creator)
     const mainLocation = await MemberLocation.findOne({
       group: groupId,
       user: group.creator,
+      status: { $ne: "stopped" },
+      latitude: { $ne: 0 },
+      longitude: { $ne: 0 },
     }).sort({ serverReceivedAt: -1 });
+
+    const isMainFresh = mainLocation
+      ? isLocationFresh(mainLocation.serverReceivedAt || mainLocation.clientTimestamp, freshnessMinutes)
+      : false;
 
     const membersWithStatus = await Promise.all(
       memberships.map(async (m) => {
+        const isMain = m.role === "main" || (m.user && String(m.user._id || m.user) === String(group.creator));
+
         // Query location by membership._id (or fallback user._id)
         const locQuery = {
           group: groupId,
+          status: { $ne: "stopped" },
+          latitude: { $ne: 0 },
+          longitude: { $ne: 0 },
           $or: [
             { membership: m._id },
-            ...(m.user ? [{ user: m.user._id }] : []),
+            ...(m.user ? [{ user: m.user._id || m.user }] : []),
           ],
         };
 
@@ -1001,26 +1019,30 @@ const getGroupMembers = async (req, res, next) => {
 
         const locationStatus = determineLocationStatus(
           latestLoc,
-          group.locationFreshnessMinutes,
+          freshnessMinutes,
           m.isLocationSharing
         );
 
         let distanceMeters = null;
         let isSeparated = false;
 
-        if (latestLoc && mainLocation && m.role !== "main") {
+        const isMemberFresh = latestLoc
+          ? isLocationFresh(latestLoc.serverReceivedAt || latestLoc.clientTimestamp, freshnessMinutes)
+          : false;
+
+        if (!isMain && m.isLocationSharing && isMainFresh && isMemberFresh && latestLoc && mainLocation) {
           distanceMeters = calculateHaversineDistance(
             mainLocation.latitude,
             mainLocation.longitude,
             latestLoc.latitude,
             latestLoc.longitude
           );
-          if (distanceMeters !== null && distanceMeters > (group.separationThresholdMeters || 10)) {
+          if (distanceMeters !== null && distanceMeters > threshold) {
             isSeparated = true;
           }
         }
 
-        const isMain = m.role === "main" || (m.user && String(m.user._id) === String(group.creator));
+        const isMainUser = isMain;
 
         return {
           membershipId: m._id,
@@ -1381,13 +1403,13 @@ const getGroupAlerts = async (req, res, next) => {
       throw new Error("Not authorized to view alerts for this group.");
     }
 
-    // Auto-expire stale alerts older than 5 minutes
+    // Auto-expire stale alerts older than 5 minutes (based on updatedAt to allow ongoing active separations)
     const expiryCutoff = new Date(Date.now() - 5 * 60 * 1000);
     await SeparationAlert.updateMany(
       {
         group: groupId,
         status: { $in: ["active", "acknowledged_by_device"] },
-        createdAt: { $lt: expiryCutoff },
+        updatedAt: { $lt: expiryCutoff },
       },
       {
         $set: {
@@ -1656,25 +1678,31 @@ const iotGetPendingCommands = async (req, res, next) => {
         severity: "warning",
         buzzerPattern: device.testCommandPattern || "warning_short",
         distanceMeters: 0,
-        thresholdMeters: group.separationThresholdMeters || 5,
+        thresholdMeters: group.separationThresholdMeters || 50,
         memberName: "Hardware Buzzer Test",
         timestamp: new Date(),
       });
     }
 
-    // Auto-expire stale alerts older than 5 minutes
+    const freshnessMinutes = group.locationFreshnessMinutes || 3;
+    const threshold =
+      group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
+        ? group.separationThresholdMeters
+        : 50;
+
+    // Auto-expire stale alerts older than 5 minutes based on updatedAt to preserve ongoing active separations
     const expiryCutoff = new Date(Date.now() - 5 * 60 * 1000);
     await SeparationAlert.updateMany(
       {
         group: device.group,
         status: { $in: ["active", "acknowledged_by_device"] },
-        createdAt: { $lt: expiryCutoff },
+        updatedAt: { $lt: expiryCutoff },
       },
       {
         $set: {
           status: "expired",
           resolvedAt: new Date(),
-          resolvedReason: "Alert expired automatically due to age (> 5 min)",
+          resolvedReason: "Alert expired automatically due to age (> 5 min inactivity)",
         },
       }
     );
@@ -1686,18 +1714,32 @@ const iotGetPendingCommands = async (req, res, next) => {
       status: "active",
     });
 
-    // Fetch latest location of the main user (creator)
-    const mainLocation = await MemberLocation.findOne({
-      group: device.group,
-      user: group.creator,
-    }).sort({ serverReceivedAt: -1 });
+    if (otherMembersCount === 0) {
+      await SeparationAlert.updateMany(
+        {
+          group: device.group,
+          status: { $in: ["active", "acknowledged_by_device"] },
+        },
+        {
+          $set: {
+            status: "resolved",
+            resolvedAt: new Date(),
+            resolvedReason: "Suppressed: Main user is the only member in this group.",
+          },
+        }
+      );
 
-    const isMainFresh = mainLocation
-      ? isLocationFresh(mainLocation.serverReceivedAt, group.locationFreshnessMinutes)
-      : false;
+      return res.status(200).json({
+        hasCommand: false,
+        command: "NONE",
+        status: "SAFE",
+        message: "No participating family members in paired group.",
+        pairedGroup: group.name,
+        activeMembersCount: 0,
+      });
+    }
 
-    const isMainInaccurate = mainLocation && typeof mainLocation.accuracy === "number" && mainLocation.accuracy > 35;
-
+    // Step 1: Check existing un-delivered active separation alert in database
     const activeAlert = await SeparationAlert.findOne({
       group: device.group,
       status: "active",
@@ -1707,69 +1749,238 @@ const iotGetPendingCommands = async (req, res, next) => {
       .populate("member", "name");
 
     if (activeAlert) {
-      // If main user is the only member, suppress alert
-      if (otherMembersCount === 0) {
-        activeAlert.status = "resolved";
-        activeAlert.resolvedReason = "Suppressed: Main user is the only member in this group.";
-        await activeAlert.save();
-        return res.status(200).json({
-          hasCommand: false,
-          command: "NONE",
-          status: "SAFE",
-        });
-      }
-
-      // If main user's location is unavailable, stale, or inaccurate, do not buzz
-      if (!mainLocation || !isMainFresh || isMainInaccurate) {
-        return res.status(200).json({
-          hasCommand: false,
-          command: "NONE",
-          status: "SAFE",
-          message: "Main user GPS unavailable, stale, or inaccurate.",
-        });
-      }
-
       // Ensure main user cannot be alerted as separated from themselves
-      if (activeAlert.member && String(activeAlert.member._id || activeAlert.member) === String(group.creator)) {
+      const isSelfAlert =
+        activeAlert.member && String(activeAlert.member._id || activeAlert.member) === String(group.creator);
+
+      if (isSelfAlert) {
         activeAlert.status = "resolved";
         activeAlert.resolvedReason = "Resolved: Main user cannot be separated from themselves.";
         await activeAlert.save();
-        return res.status(200).json({
-          hasCommand: false,
-          command: "NONE",
-          status: "SAFE",
-        });
+      } else {
+        // Check if alert coordinates are fresh (reject stale GPS)
+        const isAlertFresh = isLocationFresh(
+          activeAlert.memberLocation?.recordedAt || activeAlert.updatedAt,
+          freshnessMinutes
+        );
+
+        if (!isAlertFresh) {
+          activeAlert.status = "expired";
+          activeAlert.resolvedReason = "Alert expired: Member GPS coordinates are stale.";
+          await activeAlert.save();
+        } else {
+          // Genuine un-delivered alert -> dispatch to ESP32
+          const memberDisplayName =
+            activeAlert.memberName || (activeAlert.member ? activeAlert.member.name : "Family Member");
+          const memberId = activeAlert.membership
+            ? activeAlert.membership.toString()
+            : activeAlert.member
+            ? activeAlert.member.toString()
+            : "";
+
+          return res.status(200).json({
+            hasCommand: true,
+            command: "TRIGGER_BUZZER",
+            alertId: activeAlert._id,
+            memberId,
+            membershipId: activeAlert.membership,
+            severity: activeAlert.severity,
+            buzzerPattern: activeAlert.buzzerPattern,
+            distanceMeters: activeAlert.distanceMeters,
+            thresholdMeters: activeAlert.thresholdMeters,
+            memberName: memberDisplayName,
+            memberLocation: activeAlert.memberLocation,
+            mainLocation: activeAlert.mainLocation,
+            timestamp: activeAlert.createdAt,
+          });
+        }
       }
+    }
 
-      const memberDisplayName =
-        activeAlert.memberName || (activeAlert.member ? activeAlert.member.name : "Family Member");
-      const memberId = activeAlert.membership
-        ? activeAlert.membership.toString()
-        : activeAlert.member
-        ? activeAlert.member.toString()
-        : "";
+    // Step 2: Synchronize with real separation state (same real criteria as dashboard)
+    // Fetch latest valid non-stopped location of main user (creator)
+    const mainLocation = await MemberLocation.findOne({
+      group: device.group,
+      user: group.creator,
+      status: { $ne: "stopped" },
+      latitude: { $ne: 0 },
+      longitude: { $ne: 0 },
+    }).sort({ serverReceivedAt: -1 });
 
-      return res.status(200).json({
-        hasCommand: true,
-        command: "TRIGGER_BUZZER",
-        alertId: activeAlert._id,
-        memberId,
-        membershipId: activeAlert.membership,
-        severity: activeAlert.severity,
-        buzzerPattern: activeAlert.buzzerPattern,
-        distanceMeters: activeAlert.distanceMeters,
-        thresholdMeters: activeAlert.thresholdMeters,
-        memberName: memberDisplayName,
-        memberLocation: activeAlert.memberLocation,
-        mainLocation: activeAlert.mainLocation,
-        timestamp: activeAlert.createdAt,
+    const isMainFresh = mainLocation
+      ? isLocationFresh(mainLocation.serverReceivedAt || mainLocation.clientTimestamp, freshnessMinutes)
+      : false;
+
+    if (mainLocation && isMainFresh) {
+      const activeMembers = await FamilyMembership.find({
+        group: device.group,
+        role: "member",
+        status: "active",
+        isLocationSharing: true,
       });
+
+      for (const m of activeMembers) {
+        const memberLocQuery = {
+          group: device.group,
+          status: { $ne: "stopped" },
+          latitude: { $ne: 0 },
+          longitude: { $ne: 0 },
+          $or: [
+            { membership: m._id },
+            ...(m.user ? [{ user: m.user }] : []),
+          ],
+        };
+
+        const memberLoc = await MemberLocation.findOne(memberLocQuery).sort({ serverReceivedAt: -1 });
+
+        const isMemberFresh = memberLoc
+          ? isLocationFresh(memberLoc.serverReceivedAt || memberLoc.clientTimestamp, freshnessMinutes)
+          : false;
+
+        if (memberLoc && isMemberFresh) {
+          const distanceMeters = calculateHaversineDistance(
+            mainLocation.latitude,
+            mainLocation.longitude,
+            memberLoc.latitude,
+            memberLoc.longitude
+          );
+
+          if (distanceMeters !== null && distanceMeters > threshold) {
+            // Real separation detected! Check existing alert record for this member
+            const memberAlert = await SeparationAlert.findOne({
+              group: device.group,
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: m._id },
+                ...(m.user ? [{ member: m.user }] : []),
+              ],
+            }).sort({ createdAt: -1 });
+
+            const isCritical = distanceMeters > threshold * 2.5;
+            const severity = isCritical ? "critical" : "warning";
+            const buzzerPattern = isCritical ? "critical_urgent" : "warning_short";
+
+            if (memberAlert) {
+              if (memberAlert.deviceCommandDelivered === false && memberAlert.status === "active") {
+                return res.status(200).json({
+                  hasCommand: true,
+                  command: "TRIGGER_BUZZER",
+                  alertId: memberAlert._id,
+                  memberId: m._id.toString(),
+                  membershipId: m._id,
+                  severity: memberAlert.severity,
+                  buzzerPattern: memberAlert.buzzerPattern,
+                  distanceMeters: memberAlert.distanceMeters,
+                  thresholdMeters: memberAlert.thresholdMeters,
+                  memberName: memberAlert.memberName || m.name,
+                  memberLocation: memberAlert.memberLocation,
+                  mainLocation: memberAlert.mainLocation,
+                  timestamp: memberAlert.createdAt,
+                });
+              } else if (memberAlert.status === "acknowledged_by_device") {
+                // If severity escalated from warning to critical, re-arm buzzer command for ESP32
+                if (isCritical && memberAlert.severity === "warning") {
+                  memberAlert.severity = "critical";
+                  memberAlert.buzzerPattern = "critical_urgent";
+                  memberAlert.status = "active";
+                  memberAlert.deviceCommandDelivered = false;
+                  memberAlert.distanceMeters = distanceMeters;
+                  await memberAlert.save();
+
+                  return res.status(200).json({
+                    hasCommand: true,
+                    command: "TRIGGER_BUZZER",
+                    alertId: memberAlert._id,
+                    memberId: m._id.toString(),
+                    membershipId: m._id,
+                    severity: memberAlert.severity,
+                    buzzerPattern: memberAlert.buzzerPattern,
+                    distanceMeters: memberAlert.distanceMeters,
+                    thresholdMeters: memberAlert.thresholdMeters,
+                    memberName: memberAlert.memberName || m.name,
+                    memberLocation: memberAlert.memberLocation,
+                    mainLocation: memberAlert.mainLocation,
+                    timestamp: memberAlert.createdAt,
+                  });
+                }
+                // Already acknowledged by ESP32; buzzer pattern already completed for this separation
+              }
+            } else {
+              // Create genuine SeparationAlert record in database using real GPS coordinates
+              const newAlert = await SeparationAlert.create({
+                group: device.group,
+                membership: m._id,
+                member: m.user || null,
+                memberName: m.name || "Family Member",
+                mainUser: group.creator,
+                distanceMeters,
+                thresholdMeters: threshold,
+                severity,
+                buzzerPattern,
+                memberLocation: {
+                  latitude: memberLoc.latitude,
+                  longitude: memberLoc.longitude,
+                  accuracy: memberLoc.accuracy || 0,
+                  recordedAt: memberLoc.serverReceivedAt || new Date(),
+                },
+                mainLocation: {
+                  latitude: mainLocation.latitude,
+                  longitude: mainLocation.longitude,
+                  accuracy: mainLocation.accuracy || 0,
+                  recordedAt: mainLocation.serverReceivedAt || new Date(),
+                },
+                status: "active",
+                deviceCommandDelivered: false,
+                consecutiveCount: 2,
+              });
+
+              return res.status(200).json({
+                hasCommand: true,
+                command: "TRIGGER_BUZZER",
+                alertId: newAlert._id,
+                memberId: m._id.toString(),
+                membershipId: m._id,
+                severity: newAlert.severity,
+                buzzerPattern: newAlert.buzzerPattern,
+                distanceMeters,
+                thresholdMeters: threshold,
+                memberName: newAlert.memberName,
+                memberLocation: newAlert.memberLocation,
+                mainLocation: newAlert.mainLocation,
+                timestamp: newAlert.createdAt,
+              });
+            }
+          } else if (distanceMeters !== null && distanceMeters <= threshold) {
+            // Member is within safe distance -> auto-resolve any active/acknowledged alerts
+            await SeparationAlert.updateMany(
+              {
+                group: device.group,
+                status: { $in: ["active", "acknowledged_by_device"] },
+                $or: [
+                  { membership: m._id },
+                  ...(m.user ? [{ member: m.user }] : []),
+                ],
+              },
+              {
+                $set: {
+                  status: "resolved",
+                  resolvedAt: new Date(),
+                  resolvedReason: `Reunited within safe distance (${distanceMeters}m)`,
+                },
+              }
+            );
+          }
+        }
+      }
     }
 
     return res.status(200).json({
       hasCommand: false,
       command: "NONE",
       status: "SAFE",
+      message: "All family members within safe distance or tracking idle.",
+      pairedGroup: group.name,
+      activeMembersCount: otherMembersCount,
     });
   } catch (error) {
     next(error);
@@ -1814,6 +2025,7 @@ const iotAcknowledgeCommand = async (req, res, next) => {
       message: "Command delivery acknowledged by ESP32.",
       alertId: alert._id,
       acknowledgedAt: alert.deviceAcknowledgedAt,
+      status: alert.status,
     });
   } catch (error) {
     next(error);

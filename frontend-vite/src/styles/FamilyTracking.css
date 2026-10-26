@@ -1293,4 +1293,17 @@
   .family-tracking-map-wrapper {
     height: 360px;
   }
+  .threshold-preset-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.preset-chip:hover {
+  border-color: #3b82f6 !important;
+  background-color: #f8fafc !important;
+  transform: translateY(-1px);
+}
+
+.preset-chip.selected:hover {
+  background-color: #eff6ff !important;
 }

@@ -188,8 +188,9 @@ async function processLocationUpdate({
       user: mainUserId,
     }).sort({ serverReceivedAt: -1 });
 
+    const freshnessMinutes = group.locationFreshnessMinutes || 5;
     const isMainFresh = mainUserLocation
-      ? isLocationFresh(mainUserLocation.serverReceivedAt, group.locationFreshnessMinutes)
+      ? isLocationFresh(mainUserLocation.serverReceivedAt, freshnessMinutes)
       : false;
 
     const memberAccuracy = typeof accuracy === "number" && !isNaN(accuracy) ? accuracy : 0;
@@ -217,7 +218,7 @@ async function processLocationUpdate({
       const threshold =
         group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
           ? group.separationThresholdMeters
-          : 5;
+          : 50;
 
       const isSeparated = computedDistance !== null && computedDistance > threshold;
 
@@ -376,6 +377,8 @@ async function reevaluateMembersSeparation(group, mainLocation) {
     status: "active",
   });
 
+  const freshnessMinutes = group.locationFreshnessMinutes || 5;
+
   for (const member of memberships) {
     const locQuery = {
       group: group._id,
@@ -387,7 +390,7 @@ async function reevaluateMembersSeparation(group, mainLocation) {
 
     const latestLoc = await MemberLocation.findOne(locQuery).sort({ serverReceivedAt: -1 });
 
-    if (latestLoc && isLocationFresh(latestLoc.serverReceivedAt, group.locationFreshnessMinutes)) {
+    if (latestLoc && isLocationFresh(latestLoc.serverReceivedAt, freshnessMinutes)) {
       const distance = calculateHaversineDistance(
         mainLocation.latitude,
         mainLocation.longitude,
@@ -398,28 +401,110 @@ async function reevaluateMembersSeparation(group, mainLocation) {
       const threshold =
         group.separationThresholdMeters !== undefined && group.separationThresholdMeters !== null
           ? group.separationThresholdMeters
-          : 5;
-      if (distance !== null && distance <= threshold) {
-        member.consecutiveSeparatedCount = 0;
-        await member.save();
+          : 50;
 
-        await SeparationAlert.updateMany(
-          {
-            group: group._id,
-            status: { $in: ["active", "acknowledged_by_device"] },
-            $or: [
-              { membership: member._id },
-              ...(member.user ? [{ member: member.user }] : []),
-            ],
-          },
-          {
-            $set: {
-              status: "resolved",
-              resolvedAt: new Date(),
-              resolvedReason: "Reunited after main user moved closer (" + distance + "m)",
+      const memberAccuracy = typeof latestLoc.accuracy === "number" && !isNaN(latestLoc.accuracy) ? latestLoc.accuracy : 0;
+      const mainAccuracy = typeof mainLocation.accuracy === "number" && !isNaN(mainLocation.accuracy) ? mainLocation.accuracy : 0;
+      const isAccuracyDegraded = memberAccuracy > 35 || mainAccuracy > 35;
+
+      if (!isAccuracyDegraded && distance !== null) {
+        if (distance <= threshold) {
+          member.consecutiveSeparatedCount = 0;
+          await member.save();
+
+          await SeparationAlert.updateMany(
+            {
+              group: group._id,
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: member._id },
+                ...(member.user ? [{ member: member.user }] : []),
+              ],
             },
+            {
+              $set: {
+                status: "resolved",
+                resolvedAt: new Date(),
+                resolvedReason: "Reunited after main user moved closer (" + distance + "m)",
+              },
+            }
+          );
+        } else {
+          // Main user moved away from member (> threshold)
+          member.consecutiveSeparatedCount = (member.consecutiveSeparatedCount || 0) + 1;
+
+          if (member.consecutiveSeparatedCount >= (group.consecutiveReadingsRequired || 2)) {
+            const isCritical = distance > threshold * 2.5 || member.consecutiveSeparatedCount >= 4;
+            const severity = isCritical ? "critical" : "warning";
+            const buzzerPattern = isCritical ? "critical_urgent" : "warning_short";
+
+            const activeAlertQuery = {
+              group: group._id,
+              status: { $in: ["active", "acknowledged_by_device"] },
+              $or: [
+                { membership: member._id },
+                ...(member.user ? [{ member: member.user }] : []),
+              ],
+            };
+
+            const activeAlert = await SeparationAlert.findOne(activeAlertQuery).sort({ createdAt: -1 });
+
+            if (!activeAlert) {
+              await SeparationAlert.create({
+                group: group._id,
+                membership: member._id,
+                member: member.user || null,
+                memberName: member.name || "Family Member",
+                mainUser: group.creator,
+                distanceMeters: distance,
+                thresholdMeters: threshold,
+                severity,
+                buzzerPattern,
+                memberLocation: {
+                  latitude: latestLoc.latitude,
+                  longitude: latestLoc.longitude,
+                  accuracy: memberAccuracy,
+                  recordedAt: latestLoc.serverReceivedAt || new Date(),
+                },
+                mainLocation: {
+                  latitude: mainLocation.latitude,
+                  longitude: mainLocation.longitude,
+                  accuracy: mainAccuracy,
+                  recordedAt: mainLocation.serverReceivedAt || new Date(),
+                },
+                status: "active",
+                deviceCommandDelivered: false,
+                consecutiveCount: member.consecutiveSeparatedCount,
+              });
+            } else {
+              activeAlert.distanceMeters = distance;
+              activeAlert.consecutiveCount = member.consecutiveSeparatedCount;
+              activeAlert.memberName = member.name || activeAlert.memberName;
+
+              if (severity === "critical" && activeAlert.severity !== "critical") {
+                activeAlert.severity = "critical";
+                activeAlert.buzzerPattern = "critical_urgent";
+                activeAlert.status = "active";
+                activeAlert.deviceCommandDelivered = false;
+              }
+
+              activeAlert.memberLocation = {
+                latitude: latestLoc.latitude,
+                longitude: latestLoc.longitude,
+                accuracy: memberAccuracy,
+                recordedAt: latestLoc.serverReceivedAt || new Date(),
+              };
+              activeAlert.mainLocation = {
+                latitude: mainLocation.latitude,
+                longitude: mainLocation.longitude,
+                accuracy: mainAccuracy,
+                recordedAt: mainLocation.serverReceivedAt || new Date(),
+              };
+              await activeAlert.save();
+            }
           }
-        );
+          await member.save();
+        }
       }
     }
   }

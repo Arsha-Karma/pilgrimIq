@@ -91,7 +91,7 @@ function FamilyMemberTrack() {
                 valid: true,
                 memberName: cachedMemberName,
                 groupName: data.groupName,
-                separationThresholdMeters: data.separationThresholdMeters || 5,
+                separationThresholdMeters: data.separationThresholdMeters || 50,
                 consentGiven: true,
               });
               setConsentGiven(true);
@@ -144,7 +144,7 @@ function FamilyMemberTrack() {
         memberName: res.member?.name || guestName.trim(),
         relationship: res.member?.relationship || guestRelationship.trim(),
         groupName: res.group?.name || groupInfo.groupName,
-        separationThresholdMeters: res.group?.separationThresholdMeters || groupInfo.separationThresholdMeters || 5,
+        separationThresholdMeters: res.group?.separationThresholdMeters || groupInfo.separationThresholdMeters || 50,
         consentGiven: true,
       });
       setSuccessMsg(`Joined ${res.group?.name || "family group"}! You can now start sharing your location.`);
@@ -311,7 +311,7 @@ function FamilyMemberTrack() {
                 Join {groupInfo.groupName}
               </h2>
               <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-                Group Code: <strong>{groupInfo.inviteCode}</strong> • Alert Threshold: {groupInfo.separationThresholdMeters || 5}m
+                Group Code: <strong>{groupInfo.inviteCode}</strong> • Alert Threshold: {groupInfo.separationThresholdMeters || 50}m
               </p>
             </div>
 
@@ -447,7 +447,7 @@ function FamilyMemberTrack() {
                 <FiShield style={{ color: "#2563eb" }} /> How It Works
               </h4>
               <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#475569", lineHeight: "1.5" }}>
-                Sharing your location helps your family keep you safe in large pilgrimage crowds. If you move further than <strong>{validInvitation.separationThresholdMeters || 5} meters</strong> away from the group leader, their portable ESP32 device will buzz to alert them.
+                Sharing your location helps your family keep you safe in large pilgrimage crowds. If you move further than <strong>{validInvitation.separationThresholdMeters || 50} meters</strong> away from the group leader, their portable ESP32 device will buzz to alert them.
               </p>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#16a34a", fontWeight: "700" }}>
                 <FiCheckCircle /> GPS location is shared only while this page is open with your consent.

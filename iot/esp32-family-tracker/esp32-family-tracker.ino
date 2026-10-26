@@ -47,7 +47,11 @@
 #endif
 
 // Firmware Version
-const char* FIRMWARE_VERSION = "1.0.2";
+const char* FIRMWARE_VERSION = "1.0.3";
+
+// Forward declarations
+void acknowledgeAlertDelivery(const char* alertId);
+void sendHeartbeat();
 
 // State Timing Trackers
 unsigned long lastCommandPollTime = 0;
@@ -74,13 +78,16 @@ const unsigned long BUZZER_SAFETY_MAX_MS = 2000;
 
 // Track the last alert ID processed to prevent duplicate alerts
 String lastProcessedAlertId = "";
+// Track pending alert ID awaiting acknowledgment once buzzer pattern finishes
+String pendingAckAlertId = "";
 
 void setBuzzerState(bool active) {
   digitalWrite(BUZZER_PIN, active ? BUZZER_ON_LEVEL : BUZZER_OFF_LEVEL);
 }
 
 /**
- * Stop buzzer immediately and ensure GPIO pin and LED are driven to strictly OFF level
+ * Stop buzzer immediately and ensure GPIO pin and LED are driven to strictly OFF level.
+ * When alert buzzer pattern completes, dispatches acknowledgment to server.
  */
 void stopBuzzer() {
   bool wasActive = buzzerActive;
@@ -89,7 +96,14 @@ void stopBuzzer() {
   digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
   digitalWrite(STATUS_LED_PIN, LOW);
   if (wasActive) {
-    Serial.println("[BUZZER] Buzzer stopped.");
+    Serial.println("[BUZZER] Buzzer pattern complete. Pin silenced.");
+    if (pendingAckAlertId.length() > 0) {
+      String idToAck = pendingAckAlertId;
+      pendingAckAlertId = "";
+      Serial.print("[ACK] Physical buzzer pattern finished. Sending delivery acknowledgment: ");
+      Serial.println(idToAck);
+      acknowledgeAlertDelivery(idToAck.c_str());
+    }
   }
 }
 
@@ -168,10 +182,6 @@ void updateBuzzer() {
   }
 }
 
-// Forward declarations
-void acknowledgeAlertDelivery(const char* alertId);
-void sendHeartbeat();
-
 // ==========================================
 // WI-FI CONNECTION MANAGEMENT
 // ==========================================
@@ -232,12 +242,13 @@ void pollPendingCommands() {
   // Use WiFiClientSecure if HTTPS, standard WiFiClient if HTTP
   if (url.startsWith("https://")) {
     secureClient.setInsecure(); // For prototype demo; in high-security production, load root CA certificate
+    secureClient.setHandshakeTimeout(20);
     http.begin(secureClient, url);
   } else {
     http.begin(plainClient, url);
   }
 
-  http.setTimeout(10000);
+  http.setTimeout(15000);
   setupHttpHeaders(http);
 
   int httpCode = http.GET();
@@ -262,7 +273,7 @@ void pollPendingCommands() {
         const char* memberId = doc["memberId"] | "";
         const char* memberName = doc["memberName"] | "Family Member";
         float distance = doc["distanceMeters"] | 0.0;
-        float threshold = doc["thresholdMeters"] | 5.0;
+        float threshold = doc["thresholdMeters"] | 50.0;
         const char* severity = doc["severity"] | "warning";
         const char* buzzerPattern = doc["buzzerPattern"] | "warning_short";
 
@@ -279,6 +290,7 @@ void pollPendingCommands() {
         // Record genuinely new alert ID
         if (strlen(alertId) > 0) {
           lastProcessedAlertId = String(alertId);
+          pendingAckAlertId = String(alertId);
         }
 
         Serial.println("==================================================");
@@ -289,19 +301,26 @@ void pollPendingCommands() {
         Serial.print("  Distance: "); Serial.print(distance); Serial.println(" meters");
         Serial.print("  Threshold: "); Serial.print(threshold); Serial.println(" meters");
         Serial.print("  Severity: "); Serial.println(severity);
+        Serial.print("  Buzzer Pattern: "); Serial.println(buzzerPattern);
         Serial.println("==================================================");
 
-        Serial.println("[BUZZER] Buzzer activated by a real alert!");
+        Serial.println("[BUZZER] Triggering non-blocking buzzer pattern on GPIO 23...");
         // Sound the active buzzer non-blockingly (~0.8 to 1.0 seconds max, auto turns OFF)
         triggerBuzzerPattern(buzzerPattern);
-
-        // Send delivery acknowledgement back to PilgrimIQ backend
-        if (strlen(alertId) > 0) {
-          acknowledgeAlertDelivery(alertId);
-        }
+        // Delivery acknowledgment will be dispatched by stopBuzzer() once physical pattern completes
       } else {
         // Backend reports SAFE / no active alerts -> keep buzzer strictly OFF
         stopBuzzer();
+        const char* statusMsg = doc["status"] | "SAFE";
+        const char* infoMsg = doc["message"] | "";
+        Serial.print("[COMMAND] Polled OK (HTTP 200) - Status: ");
+        Serial.print(statusMsg);
+        if (strlen(infoMsg) > 0) {
+          Serial.print(" (");
+          Serial.print(infoMsg);
+          Serial.print(")");
+        }
+        Serial.println();
       }
     } else {
       Serial.print("[JSON ERROR] Failed to parse command response: ");
@@ -309,13 +328,18 @@ void pollPendingCommands() {
     }
   } else if (httpCode == 401) {
     stopBuzzer();
-    Serial.println("[AUTH ERROR] ESP32 not authorized. Verify DEVICE_ID and DEVICE_TOKEN in config.h.");
-  } else if (httpCode < 0) {
+    Serial.println("[AUTH ERROR] ESP32 not authorized (HTTP 401). Verify DEVICE_ID and DEVICE_TOKEN in config.h.");
+  } else if (httpCode > 0) {
     stopBuzzer();
-    Serial.print("[HTTP ERROR] Failed to connect: ");
-    Serial.println(http.errorToString(httpCode).c_str());
+    Serial.print("[COMMAND] Server returned HTTP error: ");
+    Serial.println(httpCode);
   } else {
     stopBuzzer();
+    Serial.print("[HTTP ERROR] Failed to connect: ");
+    Serial.print(http.errorToString(httpCode).c_str());
+    Serial.print(" (Code: ");
+    Serial.print(httpCode);
+    Serial.println(")");
   }
 
   http.end();
@@ -335,12 +359,13 @@ void acknowledgeAlertDelivery(const char* alertId) {
 
   if (url.startsWith("https://")) {
     secureClient.setInsecure();
+    secureClient.setHandshakeTimeout(20);
     http.begin(secureClient, url);
   } else {
     http.begin(plainClient, url);
   }
 
-  http.setTimeout(10000);
+  http.setTimeout(15000);
   setupHttpHeaders(http);
 
   #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
@@ -358,10 +383,18 @@ void acknowledgeAlertDelivery(const char* alertId) {
   if (httpCode == HTTP_CODE_OK) {
     Serial.print("[ACK SUCCESS] Alert ");
     Serial.print(alertId);
-    Serial.println(" delivery acknowledged to server.");
-  } else {
-    Serial.print("[ACK FAILED] Response code: ");
+    Serial.println(" delivery acknowledged to server (HTTP 200).");
+  } else if (httpCode == 401) {
+    Serial.println("[ACK FAILED] Auth Failed (HTTP 401). Check DEVICE_ID and DEVICE_TOKEN.");
+  } else if (httpCode > 0) {
+    Serial.print("[ACK FAILED] Server returned HTTP: ");
     Serial.println(httpCode);
+  } else {
+    Serial.print("[ACK FAILED] Connection failed: ");
+    Serial.print(http.errorToString(httpCode).c_str());
+    Serial.print(" (Code: ");
+    Serial.print(httpCode);
+    Serial.println(")");
   }
 
   http.end();
@@ -381,12 +414,13 @@ void sendHeartbeat() {
 
   if (url.startsWith("https://")) {
     secureClient.setInsecure();
+    secureClient.setHandshakeTimeout(20);
     http.begin(secureClient, url);
   } else {
     http.begin(plainClient, url);
   }
 
-  http.setTimeout(10000);
+  http.setTimeout(15000);
   setupHttpHeaders(http);
 
   #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
@@ -405,10 +439,31 @@ void sendHeartbeat() {
   int httpCode = http.POST(requestBody);
 
   if (httpCode == HTTP_CODE_OK) {
-    Serial.println("[HEARTBEAT] Sent successfully to PilgrimIQ server.");
-  } else {
+    String responseBody = http.getString();
+    #if defined(ARDUINOJSON_VERSION_MAJOR) && (ARDUINOJSON_VERSION_MAJOR >= 7)
+      JsonDocument resDoc;
+    #else
+      StaticJsonDocument<256> resDoc;
+    #endif
+    DeserializationError jsonErr = deserializeJson(resDoc, responseBody);
+    if (!jsonErr && resDoc["success"] == true) {
+      Serial.print("[HEARTBEAT] OK (HTTP 200) - Server acknowledged at ");
+      Serial.println(resDoc["serverTime"] | "now");
+    } else {
+      Serial.print("[HEARTBEAT] Warning (HTTP 200) - Server response: ");
+      Serial.println(responseBody);
+    }
+  } else if (httpCode == 401) {
+    Serial.println("[HEARTBEAT] Auth Failed (HTTP 401) - Unauthorized. Check DEVICE_ID & DEVICE_TOKEN.");
+  } else if (httpCode > 0) {
     Serial.print("[HEARTBEAT] Ping failed. Status code: ");
     Serial.println(httpCode);
+  } else {
+    Serial.print("[HEARTBEAT] Connection failed: ");
+    Serial.print(http.errorToString(httpCode).c_str());
+    Serial.print(" (Code: ");
+    Serial.print(httpCode);
+    Serial.println(")");
   }
 
   http.end();
